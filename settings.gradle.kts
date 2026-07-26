@@ -17,5 +17,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "TestDroidCompose"
+rootProject.name = "OpenCodeWeb"
 include(":app")

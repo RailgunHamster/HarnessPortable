@@ -7,7 +7,7 @@
         android:label="OpenCode Web"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:theme="@style/Theme.TestDroid"
+        android:theme="@style/Theme.OpenCodeWeb"
         android:usesCleartextTraffic="true"
         android:allowBackup="true">
         <activity
