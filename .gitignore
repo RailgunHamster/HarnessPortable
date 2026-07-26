@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Local machine config (contains SDK path)
+local.properties
+
+# Signing secrets - NEVER commit
+keystore.properties
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Build output
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Kotlin daemon
+.kotlin/
+
+# OS junk
+.DS_Store
+Thumbs.db
