@@ -140,7 +140,7 @@ internal fun WebViewScreen(
                             (currentY * localDensity.density).roundToInt()
                         )
                     }
-                    .pointerInput(Unit) {
+                    .pointerInput(maxX, maxY, localDensity.density) {
                         detectDragGestures(
                             onDragStart = { dragging = true },
                             onDragEnd = {
