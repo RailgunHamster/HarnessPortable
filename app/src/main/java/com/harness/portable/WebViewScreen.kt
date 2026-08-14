@@ -1,4 +1,4 @@
-package com.opencode.web
+package com.harness.portable
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,20 +22,30 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.StayCurrentLandscape
 import androidx.compose.material.icons.filled.StayCurrentPortrait
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,8 +57,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlin.math.roundToInt
 
@@ -56,12 +70,15 @@ import kotlin.math.roundToInt
 internal fun WebViewScreen(
     url: String,
     orientation: OrientationMode,
+    tunnelMode: Boolean,
+    tunnelInfo: TunnelState.Info?,
     onToggleOrientation: () -> Unit,
-    onChangeServer: () -> Unit
+    onChangeServer: () -> Unit,
+    onReconnect: () -> Unit
 ) {
     val ctx = LocalContext.current
     val localDensity = LocalDensity.current
-    val prefs = remember { ctx.getSharedPreferences("opencode_web", Context.MODE_PRIVATE) }
+    val prefs = remember { ctx.getSharedPreferences("harness_portable", Context.MODE_PRIVATE) }
 
     var webRef by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
@@ -70,10 +87,27 @@ internal fun WebViewScreen(
 
     val ballSizeDp = 48.dp
     val marginDp = 10.dp
-    val actionsHeightDp = 156.dp   // 3 buttons * 48dp + 2 gaps * 6dp
+    val buttonCount = if (tunnelMode) 4 else 3
+    val actionsHeightDp = (buttonCount * 48 + (buttonCount - 1) * 6).dp
 
     var ballX by remember { mutableStateOf(prefs.getFloat("ball_x_dp", Float.NaN)) }
     var ballY by remember { mutableStateOf(prefs.getFloat("ball_y_dp", Float.NaN)) }
+
+    // Tunnel-awareness: reload when the URL changes (e.g. rebind on another
+    // local port) and once the tunnel has come back after a drop.
+    var loadedUrl by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(url) {
+        val w = webRef
+        if (w != null && loadedUrl != null && loadedUrl != url) w.loadUrl(url)
+        loadedUrl = url
+    }
+
+    val tunnelUp = tunnelInfo == null || tunnelInfo.status == TunnelState.Status.CONNECTED
+    var tunnelWasDown by remember { mutableStateOf(false) }
+    LaunchedEffect(tunnelUp) {
+        if (tunnelUp && tunnelWasDown) webRef?.reload()
+        tunnelWasDown = !tunnelUp
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -99,7 +133,6 @@ internal fun WebViewScreen(
                         override fun onPageFinished(view: WebView, url: String?) {
                             super.onPageFinished(view, url)
                             canGoBack = view.canGoBack()
-                            view.evaluateJavascript(SAFE_AREA_OVERRIDE_JS, null)
                         }
                     }
                     loadUrl(url)
@@ -109,6 +142,57 @@ internal fun WebViewScreen(
                 .fillMaxSize()
                 .imePadding()
         )
+
+        // Tunnel status overlay: covers the dead WebView while disconnected.
+        if (!tunnelUp) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    tonalElevation = 4.dp,
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        when (tunnelInfo?.status) {
+                            TunnelState.Status.FAILED -> {
+                                Text(
+                                    "连接失败",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
+                                tunnelInfo.message?.let {
+                                    Text(
+                                        it, fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                OutlinedButton(onClick = onReconnect) { Text("重连") }
+                            }
+
+                            else -> {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                Text(
+                                    if (tunnelInfo?.status == TunnelState.Status.RETRYING)
+                                        "隧道中断，正在重连…"
+                                    else "隧道未连接",
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                        Button(onClick = onChangeServer) { Text("返回") }
+                    }
+                }
+            }
+        }
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val maxX = (maxWidth - ballSizeDp).value
@@ -229,11 +313,27 @@ internal fun WebViewScreen(
                         modifier = Modifier.size(ballSizeDp).alpha(0.85f)
                     ) {
                         Icon(
-                            Icons.Filled.Dns,
-                            contentDescription = "服务器",
+                            if (tunnelMode) Icons.Filled.LinkOff else Icons.Filled.Dns,
+                            contentDescription =
+                                if (tunnelMode) "断开并返回" else "服务器",
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(22.dp)
                         )
+                    }
+                    if (tunnelMode) {
+                        SmallFloatingActionButton(
+                            onClick = onReconnect,
+                            shape = CircleShape,
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(ballSizeDp).alpha(0.85f)
+                        ) {
+                            Icon(
+                                Icons.Filled.Autorenew,
+                                contentDescription = "重连隧道",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -250,23 +350,3 @@ private fun OrientationMode.icon(): ImageVector = when (this) {
     OrientationMode.LANDSCAPE -> Icons.Filled.StayCurrentLandscape
     OrientationMode.AUTO      -> Icons.Filled.ScreenRotation
 }
-
-// opencode web adds 30px padding-top on mobile viewports (status-bar placeholder).
-// Strip it so content sits flush at the top of the screen.
-private const val SAFE_AREA_OVERRIDE_JS = """
-(function() {
-    try {
-        if (document.getElementById('ocw-override')) return;
-        var s = document.createElement('style');
-        s.id = 'ocw-override';
-        s.textContent =
-            'html,body{' +
-              'height:100%!important;width:100%!important;' +
-              'margin:0!important;padding:0!important;overflow:hidden!important;' +
-            '}' +
-            '#root{height:100%!important;min-height:100%!important;}' +
-            '#root > *{padding-top:0!important;}';
-        document.head.appendChild(s);
-    } catch (e) {}
-})();
-"""

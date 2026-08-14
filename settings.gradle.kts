@@ -17,5 +17,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "OpenCodeWeb"
+rootProject.name = "harness-portable"
 include(":app")

@@ -13,15 +13,15 @@ val keystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.opencode.web"
+    namespace = "com.harness.portable"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.opencode.web"
+        applicationId = "com.harness.portable"
         minSdk = 24
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "2.0"
     }
 
     signingConfigs {
@@ -65,4 +65,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    // Actively maintained JSch fork: modern OpenSSH kex + signature algorithms
+    implementation("com.github.mwiede:jsch:0.2.21")
 }
