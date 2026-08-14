@@ -164,6 +164,20 @@ class SshTunnelService : Service() {
                     put("StrictHostKeyChecking", "yes")
                     put("PreferredAuthentications", "password,keyboard-interactive")
                 })
+                // Bare host names: resolve ourselves (NetBIOS broadcast on the
+                // LAN, system DNS for Tailscale MagicDNS) instead of relying
+                // on the OS resolver, which ignores NetBIOS names.
+                var viaLabel = ""
+                if (!HostResolver.isIpLiteral(p.sshHost) && !p.sshHost.contains('.')) {
+                    sess.setSocketFactory(ResolvingSocketFactory { r ->
+                        viaLabel = when (r.source) {
+                            "tailscale" -> " · Tailscale ${r.ip}"
+                            "netbios" -> " · NetBIOS ${r.ip}"
+                            "dns" -> " · DNS ${r.ip}"
+                            else -> " · ${r.ip}"
+                        }
+                    })
+                }
                 // Detect dead links within ~60s and let the loop reconnect.
                 sess.setServerAliveInterval(15_000)
                 sess.setServerAliveCountMax(4)
@@ -191,10 +205,10 @@ class SshTunnelService : Service() {
                 TunnelState.set(
                     TunnelState.Info(
                         p.id, p.name, TunnelState.Status.CONNECTED,
-                        "127.0.0.1:$bound → ${p.remoteHost}:${p.remotePort}", bound
+                        "127.0.0.1:$bound → ${p.remoteHost}:${p.remotePort}$viaLabel", bound
                     )
                 )
-                updateNotification("${p.name} 已连接 · 127.0.0.1:$bound → ${p.remoteHost}:${p.remotePort}")
+                updateNotification("${p.name} 已连接 · 127.0.0.1:$bound → ${p.remoteHost}:${p.remotePort}$viaLabel")
 
                 // Monitor: leave the connected state as soon as the session dies.
                 while (g == generation && sess.isConnected) {
@@ -209,12 +223,25 @@ class SshTunnelService : Service() {
             } catch (e: Exception) {
                 if (g != generation) return
                 val msg = e.message ?: e.javaClass.simpleName
-                val authFail = msg.contains("auth", ignoreCase = true) ||
-                        msg.contains(NO_PW_MSG)
+                val resolveFail = msg.contains("无法解析")
+                val authFail = !resolveFail && (
+                        msg.contains("auth", ignoreCase = true) ||
+                                msg.contains(NO_PW_MSG)
+                        )
                 val hostKeyChanged = e is JSchChangedHostKeyException ||
                         msg.contains("hostkey", ignoreCase = true) ||
                         msg.contains("host key", ignoreCase = true)
                 when {
+                    resolveFail -> {
+                        TunnelState.set(
+                            TunnelState.Info(p.id, p.name, TunnelState.Status.FAILED, msg)
+                        )
+                        updateNotification("${p.name} 无法解析主机名")
+                        svcPrefs().edit().remove(PREF_ACTIVE).apply()
+                        stopSelf()
+                        return
+                    }
+
                     hostKeyChanged -> {
                         TunnelState.set(
                             TunnelState.Info(

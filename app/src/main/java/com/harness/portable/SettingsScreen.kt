@@ -96,8 +96,8 @@ fun SettingsScreen(
             if (tunnels.isEmpty()) {
                 item {
                     Text(
-                        "还没有隧道。点右上角 + 添加：填服务器 IP / 域名、SSH 端口、用户名" +
-                                "（如 administrator），转发到 127.0.0.1:3080。",
+                        "还没有隧道。点右上角 + 添加：填服务器 IP / 域名 / NetBIOS 名、" +
+                                "SSH 端口、用户名（如 administrator），转发到 127.0.0.1:3080。",
                         color = MaterialTheme.colorScheme.outline,
                         fontSize = 13.sp
                     )
@@ -340,7 +340,10 @@ private fun TunnelEditorDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 Text(
-                    "等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器\n密码用 Android Keystore 加密存储。",
+                    "等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器\n" +
+                            "服务器可填 IP / 域名 / NetBIOS 名（如 winserver）：局域网自动发现；" +
+                            "装有 Tailscale 并开启 MagicDNS 时自动解析到 Tailscale IP。\n" +
+                            "密码用 Android Keystore 加密存储。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.outline
                 )
