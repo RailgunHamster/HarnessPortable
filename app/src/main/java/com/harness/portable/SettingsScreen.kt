@@ -96,7 +96,8 @@ fun SettingsScreen(
             if (tunnels.isEmpty()) {
                 item {
                     Text(
-                        "还没有隧道。点 + 添加，例如 administrator@winserver 转发到 127.0.0.1:3080。",
+                        "还没有隧道。点右上角 + 添加：填服务器 IP / 域名、SSH 端口、用户名" +
+                                "（如 administrator），转发到 127.0.0.1:3080。",
                         color = MaterialTheme.colorScheme.outline,
                         fontSize = 13.sp
                     )

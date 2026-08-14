@@ -98,8 +98,8 @@ object ProfileStore {
 
     /**
      * One-time migration from the old "OpenCode Web" app:
-     * - imports its saved direct-URL server list
-     * - seeds one tunnel profile matching the typical winserver setup
+     * imports its saved direct-URL server list. Tunnel profiles are never
+     * seeded — the user configures every server themselves.
      */
     private fun migrateIfNeeded(ctx: Context) {
         val p = prefs(ctx)
@@ -122,13 +122,6 @@ object ProfileStore {
             if (imported.isNotEmpty()) {
                 p.edit().putString(KEY_DIRECT, JSONArray(imported).toString()).apply()
             }
-        }
-
-        if (p.getString(KEY_TUNNELS, null) == null) {
-            saveTunnels(
-                ctx,
-                listOf(TunnelProfile(name = "winserver", sshHost = "winserver", user = "administrator"))
-            )
         }
 
         p.edit().putBoolean(KEY_SEEDED, true).apply()
