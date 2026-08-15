@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import com.jcraft.jsch.HostKey
 import com.jcraft.jsch.HostKeyRepository
 import com.jcraft.jsch.JSch
@@ -38,6 +39,7 @@ class SshTunnelService : Service() {
         private const val SVC_PREFS = "harness_portable_service"
         private const val PREF_ACTIVE = "active_tunnel_profile"
         private const val NO_PW_MSG = "未保存密码"
+        private const val TAG = "HarnessTunnel"
 
         fun start(ctx: Context, profileId: String) {
             val intent = Intent(ctx, SshTunnelService::class.java)
@@ -151,6 +153,7 @@ class SshTunnelService : Service() {
         while (g == generation) {
             var s: Session? = null
             try {
+                Log.d(TAG, "connecting ${p.user}@${p.sshHost}:${p.sshPort} -> ${p.remoteHost}:${p.remotePort} (local ${p.localPort})")
                 val password = SecureStore.getPassword(this, p.id)
                     ?: throw JSchException(NO_PW_MSG)
 
@@ -223,6 +226,7 @@ class SshTunnelService : Service() {
             } catch (e: Exception) {
                 if (g != generation) return
                 val msg = e.message ?: e.javaClass.simpleName
+                Log.w(TAG, "connect failed: ${e.javaClass.simpleName}: $msg", e)
                 val resolveFail = msg.contains("无法解析")
                 val authFail = !resolveFail && (
                         msg.contains("auth", ignoreCase = true) ||

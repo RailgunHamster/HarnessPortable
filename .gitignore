@@ -28,3 +28,6 @@ keystore.properties
 # OS junk
 .DS_Store
 Thumbs.db
+debug*.png
+ui.xml
+nettcp.txt

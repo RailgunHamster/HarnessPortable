@@ -1,6 +1,7 @@
 package com.harness.portable
 
 import android.os.SystemClock
+import android.util.Log
 import com.jcraft.jsch.SocketFactory
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -79,7 +80,7 @@ object HostResolver {
         }
 
         var dnsIp: String? = null
-        var nbIp: String? = null
+        var nbCandidates: List<String> = emptyList()
 
         val dnsThread = Thread {
             dnsIp = try {
@@ -92,14 +93,21 @@ object HostResolver {
 
         // NetBIOS names are <= 15 chars; longer names can only come from DNS.
         val nbThread = if (key.length <= 15) Thread {
-            nbIp = NetBios.resolve(key, 1500)
+            nbCandidates = NetBios.resolveAll(key, 1500)
         }.apply { isDaemon = true; start() } else null
 
         dnsThread.join(2500)
         nbThread?.join(2500)
 
         val d = dnsIp
-        val n = nbIp
+        // A multihomed responder answers with every interface IP (VMware
+        // adapters included); prefer the one on a subnet we actually share.
+        val n = pickReachable(nbCandidates)
+        Log.d(
+            "HarnessTunnel",
+            "resolve '$host': dns=$d nbns=$nbCandidates tailscaleIf=${tailscaleActive()}" +
+                    " -> picked ${n ?: "none"}"
+        )
         // Priority: Tailscale MagicDNS > NetBIOS > plain DNS.
         // NetBIOS beats plain DNS because carrier DNS can hijack unknown
         // names; a Tailscale-range DNS answer always wins by design.
@@ -116,6 +124,36 @@ object HostResolver {
 
     fun invalidate(host: String) {
         synchronized(cache) { cache.remove(host.trim().lowercase()) }
+    }
+
+    /**
+     * Picks the NetBIOS answer IP that shares a subnet with one of our
+     * interfaces (excluding loopback and Tailscale); falls back to the
+     * first candidate. Returns null for an empty list.
+     */
+    private fun pickReachable(candidates: List<String>): String? {
+        if (candidates.isEmpty()) return null
+        candidates.forEach { c ->
+            listInterfaces().forEach { ni ->
+                if (ni.isLoopback || ni.name.startsWith("tailscale")) return@forEach
+                ni.interfaceAddresses.forEach { ia ->
+                    val local = ia.address as? Inet4Address ?: return@forEach
+                    if (sameSubnet(local.hostAddress ?: "", ia.networkPrefixLength, c)) return c
+                }
+            }
+        }
+        return candidates.first()
+    }
+
+    private fun sameSubnet(a: String, prefixLen: Short, b: String): Boolean {
+        val pa = a.split('.').mapNotNull { it.toIntOrNull() }
+        val pb = b.split('.').mapNotNull { it.toIntOrNull() }
+        if (pa.size != 4 || pb.size != 4 || prefixLen < 0 || prefixLen > 32) return false
+        val plen = prefixLen.toInt()
+        val mask = if (plen == 0) 0L else (-1L shl (32 - plen)) and 0xFFFFFFFFL
+        val va = (pa[0] shl 24) or (pa[1] shl 16) or (pa[2] shl 8) or pa[3]
+        val vb = (pb[0] shl 24) or (pb[1] shl 16) or (pb[2] shl 8) or pb[3]
+        return (va.toLong() and mask) == (vb.toLong() and mask)
     }
 
     fun failureMessage(host: String): String {
@@ -144,8 +182,12 @@ object HostResolver {
  */
 private object NetBios {
 
-    fun resolve(name: String, timeoutMs: Int): String? {
-        if (name.isEmpty() || name.length > 15) return null
+    fun resolve(name: String, timeoutMs: Int): String? =
+        resolveAll(name, timeoutMs).firstOrNull()
+
+    /** Returns every non-zero IPv4 the responder claims for [name]. */
+    fun resolveAll(name: String, timeoutMs: Int): List<String> {
+        if (name.isEmpty() || name.length > 15) return emptyList()
         val txn = Random.nextInt(0x10000)
         val query = buildQuery(name.uppercase(), txn)
 
@@ -165,7 +207,7 @@ private object NetBios {
             targets.add(InetAddress.getByName("255.255.255.255"))
         } catch (_: Exception) {
         }
-        if (targets.isEmpty()) return null
+        if (targets.isEmpty()) return emptyList()
 
         try {
             DatagramSocket().use { sock ->
@@ -191,7 +233,7 @@ private object NetBios {
             }
         } catch (_: Exception) {
         }
-        return null
+        return emptyList()
     }
 
     /** NB name query packet: header + encoded name + QTYPE=NB(0x20)/IN. */
@@ -217,7 +259,8 @@ private object NetBios {
         return out.toByteArray()
     }
 
-    private fun parseAnswer(d: ByteArray, len: Int, txn: Int): String? {
+    /** All non-zero IPv4 addresses from the first positive NB record. */
+    private fun parseAnswer(d: ByteArray, len: Int, txn: Int): List<String>? {
         if (len < 12) return null
         val id = u16(d, 0)
         if (id != txn) return null
@@ -241,13 +284,14 @@ private object NetBios {
         var p = off + 10
         if (p + rdlen > len) return null
         // RDATA: repeat of (2-byte flags + 4-byte IPv4)
+        val ips = ArrayList<String>()
         while (p + 6 <= off + 10 + rdlen) {
             val ip = "${d[p + 2].toInt() and 0xFF}.${d[p + 3].toInt() and 0xFF}." +
                     "${d[p + 4].toInt() and 0xFF}.${d[p + 5].toInt() and 0xFF}"
-            if (ip != "0.0.0.0") return ip
+            if (ip != "0.0.0.0" && ip !in ips) ips.add(ip)
             p += 6
         }
-        return null
+        return if (ips.isEmpty()) null else ips
     }
 
     /** Skips a name field: compression pointer, NB-encoded (len 0x20), or labels. */
