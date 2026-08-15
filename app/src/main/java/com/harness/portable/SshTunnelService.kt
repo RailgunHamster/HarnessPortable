@@ -81,6 +81,7 @@ class SshTunnelService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand action=${intent?.action} startId=$startId")
         when (intent?.action) {
             ACTION_START -> {
                 val p = ProfileStore.findTunnel(this, intent.getStringExtra(EXTRA_PROFILE_ID))
@@ -118,10 +119,16 @@ class SshTunnelService : Service() {
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "onDestroy")
         generation++
         try { session?.disconnect() } catch (_: Exception) {}
         session = null
         super.onDestroy()
+    }
+
+    /** Progress marker: each stage transition is logged with elapsed time. */
+    private fun stage(name: String) {
+        Log.d(TAG, "stage: $name")
     }
 
     private fun svcPrefs() = getSharedPreferences(SVC_PREFS, Context.MODE_PRIVATE)
@@ -134,7 +141,33 @@ class SshTunnelService : Service() {
                 TunnelState.Info(p.id, p.name, TunnelState.Status.CONNECTING)
             )
             updateNotification("正在连接 ${p.name}…")
-            runLoop(g, p)
+            // Watchdog: if a connect attempt silently stalls (vendor power
+            // management, wedged keystore, unresponsive stack), tear the
+            // worker down and start over. Never fires while CONNECTED —
+            // the monitor loop is expected to stay there indefinitely.
+            var watchdogFired = false
+            val watchdog = Thread {
+                try {
+                    Thread.sleep(45_000)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+                val st = TunnelState.flow.value.status
+                if (g == generation && st != TunnelState.Status.CONNECTED) {
+                    watchdogFired = true
+                    Log.w(TAG, "watchdog: stalled in $st, restarting worker")
+                    try { session?.disconnect() } catch (_: Exception) {}
+                    startWorker(p)
+                }
+            }.apply { isDaemon = true; start() }
+            try {
+                runLoop(g, p)
+            } finally {
+                watchdog.interrupt()
+                if (watchdogFired) {
+                    Log.d(TAG, "worker g=$g exited via watchdog")
+                }
+            }
         }.start()
     }
 
@@ -154,8 +187,10 @@ class SshTunnelService : Service() {
             var s: Session? = null
             try {
                 Log.d(TAG, "connecting ${p.user}@${p.sshHost}:${p.sshPort} -> ${p.remoteHost}:${p.remotePort} (local ${p.localPort})")
+                stage("reading password")
                 val password = SecureStore.getPassword(this, p.id)
                     ?: throw JSchException(NO_PW_MSG)
+                stage("building session")
 
                 val jsch = JSch()
                 jsch.setHostKeyRepository(TofuHostKeyRepository(this))
@@ -187,7 +222,9 @@ class SshTunnelService : Service() {
 
                 s = sess
                 session = sess
+                stage("ssh connect")
                 sess.connect(20_000)
+                stage("setting up forward")
 
                 var bound = -1
                 var lastBindError: Exception? = null
@@ -204,6 +241,7 @@ class SshTunnelService : Service() {
                 }
                 if (bound < 0) throw (lastBindError ?: JSchException("无法绑定本地端口"))
 
+                stage("connected")
                 backoff = 3_000L
                 TunnelState.set(
                     TunnelState.Info(
