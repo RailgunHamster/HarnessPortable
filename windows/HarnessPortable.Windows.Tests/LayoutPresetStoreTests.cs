@@ -29,7 +29,7 @@ public sealed class LayoutPresetStoreTests : IDisposable
                     new LayoutNode
                     {
                         Kind = "pane",
-                        Tabs = [new LayoutTabRef { Kind = "tunnel", ProfileId = "p1" }],
+                        Tabs = [new LayoutTabRef { Kind = "tunnel", ProfileId = "p1", Label = "生产环境" }],
                     },
                     new LayoutNode
                     {
@@ -66,6 +66,7 @@ public sealed class LayoutPresetStoreTests : IDisposable
         Assert.Equal(2, restored.Root.Children.Count);
         Assert.Equal("p2", restored.Root.Children[1].Children[0].Tabs[0].ProfileId);
         Assert.Equal("http://a:4096", restored.Root.Children[1].Children[0].Tabs[1].Url);
+        Assert.Equal("生产环境", restored.Root.Children[0].Tabs[0].Label);
     }
 
     [Fact]

@@ -29,4 +29,7 @@ public sealed class LayoutTabRef
     public string? ProfileId { get; set; }
 
     public string? Url { get; set; }
+
+    /// <summary>Optional user-renamed tab label.</summary>
+    public string? Label { get; set; }
 }

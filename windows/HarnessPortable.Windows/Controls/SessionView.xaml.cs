@@ -28,6 +28,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private bool _coreReady;
     private bool _initialized;
     private bool _shutdown;
+    private string? _customLabel;
 
     public event Action? CloseRequested;
     public event Action<string>? TitleChanged;
@@ -40,6 +41,41 @@ public partial class SessionView : System.Windows.Controls.UserControl
     public int LocalPort => _lastPort;
     public string SessionTitle { get; private set; } = "";
     public bool AppFullScreenActive { get; set; }
+    public string? CustomLabel => _customLabel;
+
+    private const string HomeEndPageScript = """
+        (function () {
+            function isScrollable(el) {
+                if (!el || el.scrollHeight === undefined) return false;
+                return el.scrollHeight - el.clientHeight > 1;
+            }
+            function scrollToEdge(toTop) {
+                var candidates = [];
+                var root = document.scrollingElement || document.documentElement;
+                if (isScrollable(root)) candidates.push(root);
+                var all = document.querySelectorAll('div, main, section, article, ul, body');
+                for (var i = 0; i < all.length; i++) {
+                    if (isScrollable(all[i])) candidates.push(all[i]);
+                }
+                var best = null;
+                var bestDelta = -1;
+                for (var j = 0; j < candidates.length; j++) {
+                    var delta = Math.abs(candidates[j].scrollHeight - candidates[j].clientHeight);
+                    if (delta > bestDelta) { bestDelta = delta; best = candidates[j]; }
+                }
+                if (!best) return false;
+                best.scrollTo({ top: toTop ? 0 : best.scrollHeight, behavior: 'auto' });
+                return true;
+            }
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Home') {
+                    if (scrollToEdge(true)) e.preventDefault();
+                } else if (e.key === 'End') {
+                    if (scrollToEdge(false)) e.preventDefault();
+                }
+            }, true);
+        })();
+        """;
 
     public SessionView(AppServices services, TunnelProfile profile, int localPort)
     {
@@ -135,6 +171,20 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
     }
 
+    public void SetCustomLabel(string label)
+    {
+        _customLabel = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
+
+        if (_isTunnel && _profile is not null)
+        {
+            ApplyState(_services.Tunnels.GetState(_profile.Id));
+        }
+        else
+        {
+            SetTitle(_customLabel ?? ProfileStore.HostOf(_url));
+        }
+    }
+
     private void ApplyState(TunnelInfo info)
     {
         if (!_isTunnel || _profile is null)
@@ -154,7 +204,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
                 Navigate($"http://127.0.0.1:{port}");
             }
 
-            SetTitle($"● {_profile.DisplayName}");
+            SetTitle($"● {_customLabel ?? _profile.DisplayName}");
             return;
         }
 
@@ -176,10 +226,10 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         SetTitle(info.Status switch
         {
-            TunnelStatus.Failed => $"✕ {_profile.DisplayName}",
-            TunnelStatus.Stopped => $"○ {_profile.DisplayName}",
-            TunnelStatus.Retrying => $"↻ {_profile.DisplayName}",
-            _ => $"… {_profile.DisplayName}",
+            TunnelStatus.Failed => $"✕ {_customLabel ?? _profile.DisplayName}",
+            TunnelStatus.Stopped => $"○ {_customLabel ?? _profile.DisplayName}",
+            TunnelStatus.Retrying => $"↻ {_customLabel ?? _profile.DisplayName}",
+            _ => $"… {_customLabel ?? _profile.DisplayName}",
         });
     }
 
@@ -203,6 +253,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
             WebView.PreviewKeyDown += OnWebViewPreviewKeyDown;
+            await WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(HomeEndPageScript);
             Navigate(_url);
         }
         catch (Exception ex)

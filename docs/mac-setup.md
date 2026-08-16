@@ -139,9 +139,9 @@ xcodebuild -project HarnessPortable.xcodeproj \
 - 后台：菜单栏常驻（MenuBarExtra / NSStatusItem），关窗不断隧道。
 - **多隧道**：桌面端必须支持同时连接多个 profile，每个 profile 独立
   session/状态；同一工作区窗口内以标签页展示，支持拖拽标签左右/上下分屏；
-  右键标签可复制、四向拆分、切换为其他隧道/直连；支持布局预设保存与一键
-  恢复；F11 全屏、Esc 退出；Home/End 滚动；关闭标签不停止隧道；行为对齐
-  Windows 版。
+  右键标签可复制、重命名、四向拆分、切换为其他隧道/直连；标签重命名后的
+  label 随布局预设保存与恢复；支持布局预设保存与一键恢复；F11 全屏、Esc
+  退出；Home/End 滚动；关闭标签不停止隧道；行为对齐 Windows 版。
 
 ## 10. 签名与公证（最后阶段）
 

@@ -11,13 +11,164 @@
         FontFamily="Segoe UI, Microsoft YaHei UI"
         PreviewKeyDown="Window_PreviewKeyDown">
 
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <Style x:Key="ModernDocumentPaneControlStyle" TargetType="{x:Type avalonDock:LayoutDocumentPaneControl}">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type avalonDock:LayoutDocumentPaneControl}">
+                        <Grid ClipToBounds="True" KeyboardNavigation.TabNavigation="Local">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Grid Panel.ZIndex="1"
+                                  Visibility="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type avalonDock:LayoutDocumentPaneControl}}, Path=Model.ShowHeader, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <avalonDock:DocumentPaneTabPanel x:Name="HeaderPanel"
+                                                                 IsItemsHost="True"
+                                                                 KeyboardNavigation.TabIndex="1"/>
+                            </Grid>
+                            <Border x:Name="ContentPanel"
+                                    Grid.Row="1"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="#E5E7EB"
+                                    BorderThickness="1,0,0,0"
+                                    KeyboardNavigation.DirectionalNavigation="Contained"
+                                    KeyboardNavigation.TabIndex="2"
+                                    KeyboardNavigation.TabNavigation="Cycle">
+                                <ContentPresenter x:Name="PART_SelectedContentHost"
+                                                  ContentSource="SelectedContent"
+                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="TabItem">
+                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                        <Setter Property="IsEnabled" Value="{Binding IsEnabled}"/>
+                        <Setter Property="ToolTip" Value="{Binding ToolTip}"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="TabItem">
+                                    <ContentPresenter ContentSource="Header"/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <avalonDock:LayoutDocumentTabItem Model="{Binding}"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <avalonDock:LayoutDocumentControl Model="{Binding}"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="{x:Type avalonDock:LayoutDocumentTabItem}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type avalonDock:LayoutDocumentTabItem}">
+                        <avalonDock:DropDownControlArea
+                            DropDownContextMenu="{Binding Root.Manager.DocumentContextMenu}"
+                            DropDownContextMenuDataContext="{Binding LayoutItem, RelativeSource={RelativeSource TemplatedParent}}">
+                            <Border x:Name="TabBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="0,0,0,2"
+                                    CornerRadius="8,8,0,0"
+                                    Padding="{TemplateBinding Padding}"
+                                    Margin="1,3,1,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter
+                                        VerticalAlignment="Center"
+                                        Content="{Binding Model, RelativeSource={RelativeSource TemplatedParent}}"
+                                        ContentTemplate="{Binding DocumentHeaderTemplate, Mode=OneWay, RelativeSource={RelativeSource AncestorType={x:Type avalonDock:DockingManager}, Mode=FindAncestor}}"
+                                        ContentTemplateSelector="{Binding DocumentHeaderTemplateSelector, Mode=OneWay, RelativeSource={RelativeSource AncestorType={x:Type avalonDock:DockingManager}, Mode=FindAncestor}}"/>
+                                    <Button x:Name="CloseButton"
+                                            Grid.Column="1"
+                                            Width="18" Height="18"
+                                            Margin="6,0,0,0"
+                                            Padding="0"
+                                            Command="{Binding LayoutItem.CloseCommand, RelativeSource={RelativeSource TemplatedParent}}"
+                                            Focusable="False"
+                                            Cursor="Hand"
+                                            ToolTip="关闭标签"
+                                            Visibility="Collapsed">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="Bd" Background="Transparent" CornerRadius="4">
+                                                    <TextBlock Text="✕" FontSize="10" Foreground="#9CA3AF"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Bd" Property="Background" Value="#FEE2E2"/>
+                                                        <Setter Property="Foreground" Value="#DC2626"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </Grid>
+                            </Border>
+                        </avalonDock:DropDownControlArea>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="#FFFFFF"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#2563EB"/>
+                                <Setter Property="Foreground" Value="#111827"/>
+                            </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}" Value="True"/>
+                                    <Condition Binding="{Binding IsSelected}" Value="False"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="TabBorder" Property="Background" Value="#F3F4F6"/>
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="CloseButton" Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                            <DataTrigger Binding="{Binding CanClose}" Value="False">
+                                <Setter TargetName="CloseButton" Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <DockPanel>
         <Border x:Name="ChromeBar" DockPanel.Dock="Top" Background="#F9FAFB" Padding="14,8"
                 BorderBrush="#E5E7EB" BorderThickness="0,0,0,1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="布局预设" Foreground="#6B7280" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <ComboBox x:Name="LayoutPresetBox" Width="170" Height="30" VerticalContentAlignment="Center"
+                    <ComboBox x:Name="LayoutPresetBox" Width="170"
+                              Style="{StaticResource ModernComboBox}"
                               DisplayMemberPath="Name"
                               SelectionChanged="LayoutPresetBox_SelectionChanged"/>
                     <Button Content="保存当前布局" Style="{StaticResource ModernToolbarButton}"
@@ -47,13 +198,21 @@
 
         <avalonDock:DockingManager x:Name="DockManager"
                                    AllowMixedOrientation="True"
-                                   Background="#F3F4F6">
+                                   Background="#F3F4F6"
+                                   DocumentPaneControlStyle="{StaticResource ModernDocumentPaneControlStyle}">
             <avalonDock:DockingManager.Theme>
                 <avalonDock:GenericTheme/>
             </avalonDock:DockingManager.Theme>
+            <avalonDock:DockingManager.DocumentHeaderTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" FontSize="13"/>
+                </DataTemplate>
+            </avalonDock:DockingManager.DocumentHeaderTemplate>
             <avalonDock:DockingManager.DocumentContextMenu>
                 <ContextMenu Opened="DocumentContextMenu_Opened">
                     <MenuItem Header="复制标签" Click="DuplicateTab_Click"/>
+                    <MenuItem Header="重命名" Click="RenameTab_Click"/>
                     <Separator/>
                     <MenuItem Header="向右拆分" Click="SplitRight_Click"/>
                     <MenuItem Header="向左拆分" Click="SplitLeft_Click"/>

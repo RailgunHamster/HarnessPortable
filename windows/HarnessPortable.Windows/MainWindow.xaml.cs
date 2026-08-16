@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using AvalonDock.Layout;
 using HarnessPortable.Windows.Controls;
 using HarnessPortable.Windows.Models;
@@ -38,6 +39,10 @@ public partial class MainWindow : Window
     private WindowState _preFullScreenState;
     private ResizeMode _normalResizeMode;
     private bool _normalTopmost;
+    private double _normalLeft;
+    private double _normalTop;
+    private double _normalWidth;
+    private double _normalHeight;
 
     public MainWindow(AppServices services)
     {
@@ -309,17 +314,24 @@ public partial class MainWindow : Window
 
     private void DuplicateViewInto(SessionView source, LayoutDocumentPane targetPane, bool activate)
     {
+        LayoutDocument? created = null;
+
         if (source.IsTunnel && source.ProfileId is { } profileId)
         {
             var profile = _services.Profiles.FindTunnel(profileId);
             if (profile is not null)
             {
-                CreateTunnelDoc(profile, source.LocalPort, targetPane, activate);
+                created = CreateTunnelDoc(profile, source.LocalPort, targetPane, activate);
             }
         }
         else if (!source.IsTunnel && source.DirectUrl is { } url)
         {
-            CreateDirectDoc(url, NextDirectSuffix(url), targetPane, activate);
+            created = CreateDirectDoc(url, NextDirectSuffix(url), targetPane, activate);
+        }
+
+        if (created?.Content is SessionView duplicate && source.CustomLabel is { } label)
+        {
+            duplicate.SetCustomLabel(label);
         }
     }
 
@@ -481,6 +493,26 @@ public partial class MainWindow : Window
         }
     }
 
+    private void RenameTab_Click(object sender, RoutedEventArgs e)
+    {
+        var doc = GetContextDocumentFromMenuItem(sender) ?? _contextDoc;
+        if (doc is null || ReferenceEquals(doc, _managementDoc) || doc.Content is not SessionView view)
+        {
+            return;
+        }
+
+        var dialog = new LayoutNameWindow(view.CustomLabel ?? view.SessionTitle)
+        {
+            Owner = this,
+            Title = "重命名标签",
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            view.SetCustomLabel(dialog.LayoutName);
+        }
+    }
+
     private void DuplicateTab_Click(object sender, RoutedEventArgs e)
     {
         var doc = GetContextDocumentFromMenuItem(sender);
@@ -577,6 +609,11 @@ public partial class MainWindow : Window
             var newView = CreateTunnelView(profile, port);
 
             ReplaceDocumentContent(doc, oldView, newView, newTunnelProfileId: profile.Id);
+            if (target.Label is { } label)
+            {
+                newView.SetCustomLabel(label);
+            }
+
             if (state.Status is not (TunnelStatus.Connected or TunnelStatus.Connecting or TunnelStatus.Retrying))
             {
                 _services.Tunnels.Start(profile.Id);
@@ -586,6 +623,10 @@ public partial class MainWindow : Window
         {
             var newView = CreateDirectView(url);
             ReplaceDocumentContent(doc, oldView, newView, newTunnelProfileId: null);
+            if (target.Label is { } label)
+            {
+                newView.SetCustomLabel(label);
+            }
         }
     }
 
@@ -837,9 +878,14 @@ public partial class MainWindow : Window
 
         return doc.Content is SessionView view
             ? view.IsTunnel && view.ProfileId is { } profileId
-                ? new LayoutTabRef { Kind = "tunnel", ProfileId = profileId }
+                ? new LayoutTabRef
+                {
+                    Kind = "tunnel",
+                    ProfileId = profileId,
+                    Label = view.CustomLabel,
+                }
                 : !view.IsTunnel && view.DirectUrl is { } url
-                    ? new LayoutTabRef { Kind = "direct", Url = url }
+                    ? new LayoutTabRef { Kind = "direct", Url = url, Label = view.CustomLabel }
                     : null
             : null;
     }
@@ -887,7 +933,11 @@ public partial class MainWindow : Window
 
             var state = _services.Tunnels.GetState(profile.Id);
             var port = state.LocalPort > 0 ? state.LocalPort : profile.LocalPort;
-            CreateTunnelDoc(profile, port, pane, activate: false);
+            var doc = CreateTunnelDoc(profile, port, pane, activate: false);
+            if (tab.Label is { } label && doc.Content is SessionView tunnelView)
+            {
+                tunnelView.SetCustomLabel(label);
+            }
 
             if (state.Status is not (TunnelStatus.Connected or TunnelStatus.Connecting or TunnelStatus.Retrying))
             {
@@ -896,7 +946,11 @@ public partial class MainWindow : Window
         }
         else if (tab.Kind == "direct" && tab.Url is { } url)
         {
-            CreateDirectDoc(url, NextDirectSuffix(url), pane, activate: false);
+            var doc = CreateDirectDoc(url, NextDirectSuffix(url), pane, activate: false);
+            if (tab.Label is { } label && doc.Content is SessionView directView)
+            {
+                directView.SetCustomLabel(label);
+            }
         }
     }
 
@@ -942,16 +996,28 @@ public partial class MainWindow : Window
         _normalResizeMode = ResizeMode;
         _preFullScreenState = WindowState;
         _normalTopmost = Topmost;
+        _normalLeft = Left;
+        _normalTop = Top;
+        _normalWidth = Width;
+        _normalHeight = Height;
 
         SetSessionFullScreenState(true);
 
         ChromeBar.Visibility = Visibility.Collapsed;
         ChromeStatus.Visibility = Visibility.Collapsed;
 
+        // Cover the current monitor completely, including the taskbar:
+        // WPF's "maximized borderless" alone can leave the taskbar visible.
+        var screen = System.Windows.Forms.Screen.FromHandle(new WindowInteropHelper(this).Handle);
+
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         Topmost = true;
-        WindowState = WindowState.Maximized;
+        WindowState = WindowState.Normal;
+        Left = screen.Bounds.Left;
+        Top = screen.Bounds.Top;
+        Width = screen.Bounds.Width;
+        Height = screen.Bounds.Height;
     }
 
     private void ExitFullScreen()
@@ -970,9 +1036,20 @@ public partial class MainWindow : Window
         WindowStyle = _normalWindowStyle;
         ResizeMode = _normalResizeMode;
         Topmost = _normalTopmost;
-        WindowState = _preFullScreenState == WindowState.Minimized
-            ? WindowState.Normal
-            : _preFullScreenState;
+        WindowState = WindowState.Normal;
+        Left = _normalLeft;
+        Top = _normalTop;
+        Width = _normalWidth;
+        Height = _normalHeight;
+
+        if (_preFullScreenState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+        else if (_preFullScreenState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
     }
 
     private void SetSessionFullScreenState(bool fullScreen)
