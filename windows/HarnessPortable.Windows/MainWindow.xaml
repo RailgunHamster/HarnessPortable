@@ -7,41 +7,48 @@
         Width="1200" Height="780"
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen"
-        FontFamily="Segoe UI, Microsoft YaHei UI">
+        Background="#F3F4F6"
+        FontFamily="Segoe UI, Microsoft YaHei UI"
+        PreviewKeyDown="Window_PreviewKeyDown">
 
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#F3F4F6" Padding="12,8"
-                BorderBrush="#E3E6EA" BorderThickness="0,0,0,1">
+        <Border x:Name="ChromeBar" DockPanel.Dock="Top" Background="#F9FAFB" Padding="14,8"
+                BorderBrush="#E5E7EB" BorderThickness="0,0,0,1">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button x:Name="SplitRightButton" Content="当前标签 → 右侧分屏" Padding="10,5"
-                            Margin="4,0,0,0" Click="SplitRight_Click"/>
-                    <Button x:Name="SplitDownButton" Content="当前标签 ↓ 下方分屏" Padding="10,5"
-                            Margin="4,0,0,0" Click="SplitDown_Click"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="F11 全屏 · 拖动标签分屏 · 右键标签复制" Foreground="#9CA3AF"
+                               FontSize="12" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Harness Portable" FontSize="16" FontWeight="Bold"
+                    <TextBlock Text="Harness Portable" FontSize="16" FontWeight="SemiBold"
                                Foreground="#111827" VerticalAlignment="Center"/>
-                    <TextBlock Text="拖动标签到窗口边缘也可分屏" Margin="12,0,0,0"
-                               Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <StatusBar DockPanel.Dock="Bottom" Background="#F9FAFB">
+        <StatusBar x:Name="ChromeStatus" DockPanel.Dock="Bottom" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0">
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="就绪" Foreground="#374151"/>
             </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right">
-                <Button x:Name="StopTunnelButton" Content="停止全部隧道" Padding="10,2"
+                <Button x:Name="StopTunnelButton" Content="停止全部隧道"
+                        Style="{StaticResource ModernToolbarButton}"
                         Visibility="Collapsed" Click="StopAll_Click"/>
             </StatusBarItem>
         </StatusBar>
 
-        <avalonDock:DockingManager x:Name="DockManager">
+        <avalonDock:DockingManager x:Name="DockManager"
+                                   AllowMixedOrientation="True"
+                                   Background="#F3F4F6">
             <avalonDock:DockingManager.Theme>
                 <avalonDock:GenericTheme/>
             </avalonDock:DockingManager.Theme>
+            <avalonDock:DockingManager.DocumentContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="复制标签" Click="DuplicateTab_Click"/>
+                    <MenuItem Header="关闭标签" Click="CloseTab_Click"/>
+                </ContextMenu>
+            </avalonDock:DockingManager.DocumentContextMenu>
         </avalonDock:DockingManager>
     </DockPanel>
 </Window>

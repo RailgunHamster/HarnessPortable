@@ -16,8 +16,10 @@
                                TextWrapping="Wrap" Margin="0,8,0,0" HorizontalAlignment="Center"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
                         <Button x:Name="OverlayReconnectButton" Content="重连" Width="88" Margin="0,0,8,0"
+                                Style="{StaticResource ModernPrimaryButton}"
                                 Click="OverlayReconnect_Click"/>
                         <Button x:Name="OverlayReturnButton" Content="关闭标签" Width="88"
+                                Style="{StaticResource ModernButton}"
                                 Click="OverlayReturn_Click"/>
                     </StackPanel>
                 </StackPanel>
@@ -38,11 +40,13 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
 
-            <StackPanel x:Name="ActionsPanel" Visibility="Collapsed" Width="72" IsHitTestVisible="True">
-                <Button Content="刷新" Height="38" Margin="0,0,0,6" Click="Refresh_Click"/>
-                <Button x:Name="ReconnectAction" Content="重连" Height="38" Margin="0,0,0,6"
-                        Click="Reconnect_Click"/>
-                <Button x:Name="DisconnectAction" Content="断开" Height="38" Click="Disconnect_Click"/>
+            <StackPanel x:Name="ActionsPanel" Visibility="Collapsed" Width="76" IsHitTestVisible="True">
+                <Button Content="刷新" Height="36" Margin="0,0,0,6"
+                        Style="{StaticResource ModernButton}" Click="Refresh_Click"/>
+                <Button x:Name="ReconnectAction" Content="重连" Height="36" Margin="0,0,0,6"
+                        Style="{StaticResource ModernButton}" Click="Reconnect_Click"/>
+                <Button x:Name="DisconnectAction" Content="断开" Height="36"
+                        Style="{StaticResource ModernDangerButton}" Click="Disconnect_Click"/>
             </StackPanel>
         </Canvas>
     </Grid>

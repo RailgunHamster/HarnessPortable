@@ -12,7 +12,7 @@ namespace HarnessPortable.Windows.Controls;
 public partial class SessionView : System.Windows.Controls.UserControl
 {
     private const double BallSize = 48;
-    private const double ActionHeight = 38 + 6;
+    private const double ActionHeight = 36 + 6;
 
     private readonly AppServices _services;
     private readonly bool _isTunnel;
@@ -30,10 +30,15 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     public event Action? CloseRequested;
     public event Action<string>? TitleChanged;
+    public event Action? FullScreenToggleRequested;
+    public event Action? EscapeRequested;
 
     public string? ProfileId => _profile?.Id;
     public bool IsTunnel => _isTunnel;
+    public string? DirectUrl => _isTunnel ? null : _url;
+    public int LocalPort => _lastPort;
     public string SessionTitle { get; private set; } = "";
+    public bool AppFullScreenActive { get; set; }
 
     public SessionView(AppServices services, TunnelProfile profile, int localPort)
     {
@@ -92,6 +97,8 @@ public partial class SessionView : System.Windows.Controls.UserControl
         {
             _services.Tunnels.StateChanged -= OnTunnelStateChanged;
         }
+
+        WebView.PreviewKeyDown -= OnWebViewPreviewKeyDown;
 
         try
         {
@@ -187,6 +194,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             _coreReady = true;
             WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+            WebView.PreviewKeyDown += OnWebViewPreviewKeyDown;
             Navigate(_url);
         }
         catch (Exception ex)
@@ -210,6 +218,74 @@ public partial class SessionView : System.Windows.Controls.UserControl
         if (_coreReady)
         {
             WebView.CoreWebView2.Navigate(url);
+        }
+    }
+
+    private void OnWebViewPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case System.Windows.Input.Key.F11:
+                e.Handled = true;
+                FullScreenToggleRequested?.Invoke();
+                break;
+
+            case System.Windows.Input.Key.Escape:
+                if (AppFullScreenActive)
+                {
+                    e.Handled = true;
+                    EscapeRequested?.Invoke();
+                }
+
+                break;
+
+            case System.Windows.Input.Key.Home:
+            case System.Windows.Input.Key.End:
+                e.Handled = true;
+                ScrollPageToEdge(e.Key == System.Windows.Input.Key.Home);
+                break;
+        }
+    }
+
+    private async void ScrollPageToEdge(bool top)
+    {
+        if (!_coreReady)
+        {
+            return;
+        }
+
+        const string script = """
+            (function (toTop) {
+                function isScrollable(el) {
+                    if (!el || el.scrollHeight === undefined) return false;
+                    return el.scrollHeight - el.clientHeight > 1;
+                }
+                var candidates = [];
+                var root = document.scrollingElement || document.documentElement;
+                if (isScrollable(root)) candidates.push(root);
+                var all = document.querySelectorAll('div, main, section, article, ul, body');
+                for (var i = 0; i < all.length; i++) {
+                    if (isScrollable(all[i])) candidates.push(all[i]);
+                }
+                var best = null;
+                var bestDelta = -1;
+                for (var j = 0; j < candidates.length; j++) {
+                    var delta = Math.abs(candidates[j].scrollHeight - candidates[j].clientHeight);
+                    if (delta > bestDelta) { bestDelta = delta; best = candidates[j]; }
+                }
+                if (!best) return false;
+                best.scrollTo({ top: toTop ? 0 : best.scrollHeight, behavior: 'auto' });
+                return true;
+            })(arguments[0]);
+            """;
+
+        try
+        {
+            await WebView.CoreWebView2.ExecuteScriptAsync(script.Replace("arguments[0]", top ? "true" : "false"));
+        }
+        catch
+        {
+            // Best effort only.
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using AvalonDock.Layout;
 using HarnessPortable.Windows.Controls;
 using HarnessPortable.Windows.Models;
@@ -14,10 +15,16 @@ public partial class MainWindow : Window
     private readonly LayoutDocument _managementDoc;
 
     private readonly Dictionary<string, TunnelProfile> _pendingProfiles = [];
-    private readonly Dictionary<string, LayoutDocument> _tunnelDocs = [];
+    private readonly Dictionary<string, List<LayoutDocument>> _tunnelDocsByProfile = [];
     private readonly List<LayoutDocument> _directDocs = [];
+    private readonly Dictionary<LayoutDocument, string> _docSuffixes = [];
 
     private bool _trayHintShown;
+    private bool _isFullScreen;
+    private WindowStyle _normalWindowStyle;
+    private WindowState _preFullScreenState;
+    private ResizeMode _normalResizeMode;
+    private bool _normalTopmost;
 
     public MainWindow(AppServices services)
     {
@@ -26,7 +33,7 @@ public partial class MainWindow : Window
 
         _managementView = new ManagementView(_services);
         _managementView.TunnelConnectRequested += ConnectTunnel;
-        _managementView.TunnelStopRequested += CloseTunnelDoc;
+        _managementView.TunnelStopRequested += CloseTunnelDocs;
         _managementView.DirectOpenRequested += OpenDirectSession;
 
         _managementDoc = new LayoutDocument
@@ -151,60 +158,90 @@ public partial class MainWindow : Window
 
     private void OpenOrFocusTunnelSession(TunnelProfile profile, int localPort)
     {
-        if (_tunnelDocs.TryGetValue(profile.Id, out var existing))
+        if (_tunnelDocsByProfile.TryGetValue(profile.Id, out var docs) && docs.Count > 0)
         {
-            existing.IsActive = true;
-            existing.IsSelected = true;
+            var doc = docs[0];
+            doc.IsActive = true;
+            doc.IsSelected = true;
             return;
         }
 
+        CreateTunnelSession(profile, localPort);
+    }
+
+    private void CreateTunnelSession(TunnelProfile profile, int localPort)
+    {
+        var existingCount = _tunnelDocsByProfile.TryGetValue(profile.Id, out var docs) ? docs.Count : 0;
+        var suffix = existingCount == 0 ? "" : $" ({existingCount + 1})";
+
         var view = new SessionView(_services, profile, localPort);
+        view.AppFullScreenActive = _isFullScreen;
         view.CloseRequested += () => CloseDocByView(view);
+        view.FullScreenToggleRequested += ToggleFullScreen;
+        view.EscapeRequested += ExitFullScreen;
         view.TitleChanged += title =>
         {
-            if (_tunnelDocs.TryGetValue(profile.Id, out var doc))
+            if (FindDocForView(view) is { } doc)
             {
-                doc.Title = title;
+                doc.Title = title + suffix;
             }
         };
 
         var doc = new LayoutDocument
         {
-            Title = view.SessionTitle,
-            ContentId = $"tunnel:{profile.Id}",
+            Title = view.SessionTitle + suffix,
+            ContentId = $"tunnel:{profile.Id}:{Guid.NewGuid():N}",
             CanClose = true,
             Content = view,
         };
 
+        _docSuffixes[doc] = suffix;
+
         doc.Closed += (_, _) =>
         {
-            if (_tunnelDocs.Remove(profile.Id))
+            _docSuffixes.Remove(doc);
+            view.Shutdown();
+            if (_tunnelDocsByProfile.TryGetValue(profile.Id, out var list))
             {
-                view.Shutdown();
+                list.Remove(doc);
             }
         };
 
-        _tunnelDocs[profile.Id] = doc;
+        if (!_tunnelDocsByProfile.TryGetValue(profile.Id, out var target))
+        {
+            target = [];
+            _tunnelDocsByProfile[profile.Id] = target;
+        }
+
+        target.Add(doc);
         GetTargetPane().Children.Add(doc);
         doc.IsActive = true;
         doc.IsSelected = true;
     }
 
-    private void OpenDirectSession(string url)
+    private void OpenDirectSession(string url) => CreateDirectSession(url, string.Empty);
+
+    private void CreateDirectSession(string url, string suffix)
     {
         var view = new SessionView(_services, url);
+        view.AppFullScreenActive = _isFullScreen;
         view.CloseRequested += () => CloseDocByView(view);
+        view.FullScreenToggleRequested += ToggleFullScreen;
+        view.EscapeRequested += ExitFullScreen;
 
         var doc = new LayoutDocument
         {
-            Title = view.SessionTitle,
+            Title = view.SessionTitle + suffix,
             ContentId = $"direct:{Guid.NewGuid():N}",
             CanClose = true,
             Content = view,
         };
 
+        _docSuffixes[doc] = suffix;
+
         doc.Closed += (_, _) =>
         {
+            _docSuffixes.Remove(doc);
             _directDocs.Remove(doc);
             view.Shutdown();
         };
@@ -215,21 +252,33 @@ public partial class MainWindow : Window
         doc.IsSelected = true;
     }
 
-    private void CloseDocByView(SessionView view)
+    private LayoutDocument? FindDocForView(SessionView view)
     {
-        foreach (var doc in _tunnelDocs.Values.Concat(_directDocs))
+        foreach (var docs in _tunnelDocsByProfile.Values)
         {
-            if (ReferenceEquals(doc.Content, view))
+            var match = docs.FirstOrDefault(d => ReferenceEquals(d.Content, view));
+            if (match is not null)
             {
-                doc.Close();
-                return;
+                return match;
             }
         }
+
+        return _directDocs.FirstOrDefault(d => ReferenceEquals(d.Content, view));
     }
 
-    private void CloseTunnelDoc(string profileId)
+    private void CloseDocByView(SessionView view)
     {
-        if (_tunnelDocs.TryGetValue(profileId, out var doc))
+        FindDocForView(view)?.Close();
+    }
+
+    private void CloseTunnelDocs(string profileId)
+    {
+        if (!_tunnelDocsByProfile.TryGetValue(profileId, out var docs))
+        {
+            return;
+        }
+
+        foreach (var doc in docs.ToList())
         {
             doc.Close();
         }
@@ -240,54 +289,170 @@ public partial class MainWindow : Window
         _pendingProfiles.Clear();
         _services.Tunnels.StopAll();
 
-        foreach (var doc in _tunnelDocs.Values.ToList())
+        foreach (var docs in _tunnelDocsByProfile.Values)
         {
-            doc.Close();
+            foreach (var doc in docs.ToList())
+            {
+                doc.Close();
+            }
         }
 
         RefreshStatusBar();
     }
 
     // ------------------------------------------------------------------
-    // Split / dock
+    // Tab context menu
     // ------------------------------------------------------------------
 
-    private void SplitRight_Click(object sender, RoutedEventArgs e) =>
-        SplitActiveDocument(System.Windows.Controls.Orientation.Horizontal);
-
-    private void SplitDown_Click(object sender, RoutedEventArgs e) =>
-        SplitActiveDocument(System.Windows.Controls.Orientation.Vertical);
-
-    private void SplitActiveDocument(System.Windows.Controls.Orientation orientation)
+    private LayoutDocument? GetContextDocument(FrameworkElement source)
     {
-        if (DockManager.Layout.ActiveContent is not LayoutDocument active ||
-            ReferenceEquals(active, _managementDoc))
+        if (source.DataContext is AvalonDock.Controls.LayoutItem item &&
+            item.LayoutElement is LayoutDocument doc)
+        {
+            return doc;
+        }
+
+        if (source.DataContext is LayoutDocument directDoc)
+        {
+            return directDoc;
+        }
+
+        return DockManager.Layout.ActiveContent as LayoutDocument;
+    }
+
+    private void DuplicateTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.MenuItem menuItem)
         {
             return;
         }
 
-        if (active.Parent is not LayoutDocumentPane oldPane || oldPane.Children.Count <= 1)
+        var doc = GetContextDocument(menuItem);
+        if (doc is null || ReferenceEquals(doc, _managementDoc) || doc.Content is not SessionView view)
         {
             return;
         }
 
-        if (oldPane.Parent is not ILayoutContainer parent)
+        if (view.IsTunnel && view.ProfileId is { } profileId)
+        {
+            var profile = _services.Profiles.FindTunnel(profileId);
+            if (profile is not null)
+            {
+                CreateTunnelSession(profile, view.LocalPort);
+            }
+        }
+        else if (!view.IsTunnel && view.DirectUrl is { } url)
+        {
+            var existingCount = _directDocs.Count(d =>
+                (d.Content as SessionView)?.DirectUrl == url);
+
+            CreateDirectSession(url, existingCount == 0 ? "" : $" ({existingCount + 1})");
+        }
+    }
+
+    private void CloseTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem menuItem)
+        {
+            GetContextDocument(menuItem)?.Close();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Full screen
+    // ------------------------------------------------------------------
+
+    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.F11)
+        {
+            ToggleFullScreen();
+            e.Handled = true;
+        }
+        else if (_isFullScreen && e.Key == Key.Escape)
+        {
+            ExitFullScreen();
+            e.Handled = true;
+        }
+    }
+
+    private void ToggleFullScreen()
+    {
+        if (_isFullScreen)
+        {
+            ExitFullScreen();
+        }
+        else
+        {
+            EnterFullScreen();
+        }
+    }
+
+    private void EnterFullScreen()
+    {
+        if (_isFullScreen)
         {
             return;
         }
 
-        var newPane = new LayoutDocumentPane();
-        var group = new LayoutDocumentPaneGroup { Orientation = orientation };
+        _isFullScreen = true;
+        _normalWindowStyle = WindowStyle;
+        _normalResizeMode = ResizeMode;
+        _preFullScreenState = WindowState;
+        _normalTopmost = Topmost;
 
-        parent.ReplaceChild(oldPane, group);
-        group.Children.Add(oldPane);
-        group.Children.Add(newPane);
+        SetSessionFullScreenState(true);
 
-        oldPane.RemoveChild(active);
-        newPane.Children.Add(active);
+        ChromeBar.Visibility = Visibility.Collapsed;
+        ChromeStatus.Visibility = Visibility.Collapsed;
 
-        active.IsActive = true;
-        active.IsSelected = true;
+        WindowStyle = WindowStyle.None;
+        ResizeMode = ResizeMode.NoResize;
+        Topmost = true;
+        WindowState = WindowState.Maximized;
+    }
+
+    private void ExitFullScreen()
+    {
+        if (!_isFullScreen)
+        {
+            return;
+        }
+
+        _isFullScreen = false;
+        ChromeBar.Visibility = Visibility.Visible;
+        ChromeStatus.Visibility = Visibility.Visible;
+
+        SetSessionFullScreenState(false);
+
+        WindowStyle = _normalWindowStyle;
+        ResizeMode = _normalResizeMode;
+        Topmost = _normalTopmost;
+        WindowState = _preFullScreenState == WindowState.Minimized
+            ? WindowState.Normal
+            : _preFullScreenState;
+    }
+
+    private void SetSessionFullScreenState(bool fullScreen)
+    {
+        foreach (var docs in _tunnelDocsByProfile.Values)
+        {
+            foreach (var doc in docs)
+            {
+                if (doc.Content is SessionView view)
+                {
+                    view.AppFullScreenActive = fullScreen;
+                }
+            }
+        }
+
+        foreach (var doc in _directDocs)
+        {
+            if (doc.Content is SessionView view)
+            {
+                view.AppFullScreenActive = fullScreen;
+            }
+        }
     }
 
     // ------------------------------------------------------------------
