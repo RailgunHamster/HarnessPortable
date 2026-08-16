@@ -16,6 +16,9 @@
 - 支持**同时连接多个 SSH 隧道**，每个隧道独立重连/停止
 - 单一工作区窗口：隧道与直连聚合为**标签页**，支持拖拽标签到窗口边缘进行**左右/上下分屏**
 - 右键标签可**复制标签**：同一隧道/直连可开多个独立 WebView 标签（如网页内切换不同对话）
+- 右键标签可**四向拆分**（复制当前标签到左/右/上/下新 pane），递归组合出三列/2×2/不规则布局
+- 右键标签可**切换为其他隧道/直连**，在原布局位置替换当前标签
+- **布局预设**：保存当前分屏结构 + 每个标签对应的隧道/直连，顶部下拉一键切换，可保存多个
 - **F11 全屏**：隐藏标题栏/工具栏/状态栏，只保留标签和网页，Esc 退出
 - 关闭标签不停止隧道；停止隧道才关闭对应标签
 - **Home / End** 快速滚到页面顶部/底部（自动寻找可滚动容器）
@@ -114,6 +117,7 @@ dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
 - `%APPDATA%\HarnessPortable\profiles.json` —— 隧道与直连列表
 - `%APPDATA%\HarnessPortable\secrets.json` —— DPAPI 加密的 SSH 密码
 - `%APPDATA%\HarnessPortable\known_hosts.json` —— TOFU 主机密钥
+- `%APPDATA%\HarnessPortable\layouts.json` —— 布局预设
 - `%APPDATA%\HarnessPortable\WebView2\` —— 浏览器用户数据
 
 字段约定见 `spec/config-schema.md`。

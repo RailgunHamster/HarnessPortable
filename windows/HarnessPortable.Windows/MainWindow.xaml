@@ -16,8 +16,16 @@
                 BorderBrush="#E5E7EB" BorderThickness="0,0,0,1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="F11 全屏 · 拖动标签分屏 · 右键标签复制" Foreground="#9CA3AF"
-                               FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock Text="布局预设" Foreground="#6B7280" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <ComboBox x:Name="LayoutPresetBox" Width="170" Height="30" VerticalContentAlignment="Center"
+                              DisplayMemberPath="Name"
+                              SelectionChanged="LayoutPresetBox_SelectionChanged"/>
+                    <Button Content="保存当前布局" Style="{StaticResource ModernToolbarButton}"
+                            Margin="6,0,0,0" Click="SaveLayout_Click"/>
+                    <Button Content="删除" Style="{StaticResource ModernToolbarButton}"
+                            Margin="6,0,0,0" Click="DeleteLayout_Click"/>
+                    <TextBlock Text="F11 全屏 · 拖动标签分屏 · 右键标签更多操作" Foreground="#9CA3AF"
+                               FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Harness Portable" FontSize="16" FontWeight="SemiBold"
@@ -44,8 +52,16 @@
                 <avalonDock:GenericTheme/>
             </avalonDock:DockingManager.Theme>
             <avalonDock:DockingManager.DocumentContextMenu>
-                <ContextMenu>
+                <ContextMenu Opened="DocumentContextMenu_Opened">
                     <MenuItem Header="复制标签" Click="DuplicateTab_Click"/>
+                    <Separator/>
+                    <MenuItem Header="向右拆分" Click="SplitRight_Click"/>
+                    <MenuItem Header="向左拆分" Click="SplitLeft_Click"/>
+                    <MenuItem Header="向上拆分" Click="SplitUp_Click"/>
+                    <MenuItem Header="向下拆分" Click="SplitDown_Click"/>
+                    <Separator/>
+                    <MenuItem x:Name="SwitchToMenu" Header="切换为…"/>
+                    <Separator/>
                     <MenuItem Header="关闭标签" Click="CloseTab_Click"/>
                 </ContextMenu>
             </avalonDock:DockingManager.DocumentContextMenu>

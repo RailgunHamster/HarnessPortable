@@ -27,6 +27,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private bool _tunnelWasDown;
     private bool _coreReady;
     private bool _initialized;
+    private bool _shutdown;
 
     public event Action? CloseRequested;
     public event Action<string>? TitleChanged;
@@ -93,6 +94,13 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     public void Shutdown()
     {
+        if (_shutdown)
+        {
+            return;
+        }
+
+        _shutdown = true;
+
         if (_isTunnel)
         {
             _services.Tunnels.StateChanged -= OnTunnelStateChanged;
