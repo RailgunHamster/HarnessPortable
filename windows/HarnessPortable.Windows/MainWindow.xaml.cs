@@ -768,12 +768,18 @@ public partial class MainWindow : Window
         CloseAllSessionDocs();
 
         _managementDoc = CreateManagementDoc();
-        var managementPane = new LayoutDocumentPane(_managementDoc);
 
-        var rootPanel = new LayoutPanel(managementPane);
-        if (DeserializeLayoutNode(layout.Root) is { } body)
+        var body = DeserializeLayoutNode(layout.Root);
+        var rootPanel = body switch
         {
-            rootPanel.Children.Add(body);
+            null => new LayoutPanel(new LayoutDocumentPane(_managementDoc)),
+            LayoutPanel panel => panel,
+            _ => new LayoutPanel(body),
+        };
+
+        if (!ContainsManagement(layout.Root))
+        {
+            rootPanel.Children.Insert(0, new LayoutDocumentPane(_managementDoc));
         }
 
         DockManager.Layout = new LayoutRoot { RootPanel = rootPanel };
@@ -790,6 +796,16 @@ public partial class MainWindow : Window
         }
 
         RefreshStatusBar();
+    }
+
+    private bool ContainsManagement(LayoutNode node)
+    {
+        if (node.Kind == "pane")
+        {
+            return node.Tabs.Any(t => t.Kind == "management");
+        }
+
+        return node.Children.Any(ContainsManagement);
     }
 
     private IEnumerable<LayoutDocument> AllSessionDocs()
@@ -873,7 +889,7 @@ public partial class MainWindow : Window
     {
         if (ReferenceEquals(doc, _managementDoc))
         {
-            return null;
+            return new LayoutTabRef { Kind = "management" };
         }
 
         return doc.Content is SessionView view
@@ -923,6 +939,12 @@ public partial class MainWindow : Window
 
     private void CreateSessionForTab(LayoutTabRef tab, LayoutDocumentPane pane)
     {
+        if (tab.Kind == "management")
+        {
+            pane.Children.Add(_managementDoc);
+            return;
+        }
+
         if (tab.Kind == "tunnel")
         {
             var profile = tab.ProfileId is null ? null : _services.Profiles.FindTunnel(tab.ProfileId);
@@ -1006,18 +1028,35 @@ public partial class MainWindow : Window
         ChromeBar.Visibility = Visibility.Collapsed;
         ChromeStatus.Visibility = Visibility.Collapsed;
 
-        // Cover the current monitor completely, including the taskbar:
-        // WPF's "maximized borderless" alone can leave the taskbar visible.
+        // Cover the current monitor completely, including the taskbar.
+        // Screen.Bounds is in physical pixels; WPF Left/Top/Width/Height are
+        // DIPs, so convert through the composition target to avoid a window
+        // that is physically larger than the monitor on scaled displays.
         var screen = System.Windows.Forms.Screen.FromHandle(new WindowInteropHelper(this).Handle);
+        var deviceToDip = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformFromDevice;
 
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         Topmost = true;
         WindowState = WindowState.Normal;
-        Left = screen.Bounds.Left;
-        Top = screen.Bounds.Top;
-        Width = screen.Bounds.Width;
-        Height = screen.Bounds.Height;
+
+        if (deviceToDip.HasValue)
+        {
+            var matrix = deviceToDip.Value;
+            var topLeft = matrix.Transform(new System.Windows.Point(screen.Bounds.Left, screen.Bounds.Top));
+            var bottomRight = matrix.Transform(new System.Windows.Point(screen.Bounds.Right, screen.Bounds.Bottom));
+            Left = topLeft.X;
+            Top = topLeft.Y;
+            Width = bottomRight.X - topLeft.X;
+            Height = bottomRight.Y - topLeft.Y;
+        }
+        else
+        {
+            Left = screen.Bounds.Left;
+            Top = screen.Bounds.Top;
+            Width = screen.Bounds.Width;
+            Height = screen.Bounds.Height;
+        }
     }
 
     private void ExitFullScreen()

@@ -43,40 +43,6 @@ public partial class SessionView : System.Windows.Controls.UserControl
     public bool AppFullScreenActive { get; set; }
     public string? CustomLabel => _customLabel;
 
-    private const string HomeEndPageScript = """
-        (function () {
-            function isScrollable(el) {
-                if (!el || el.scrollHeight === undefined) return false;
-                return el.scrollHeight - el.clientHeight > 1;
-            }
-            function scrollToEdge(toTop) {
-                var candidates = [];
-                var root = document.scrollingElement || document.documentElement;
-                if (isScrollable(root)) candidates.push(root);
-                var all = document.querySelectorAll('div, main, section, article, ul, body');
-                for (var i = 0; i < all.length; i++) {
-                    if (isScrollable(all[i])) candidates.push(all[i]);
-                }
-                var best = null;
-                var bestDelta = -1;
-                for (var j = 0; j < candidates.length; j++) {
-                    var delta = Math.abs(candidates[j].scrollHeight - candidates[j].clientHeight);
-                    if (delta > bestDelta) { bestDelta = delta; best = candidates[j]; }
-                }
-                if (!best) return false;
-                best.scrollTo({ top: toTop ? 0 : best.scrollHeight, behavior: 'auto' });
-                return true;
-            }
-            document.addEventListener('keydown', function (e) {
-                if (e.key === 'Home') {
-                    if (scrollToEdge(true)) e.preventDefault();
-                } else if (e.key === 'End') {
-                    if (scrollToEdge(false)) e.preventDefault();
-                }
-            }, true);
-        })();
-        """;
-
     public SessionView(AppServices services, TunnelProfile profile, int localPort)
     {
         _services = services;
@@ -253,7 +219,6 @@ public partial class SessionView : System.Windows.Controls.UserControl
             WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
             WebView.PreviewKeyDown += OnWebViewPreviewKeyDown;
-            await WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(HomeEndPageScript);
             Navigate(_url);
         }
         catch (Exception ex)
@@ -297,54 +262,6 @@ public partial class SessionView : System.Windows.Controls.UserControl
                 }
 
                 break;
-
-            case System.Windows.Input.Key.Home:
-            case System.Windows.Input.Key.End:
-                e.Handled = true;
-                ScrollPageToEdge(e.Key == System.Windows.Input.Key.Home);
-                break;
-        }
-    }
-
-    private async void ScrollPageToEdge(bool top)
-    {
-        if (!_coreReady)
-        {
-            return;
-        }
-
-        const string script = """
-            (function (toTop) {
-                function isScrollable(el) {
-                    if (!el || el.scrollHeight === undefined) return false;
-                    return el.scrollHeight - el.clientHeight > 1;
-                }
-                var candidates = [];
-                var root = document.scrollingElement || document.documentElement;
-                if (isScrollable(root)) candidates.push(root);
-                var all = document.querySelectorAll('div, main, section, article, ul, body');
-                for (var i = 0; i < all.length; i++) {
-                    if (isScrollable(all[i])) candidates.push(all[i]);
-                }
-                var best = null;
-                var bestDelta = -1;
-                for (var j = 0; j < candidates.length; j++) {
-                    var delta = Math.abs(candidates[j].scrollHeight - candidates[j].clientHeight);
-                    if (delta > bestDelta) { bestDelta = delta; best = candidates[j]; }
-                }
-                if (!best) return false;
-                best.scrollTo({ top: toTop ? 0 : best.scrollHeight, behavior: 'auto' });
-                return true;
-            })(arguments[0]);
-            """;
-
-        try
-        {
-            await WebView.CoreWebView2.ExecuteScriptAsync(script.Replace("arguments[0]", top ? "true" : "false"));
-        }
-        catch
-        {
-            // Best effort only.
         }
     }
 

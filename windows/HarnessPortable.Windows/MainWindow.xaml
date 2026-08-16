@@ -7,7 +7,7 @@
         Width="1200" Height="780"
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen"
-        Background="#F3F4F6"
+        Background="#FFFFFF"
         FontFamily="Segoe UI, Microsoft YaHei UI"
         PreviewKeyDown="Window_PreviewKeyDown">
 
@@ -32,7 +32,7 @@
                             <Border x:Name="ContentPanel"
                                     Grid.Row="1"
                                     Background="{TemplateBinding Background}"
-                                    BorderBrush="#E5E7EB"
+                                    BorderBrush="#EBEEF2"
                                     BorderThickness="1,0,0,0"
                                     KeyboardNavigation.DirectionalNavigation="Contained"
                                     KeyboardNavigation.TabIndex="2"
@@ -79,8 +79,8 @@
 
         <Style TargetType="{x:Type avalonDock:LayoutDocumentTabItem}">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#6B7280"/>
-            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Foreground" Value="#61666B"/>
+            <Setter Property="Padding" Value="12,5"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type avalonDock:LayoutDocumentTabItem}">
@@ -90,10 +90,10 @@
                             <Border x:Name="TabBorder"
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="Transparent"
-                                    BorderThickness="0,0,0,2"
-                                    CornerRadius="8,8,0,0"
+                                    BorderThickness="1"
+                                    CornerRadius="16"
                                     Padding="{TemplateBinding Padding}"
-                                    Margin="1,3,1,0">
+                                    Margin="1,4,1,2">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -106,8 +106,8 @@
                                         ContentTemplateSelector="{Binding DocumentHeaderTemplateSelector, Mode=OneWay, RelativeSource={RelativeSource AncestorType={x:Type avalonDock:DockingManager}, Mode=FindAncestor}}"/>
                                     <Button x:Name="CloseButton"
                                             Grid.Column="1"
-                                            Width="18" Height="18"
-                                            Margin="6,0,0,0"
+                                            Width="16" Height="16"
+                                            Margin="7,0,0,0"
                                             Padding="0"
                                             Command="{Binding LayoutItem.CloseCommand, RelativeSource={RelativeSource TemplatedParent}}"
                                             Focusable="False"
@@ -116,14 +116,18 @@
                                             Visibility="Collapsed">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
-                                                <Border x:Name="Bd" Background="Transparent" CornerRadius="4">
-                                                    <TextBlock Text="✕" FontSize="10" Foreground="#9CA3AF"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <Border x:Name="Bd" Background="Transparent" CornerRadius="8"
+                                                        UseLayoutRounding="True" SnapsToDevicePixels="True">
+                                                    <Path x:Name="CloseGlyph" Data="M4,4 L12,12 M12,4 L4,12"
+                                                          Stroke="#61666B" StrokeThickness="1.4"
+                                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                          SnapsToDevicePixels="True"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="Bd" Property="Background" Value="#FEE2E2"/>
-                                                        <Setter Property="Foreground" Value="#DC2626"/>
+                                                        <Setter TargetName="Bd" Property="Background" Value="#FDE8E8"/>
+                                                        <Setter TargetName="CloseGlyph" Property="Stroke" Value="#EC1313"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -134,16 +138,16 @@
                         </avalonDock:DropDownControlArea>
                         <ControlTemplate.Triggers>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="#FFFFFF"/>
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#2563EB"/>
-                                <Setter Property="Foreground" Value="#111827"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="#EBEEF2"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#19000000"/>
+                                <Setter Property="Foreground" Value="#0F1115"/>
                             </DataTrigger>
                             <MultiDataTrigger>
                                 <MultiDataTrigger.Conditions>
                                     <Condition Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}" Value="True"/>
                                     <Condition Binding="{Binding IsSelected}" Value="False"/>
                                 </MultiDataTrigger.Conditions>
-                                <Setter TargetName="TabBorder" Property="Background" Value="#F3F4F6"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="#F1F3F5"/>
                             </MultiDataTrigger>
                             <MultiDataTrigger>
                                 <MultiDataTrigger.Conditions>
@@ -151,6 +155,9 @@
                                 </MultiDataTrigger.Conditions>
                                 <Setter TargetName="CloseButton" Property="Visibility" Value="Visible"/>
                             </MultiDataTrigger>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter TargetName="CloseButton" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding CanClose}" Value="False">
                                 <Setter TargetName="CloseButton" Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
@@ -163,7 +170,7 @@
 
     <DockPanel>
         <Border x:Name="ChromeBar" DockPanel.Dock="Top" Background="#F9FAFB" Padding="14,8"
-                BorderBrush="#E5E7EB" BorderThickness="0,0,0,1">
+                BorderBrush="#EBEEF2" BorderThickness="0,0,0,1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="布局预设" Foreground="#6B7280" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
@@ -185,7 +192,7 @@
             </DockPanel>
         </Border>
 
-        <StatusBar x:Name="ChromeStatus" DockPanel.Dock="Bottom" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0">
+        <StatusBar x:Name="ChromeStatus" DockPanel.Dock="Bottom" Background="#F9FAFB" BorderBrush="#EBEEF2" BorderThickness="0,1,0,0">
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="就绪" Foreground="#374151"/>
             </StatusBarItem>
@@ -198,7 +205,7 @@
 
         <avalonDock:DockingManager x:Name="DockManager"
                                    AllowMixedOrientation="True"
-                                   Background="#F3F4F6"
+                                   Background="#FFFFFF"
                                    DocumentPaneControlStyle="{StaticResource ModernDocumentPaneControlStyle}">
             <avalonDock:DockingManager.Theme>
                 <avalonDock:GenericTheme/>
