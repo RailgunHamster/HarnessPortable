@@ -7,9 +7,9 @@ using HarnessPortable.Windows.Services;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 
-namespace HarnessPortable.Windows;
+namespace HarnessPortable.Windows.Controls;
 
-public partial class BrowserWindow : Window
+public partial class SessionView : System.Windows.Controls.UserControl
 {
     private const double BallSize = 48;
     private const double ActionHeight = 38 + 6;
@@ -22,52 +22,85 @@ public partial class BrowserWindow : Window
 
     private bool _ballDragging;
     private bool _ballMoved;
-    private bool _tunnelWasDown;
     private System.Windows.Point _dragStart;
     private System.Windows.Point _ballStart;
+    private bool _tunnelWasDown;
     private bool _coreReady;
+    private bool _initialized;
 
-    public BrowserWindow(AppServices services, TunnelProfile profile, int localPort)
+    public event Action? CloseRequested;
+    public event Action<string>? TitleChanged;
+
+    public string? ProfileId => _profile?.Id;
+    public bool IsTunnel => _isTunnel;
+    public string SessionTitle { get; private set; } = "";
+
+    public SessionView(AppServices services, TunnelProfile profile, int localPort)
     {
         _services = services;
         _isTunnel = true;
         _profile = profile;
         _lastPort = localPort > 0 ? localPort : profile.LocalPort;
         _url = $"http://127.0.0.1:{_lastPort}";
+        SessionTitle = profile.DisplayName;
 
         InitializeComponent();
-        Title = $"{profile.DisplayName} · Harness Portable";
         ConfigureInitialState();
     }
 
-    public BrowserWindow(AppServices services, string url)
+    public SessionView(AppServices services, string url)
     {
         _services = services;
         _isTunnel = false;
         _url = url;
         _lastPort = 0;
+        SessionTitle = ProfileStore.HostOf(url);
 
         InitializeComponent();
-        Title = $"{ProfileStore.HostOf(url)} · Harness Portable";
         ConfigureInitialState();
     }
 
     private void ConfigureInitialState()
     {
         ReconnectAction.Visibility = _isTunnel ? Visibility.Visible : Visibility.Collapsed;
+        DisconnectAction.Visibility = _isTunnel ? Visibility.Visible : Visibility.Collapsed;
+
         if (_isTunnel)
         {
             _services.Tunnels.StateChanged += OnTunnelStateChanged;
-            Closed += (_, _) => _services.Tunnels.StateChanged -= OnTunnelStateChanged;
             ApplyState(_services.Tunnels.GetState(_profile!.Id));
         }
 
         Loaded += async (_, _) =>
         {
+            if (_initialized)
+            {
+                return;
+            }
+
+            _initialized = true;
             PositionOverlay();
             await InitializeWebViewAsync();
         };
+
         SizeChanged += (_, _) => PositionOverlay();
+    }
+
+    public void Shutdown()
+    {
+        if (_isTunnel)
+        {
+            _services.Tunnels.StateChanged -= OnTunnelStateChanged;
+        }
+
+        try
+        {
+            WebView.Dispose();
+        }
+        catch
+        {
+            // Ignore.
+        }
     }
 
     private void OnTunnelStateChanged(TunnelInfo info)
@@ -77,12 +110,19 @@ public partial class BrowserWindow : Window
             return;
         }
 
-        ApplyState(info);
+        if (Dispatcher.CheckAccess())
+        {
+            ApplyState(info);
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(() => ApplyState(info));
+        }
     }
 
     private void ApplyState(TunnelInfo info)
     {
-        if (!_isTunnel)
+        if (!_isTunnel || _profile is null)
         {
             return;
         }
@@ -99,6 +139,7 @@ public partial class BrowserWindow : Window
                 Navigate($"http://127.0.0.1:{port}");
             }
 
+            SetTitle($"● {_profile.DisplayName}");
             return;
         }
 
@@ -115,10 +156,22 @@ public partial class BrowserWindow : Window
         OverlayReconnectButton.Visibility = info.Status is TunnelStatus.Failed or TunnelStatus.Retrying
             ? Visibility.Visible
             : Visibility.Collapsed;
-        OverlayReturnButton.Content = info.Status is TunnelStatus.Stopped or TunnelStatus.Failed
-            ? "返回"
-            : "取消";
+        OverlayReturnButton.Content = "关闭标签";
         StatusOverlay.Visibility = Visibility.Visible;
+
+        SetTitle(info.Status switch
+        {
+            TunnelStatus.Failed => $"✕ {_profile.DisplayName}",
+            TunnelStatus.Stopped => $"○ {_profile.DisplayName}",
+            TunnelStatus.Retrying => $"↻ {_profile.DisplayName}",
+            _ => $"… {_profile.DisplayName}",
+        });
+    }
+
+    private void SetTitle(string title)
+    {
+        SessionTitle = title;
+        TitleChanged?.Invoke(title);
     }
 
     private async Task InitializeWebViewAsync()
@@ -141,16 +194,18 @@ public partial class BrowserWindow : Window
             OverlayTitle.Text = "浏览器初始化失败";
             OverlayMessage.Text = ex.Message;
             OverlayReconnectButton.Visibility = Visibility.Collapsed;
-            OverlayReturnButton.Content = "返回";
+            OverlayReturnButton.Content = "关闭标签";
             StatusOverlay.Visibility = Visibility.Visible;
         }
     }
 
     private void Navigate(string url)
     {
-        _lastPort = _isTunnel && url.StartsWith("http://127.0.0.1:")
-            ? int.Parse(url.Split(':')[2].Split('/')[0])
-            : _lastPort;
+        if (_isTunnel && url.StartsWith("http://127.0.0.1:"))
+        {
+            var portPart = url.Split(':')[2];
+            _lastPort = int.Parse(portPart.Split('/')[0]);
+        }
 
         if (_coreReady)
         {
@@ -174,19 +229,17 @@ public partial class BrowserWindow : Window
         }
     }
 
-    private void Back_Click(object sender, RoutedEventArgs e)
+    private void Disconnect_Click(object sender, RoutedEventArgs e)
     {
         if (_isTunnel && _profile is not null)
         {
             _services.Tunnels.Stop(_profile.Id);
         }
-
-        Close();
     }
 
     private void OverlayReconnect_Click(object sender, RoutedEventArgs e) => Reconnect_Click(sender, e);
 
-    private void OverlayReturn_Click(object sender, RoutedEventArgs e) => Back_Click(sender, e);
+    private void OverlayReturn_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
     private void FloatBall_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

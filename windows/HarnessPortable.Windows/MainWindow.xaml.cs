@@ -1,7 +1,7 @@
-using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
+using AvalonDock.Layout;
+using HarnessPortable.Windows.Controls;
 using HarnessPortable.Windows.Models;
 using HarnessPortable.Windows.Services;
 
@@ -9,38 +9,13 @@ namespace HarnessPortable.Windows;
 
 public partial class MainWindow : Window
 {
-    public sealed class TunnelListItem
-    {
-        public required TunnelProfile Profile { get; init; }
-        public string Name => Profile.DisplayName;
-        public string Summary => Profile.Summary;
-        public string LocalText => $"本地端口 {Profile.LocalPort}";
-        public string StatusText { get; init; } = "";
-        public System.Windows.Media.Brush StatusBrush { get; init; } = System.Windows.Media.Brushes.Green;
-        public Visibility StatusVisibility { get; init; } = Visibility.Collapsed;
-        public Visibility StopVisibility { get; init; } = Visibility.Collapsed;
-    }
-
-    public sealed class DirectListItem
-    {
-        public required string Url { get; init; }
-        public string Host => ProfileStore.HostOf(Url);
-    }
-
-    private static readonly System.Windows.Media.Brush GreenBrush =
-        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x05, 0x96, 0x69));
-    private static readonly System.Windows.Media.Brush BlueBrush =
-        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x25, 0x63, 0xEB));
-    private static readonly System.Windows.Media.Brush RedBrush =
-        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26));
-
     private readonly AppServices _services;
-    private readonly ObservableCollection<TunnelListItem> _tunnelItems = [];
-    private readonly ObservableCollection<DirectListItem> _directItems = [];
+    private readonly ManagementView _managementView;
+    private readonly LayoutDocument _managementDoc;
 
     private readonly Dictionary<string, TunnelProfile> _pendingProfiles = [];
-    private readonly Dictionary<string, BrowserWindow> _tunnelWindows = [];
-    private readonly List<BrowserWindow> _directWindows = [];
+    private readonly Dictionary<string, LayoutDocument> _tunnelDocs = [];
+    private readonly List<LayoutDocument> _directDocs = [];
 
     private bool _trayHintShown;
 
@@ -49,11 +24,31 @@ public partial class MainWindow : Window
         _services = services;
         InitializeComponent();
 
-        TunnelList.ItemsSource = _tunnelItems;
-        DirectList.ItemsSource = _directItems;
+        _managementView = new ManagementView(_services);
+        _managementView.TunnelConnectRequested += ConnectTunnel;
+        _managementView.TunnelStopRequested += CloseTunnelDoc;
+        _managementView.DirectOpenRequested += OpenDirectSession;
 
+        _managementDoc = new LayoutDocument
+        {
+            Title = "管理",
+            ContentId = "management",
+            CanClose = false,
+            Content = _managementView,
+        };
+
+        InitializeDockLayout();
         _services.Tunnels.StateChanged += OnTunnelStateChanged;
-        RefreshLists();
+        RefreshStatusBar();
+    }
+
+    private void InitializeDockLayout()
+    {
+        var pane = new LayoutDocumentPane(_managementDoc);
+        var group = new LayoutDocumentPaneGroup(pane);
+        var layout = new LayoutRoot { RootPanel = new LayoutPanel(group) };
+        DockManager.Layout = layout;
+        _managementDoc.IsActive = true;
     }
 
     private void OnTunnelStateChanged(TunnelInfo info)
@@ -75,7 +70,7 @@ public partial class MainWindow : Window
             _pendingProfiles.TryGetValue(info.ProfileId, out var pending))
         {
             _pendingProfiles.Remove(info.ProfileId);
-            OpenBrowserForTunnel(pending, info.LocalPort);
+            OpenOrFocusTunnelSession(pending, info.LocalPort);
         }
         else if (info.ProfileId is not null &&
                  info.Status is TunnelStatus.Failed or TunnelStatus.Stopped)
@@ -83,56 +78,10 @@ public partial class MainWindow : Window
             _pendingProfiles.Remove(info.ProfileId);
         }
 
-        RefreshLists();
+        RefreshStatusBar();
     }
 
-    private void RefreshLists()
-    {
-        _tunnelItems.Clear();
-        foreach (var profile in _services.Profiles.LoadTunnels())
-        {
-            var state = _services.Tunnels.GetState(profile.Id);
-            var active = state.Status is TunnelStatus.Connected or TunnelStatus.Connecting or TunnelStatus.Retrying;
-
-            _tunnelItems.Add(new TunnelListItem
-            {
-                Profile = profile,
-                StatusText = state.Status switch
-                {
-                    TunnelStatus.Connected => "● 已连接",
-                    TunnelStatus.Connecting => "● 连接中…",
-                    TunnelStatus.Retrying => "● 重连中",
-                    TunnelStatus.Failed => "● 失败",
-                    _ => "",
-                },
-                StatusBrush = state.Status switch
-                {
-                    TunnelStatus.Connected => GreenBrush,
-                    TunnelStatus.Failed => RedBrush,
-                    _ => BlueBrush,
-                },
-                StatusVisibility = state.Status is TunnelStatus.Connected or TunnelStatus.Connecting
-                    or TunnelStatus.Retrying or TunnelStatus.Failed
-                    ? Visibility.Visible
-                    : Visibility.Collapsed,
-                StopVisibility = active ? Visibility.Visible : Visibility.Collapsed,
-            });
-        }
-
-        _directItems.Clear();
-        foreach (var url in _services.Profiles.LoadDirects())
-        {
-            _directItems.Add(new DirectListItem { Url = url });
-        }
-
-        TunnelCountText.Text = _tunnelItems.Count.ToString();
-        EmptyTunnelsHint.Visibility = _tunnelItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        EmptyDirectHint.Visibility = _directItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-
-        UpdateStatusBar();
-    }
-
-    private void UpdateStatusBar()
+    private void RefreshStatusBar()
     {
         var active = _services.Tunnels.GetActiveStates().ToList();
         StopTunnelButton.Visibility = active.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -151,64 +100,27 @@ public partial class MainWindow : Window
         };
     }
 
-    private void StopTunnel_Click(object sender, RoutedEventArgs e)
+    // ------------------------------------------------------------------
+    // Session tabs
+    // ------------------------------------------------------------------
+
+    private LayoutDocumentPane GetTargetPane()
     {
-        _pendingProfiles.Clear();
-        _services.Tunnels.StopAll();
-
-        foreach (var window in _tunnelWindows.Values.ToList())
+        var active = DockManager.Layout.ActiveContent;
+        if (active?.Parent is LayoutDocumentPane activePane)
         {
-            window.Close();
+            return activePane;
         }
 
-        _tunnelWindows.Clear();
-        RefreshLists();
-    }
-
-    private void TunnelStop_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.Tag is not TunnelListItem item)
+        if (_managementDoc.Parent is LayoutDocumentPane managementPane)
         {
-            return;
+            return managementPane;
         }
 
-        _pendingProfiles.Remove(item.Profile.Id);
-        _services.Tunnels.Stop(item.Profile.Id);
-
-        if (_tunnelWindows.TryGetValue(item.Profile.Id, out var window))
-        {
-            window.Close();
-            _tunnelWindows.Remove(item.Profile.Id);
-        }
-
-        RefreshLists();
-    }
-
-    private void AddTunnel_Click(object sender, RoutedEventArgs e)
-    {
-        var editor = new TunnelEditorWindow(null) { Owner = this };
-        if (editor.ShowDialog() == true && editor.Result is { } result)
-        {
-            var profiles = _services.Profiles.LoadTunnels();
-            profiles.RemoveAll(p => p.Id == result.Profile.Id);
-            profiles.Insert(0, result.Profile);
-            _services.Profiles.SaveTunnels(profiles);
-
-            if (!string.IsNullOrEmpty(result.Password))
-            {
-                _services.Secrets.SetPassword(result.Profile.Id, result.Password);
-            }
-
-            RefreshLists();
-        }
-    }
-
-    private void TunnelConnect_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.Tag is TunnelListItem item)
-        {
-            ConnectTunnel(item.Profile);
-        }
+        var pane = new LayoutDocumentPane(_managementDoc);
+        var group = new LayoutDocumentPaneGroup(pane);
+        DockManager.Layout.RootPanel = new LayoutPanel(group);
+        return pane;
     }
 
     private void ConnectTunnel(TunnelProfile profile)
@@ -229,7 +141,7 @@ public partial class MainWindow : Window
         var state = _services.Tunnels.GetState(profile.Id);
         if (state.Status == TunnelStatus.Connected)
         {
-            OpenBrowserForTunnel(profile, state.LocalPort);
+            OpenOrFocusTunnelSession(profile, state.LocalPort);
             return;
         }
 
@@ -237,132 +149,150 @@ public partial class MainWindow : Window
         _services.Tunnels.Start(profile.Id);
     }
 
-    private void TunnelEdit_Click(object sender, RoutedEventArgs e)
+    private void OpenOrFocusTunnelSession(TunnelProfile profile, int localPort)
     {
-        if ((sender as FrameworkElement)?.Tag is not TunnelListItem item)
+        if (_tunnelDocs.TryGetValue(profile.Id, out var existing))
         {
+            existing.IsActive = true;
+            existing.IsSelected = true;
             return;
         }
 
-        var editor = new TunnelEditorWindow(item.Profile) { Owner = this };
-        if (editor.ShowDialog() == true && editor.Result is { } result)
+        var view = new SessionView(_services, profile, localPort);
+        view.CloseRequested += () => CloseDocByView(view);
+        view.TitleChanged += title =>
         {
-            var profiles = _services.Profiles.LoadTunnels();
-            var index = profiles.FindIndex(p => p.Id == result.Profile.Id);
-            if (index >= 0)
+            if (_tunnelDocs.TryGetValue(profile.Id, out var doc))
             {
-                profiles[index] = result.Profile;
+                doc.Title = title;
             }
+        };
 
-            _services.Profiles.SaveTunnels(profiles);
+        var doc = new LayoutDocument
+        {
+            Title = view.SessionTitle,
+            ContentId = $"tunnel:{profile.Id}",
+            CanClose = true,
+            Content = view,
+        };
 
-            if (!string.IsNullOrEmpty(result.Password))
+        doc.Closed += (_, _) =>
+        {
+            if (_tunnelDocs.Remove(profile.Id))
             {
-                _services.Secrets.SetPassword(result.Profile.Id, result.Password);
+                view.Shutdown();
             }
+        };
 
-            RefreshLists();
+        _tunnelDocs[profile.Id] = doc;
+        GetTargetPane().Children.Add(doc);
+        doc.IsActive = true;
+        doc.IsSelected = true;
+    }
+
+    private void OpenDirectSession(string url)
+    {
+        var view = new SessionView(_services, url);
+        view.CloseRequested += () => CloseDocByView(view);
+
+        var doc = new LayoutDocument
+        {
+            Title = view.SessionTitle,
+            ContentId = $"direct:{Guid.NewGuid():N}",
+            CanClose = true,
+            Content = view,
+        };
+
+        doc.Closed += (_, _) =>
+        {
+            _directDocs.Remove(doc);
+            view.Shutdown();
+        };
+
+        _directDocs.Add(doc);
+        GetTargetPane().Children.Add(doc);
+        doc.IsActive = true;
+        doc.IsSelected = true;
+    }
+
+    private void CloseDocByView(SessionView view)
+    {
+        foreach (var doc in _tunnelDocs.Values.Concat(_directDocs))
+        {
+            if (ReferenceEquals(doc.Content, view))
+            {
+                doc.Close();
+                return;
+            }
         }
     }
 
-    private void TunnelDelete_Click(object sender, RoutedEventArgs e)
+    private void CloseTunnelDoc(string profileId)
     {
-        if ((sender as FrameworkElement)?.Tag is not TunnelListItem item)
+        if (_tunnelDocs.TryGetValue(profileId, out var doc))
+        {
+            doc.Close();
+        }
+    }
+
+    private void StopAll_Click(object sender, RoutedEventArgs e)
+    {
+        _pendingProfiles.Clear();
+        _services.Tunnels.StopAll();
+
+        foreach (var doc in _tunnelDocs.Values.ToList())
+        {
+            doc.Close();
+        }
+
+        RefreshStatusBar();
+    }
+
+    // ------------------------------------------------------------------
+    // Split / dock
+    // ------------------------------------------------------------------
+
+    private void SplitRight_Click(object sender, RoutedEventArgs e) =>
+        SplitActiveDocument(System.Windows.Controls.Orientation.Horizontal);
+
+    private void SplitDown_Click(object sender, RoutedEventArgs e) =>
+        SplitActiveDocument(System.Windows.Controls.Orientation.Vertical);
+
+    private void SplitActiveDocument(System.Windows.Controls.Orientation orientation)
+    {
+        if (DockManager.Layout.ActiveContent is not LayoutDocument active ||
+            ReferenceEquals(active, _managementDoc))
         {
             return;
         }
 
-        var confirm = System.Windows.MessageBox.Show(
-            this,
-            $"确定删除隧道“{item.Name}”吗？",
-            "删除隧道",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (confirm != MessageBoxResult.Yes)
+        if (active.Parent is not LayoutDocumentPane oldPane || oldPane.Children.Count <= 1)
         {
             return;
         }
 
-        _pendingProfiles.Remove(item.Profile.Id);
-        _services.Tunnels.Stop(item.Profile.Id);
-
-        if (_tunnelWindows.TryGetValue(item.Profile.Id, out var window))
-        {
-            window.Close();
-            _tunnelWindows.Remove(item.Profile.Id);
-        }
-
-        var profiles = _services.Profiles.LoadTunnels();
-        profiles.RemoveAll(p => p.Id == item.Profile.Id);
-        _services.Profiles.SaveTunnels(profiles);
-        _services.Secrets.ClearPassword(item.Profile.Id);
-
-        RefreshLists();
-    }
-
-    private void AddDirect_Click(object sender, RoutedEventArgs e)
-    {
-        var normalized = ProfileStore.NormalizeUrl(DirectInput.Text);
-        if (normalized is null)
+        if (oldPane.Parent is not ILayoutContainer parent)
         {
             return;
         }
 
-        var directs = _services.Profiles.LoadDirects();
-        directs.RemoveAll(u => u == normalized);
-        directs.Insert(0, normalized);
-        _services.Profiles.SaveDirects(directs);
-        DirectInput.Text = "";
-        RefreshLists();
+        var newPane = new LayoutDocumentPane();
+        var group = new LayoutDocumentPaneGroup { Orientation = orientation };
+
+        parent.ReplaceChild(oldPane, group);
+        group.Children.Add(oldPane);
+        group.Children.Add(newPane);
+
+        oldPane.RemoveChild(active);
+        newPane.Children.Add(active);
+
+        active.IsActive = true;
+        active.IsSelected = true;
     }
 
-    private void DirectConnect_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.Tag is DirectListItem item)
-        {
-            OpenBrowserDirect(item.Url);
-        }
-    }
-
-    private void DirectDelete_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.Tag is not DirectListItem item)
-        {
-            return;
-        }
-
-        var directs = _services.Profiles.LoadDirects();
-        directs.RemoveAll(u => u == item.Url);
-        _services.Profiles.SaveDirects(directs);
-        RefreshLists();
-    }
-
-    private void OpenBrowserForTunnel(TunnelProfile profile, int localPort)
-    {
-        if (_tunnelWindows.TryGetValue(profile.Id, out var existing) && existing.IsLoaded)
-        {
-            existing.Activate();
-            return;
-        }
-
-        _tunnelWindows.Remove(profile.Id);
-
-        var window = new BrowserWindow(_services, profile, localPort) { Owner = this };
-        window.Closed += (_, _) => _tunnelWindows.Remove(profile.Id);
-        _tunnelWindows[profile.Id] = window;
-        window.Show();
-    }
-
-    private void OpenBrowserDirect(string url)
-    {
-        // Direct URLs may be opened any number of times: every click gets a
-        // fresh browser window.
-        var window = new BrowserWindow(_services, url) { Owner = this };
-        window.Closed += (_, _) => _directWindows.Remove(window);
-        _directWindows.Add(window);
-        window.Show();
-    }
+    // ------------------------------------------------------------------
+    // Window lifecycle
+    // ------------------------------------------------------------------
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {

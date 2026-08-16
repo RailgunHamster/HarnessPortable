@@ -1,0 +1,248 @@
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using HarnessPortable.Windows.Models;
+using HarnessPortable.Windows.Services;
+
+namespace HarnessPortable.Windows.Controls;
+
+public partial class ManagementView : System.Windows.Controls.UserControl
+{
+    public sealed class TunnelListItem
+    {
+        public required TunnelProfile Profile { get; init; }
+        public string Name => Profile.DisplayName;
+        public string Summary => Profile.Summary;
+        public string LocalText => $"本地端口 {Profile.LocalPort}";
+        public string StatusText { get; init; } = "";
+        public System.Windows.Media.Brush StatusBrush { get; init; } = System.Windows.Media.Brushes.Green;
+        public Visibility StatusVisibility { get; init; } = Visibility.Collapsed;
+        public Visibility StopVisibility { get; init; } = Visibility.Collapsed;
+    }
+
+    public sealed class DirectListItem
+    {
+        public required string Url { get; init; }
+        public string Host => ProfileStore.HostOf(Url);
+    }
+
+    private static readonly System.Windows.Media.Brush GreenBrush =
+        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x05, 0x96, 0x69));
+    private static readonly System.Windows.Media.Brush BlueBrush =
+        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x25, 0x63, 0xEB));
+    private static readonly System.Windows.Media.Brush RedBrush =
+        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26));
+
+    private readonly AppServices _services;
+    private readonly ObservableCollection<TunnelListItem> _tunnelItems = [];
+    private readonly ObservableCollection<DirectListItem> _directItems = [];
+
+    public event Action<TunnelProfile>? TunnelConnectRequested;
+    public event Action<string>? TunnelStopRequested;
+    public event Action<string>? DirectOpenRequested;
+
+    public ManagementView(AppServices services)
+    {
+        _services = services;
+        InitializeComponent();
+
+        TunnelList.ItemsSource = _tunnelItems;
+        DirectList.ItemsSource = _directItems;
+
+        _services.Tunnels.StateChanged += OnTunnelStateChanged;
+        RefreshLists();
+    }
+
+    private void OnTunnelStateChanged(TunnelInfo info)
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            RefreshLists();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(RefreshLists);
+        }
+    }
+
+    private void RefreshLists()
+    {
+        _tunnelItems.Clear();
+        foreach (var profile in _services.Profiles.LoadTunnels())
+        {
+            var state = _services.Tunnels.GetState(profile.Id);
+            var active = state.Status is TunnelStatus.Connected or TunnelStatus.Connecting or TunnelStatus.Retrying;
+
+            _tunnelItems.Add(new TunnelListItem
+            {
+                Profile = profile,
+                StatusText = state.Status switch
+                {
+                    TunnelStatus.Connected => "● 已连接",
+                    TunnelStatus.Connecting => "● 连接中…",
+                    TunnelStatus.Retrying => "● 重连中",
+                    TunnelStatus.Failed => "● 失败",
+                    _ => "",
+                },
+                StatusBrush = state.Status switch
+                {
+                    TunnelStatus.Connected => GreenBrush,
+                    TunnelStatus.Failed => RedBrush,
+                    _ => BlueBrush,
+                },
+                StatusVisibility = state.Status is TunnelStatus.Connected or TunnelStatus.Connecting
+                    or TunnelStatus.Retrying or TunnelStatus.Failed
+                    ? Visibility.Visible
+                    : Visibility.Collapsed,
+                StopVisibility = active ? Visibility.Visible : Visibility.Collapsed,
+            });
+        }
+
+        _directItems.Clear();
+        foreach (var url in _services.Profiles.LoadDirects())
+        {
+            _directItems.Add(new DirectListItem { Url = url });
+        }
+
+        TunnelCountText.Text = _tunnelItems.Count.ToString();
+        EmptyTunnelsHint.Visibility = _tunnelItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyDirectHint.Visibility = _directItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void AddTunnel_Click(object sender, RoutedEventArgs e)
+    {
+        var editor = new TunnelEditorWindow(null) { Owner = Window.GetWindow(this) };
+        if (editor.ShowDialog() == true && editor.Result is { } result)
+        {
+            var profiles = _services.Profiles.LoadTunnels();
+            profiles.RemoveAll(p => p.Id == result.Profile.Id);
+            profiles.Insert(0, result.Profile);
+            _services.Profiles.SaveTunnels(profiles);
+
+            if (!string.IsNullOrEmpty(result.Password))
+            {
+                _services.Secrets.SetPassword(result.Profile.Id, result.Password);
+            }
+
+            RefreshLists();
+        }
+    }
+
+    private void TunnelConnect_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is TunnelListItem item)
+        {
+            TunnelConnectRequested?.Invoke(item.Profile);
+        }
+    }
+
+    private void TunnelStop_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is TunnelListItem item)
+        {
+            StopTunnel(item.Profile.Id);
+        }
+    }
+
+    private void StopTunnel(string profileId)
+    {
+        _services.Tunnels.Stop(profileId);
+        TunnelStopRequested?.Invoke(profileId);
+        RefreshLists();
+    }
+
+    private void TunnelEdit_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not TunnelListItem item)
+        {
+            return;
+        }
+
+        var editor = new TunnelEditorWindow(item.Profile) { Owner = Window.GetWindow(this) };
+        if (editor.ShowDialog() == true && editor.Result is { } result)
+        {
+            var profiles = _services.Profiles.LoadTunnels();
+            var index = profiles.FindIndex(p => p.Id == result.Profile.Id);
+            if (index >= 0)
+            {
+                profiles[index] = result.Profile;
+            }
+
+            _services.Profiles.SaveTunnels(profiles);
+
+            if (!string.IsNullOrEmpty(result.Password))
+            {
+                _services.Secrets.SetPassword(result.Profile.Id, result.Password);
+            }
+
+            RefreshLists();
+        }
+    }
+
+    private void TunnelDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not TunnelListItem item)
+        {
+            return;
+        }
+
+        var confirm = System.Windows.MessageBox.Show(
+            Window.GetWindow(this),
+            $"确定删除隧道“{item.Name}”吗？",
+            "删除隧道",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        StopTunnel(item.Profile.Id);
+
+        var profiles = _services.Profiles.LoadTunnels();
+        profiles.RemoveAll(p => p.Id == item.Profile.Id);
+        _services.Profiles.SaveTunnels(profiles);
+        _services.Secrets.ClearPassword(item.Profile.Id);
+
+        RefreshLists();
+    }
+
+    private void AddDirect_Click(object sender, RoutedEventArgs e)
+    {
+        var normalized = ProfileStore.NormalizeUrl(DirectInput.Text);
+        if (normalized is null)
+        {
+            return;
+        }
+
+        var directs = _services.Profiles.LoadDirects();
+        directs.RemoveAll(u => u == normalized);
+        directs.Insert(0, normalized);
+        _services.Profiles.SaveDirects(directs);
+        DirectInput.Text = "";
+        RefreshLists();
+    }
+
+    private void DirectConnect_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is DirectListItem item)
+        {
+            DirectOpenRequested?.Invoke(item.Url);
+        }
+    }
+
+    private void DirectDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not DirectListItem item)
+        {
+            return;
+        }
+
+        var directs = _services.Profiles.LoadDirects();
+        directs.RemoveAll(u => u == item.Url);
+        _services.Profiles.SaveDirects(directs);
+        RefreshLists();
+    }
+}

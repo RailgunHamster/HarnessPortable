@@ -138,8 +138,8 @@ xcodebuild -project HarnessPortable.xcodeproj \
 - 已知主机密钥：TOFU，行为对齐 Windows 版 `KnownHostsStore`。
 - 后台：菜单栏常驻（MenuBarExtra / NSStatusItem），关窗不断隧道。
 - **多隧道**：桌面端必须支持同时连接多个 profile，每个 profile 独立
-  session/状态/浏览器窗口，菜单栏可分别断开；直连项每点击一次新开一个
-  窗口；行为对齐 Windows 版 `TunnelManager`。
+  session/状态；同一工作区窗口内以标签页展示，支持左右/上下分屏；关闭
+  标签不停止隧道；直连项每点击一次新开一个标签；行为对齐 Windows 版。
 
 ## 10. 签名与公证（最后阶段）
 
