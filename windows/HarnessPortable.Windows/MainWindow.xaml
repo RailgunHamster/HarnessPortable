@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Harness Portable"
+        Icon="/Assets/HarnessPortable.ico"
         Width="920" Height="680"
         MinWidth="720" MinHeight="520"
         WindowStartupLocation="CenterScreen"

@@ -35,6 +35,9 @@ nettcp.txt
 # Scratch files
 temp/
 
+# Icon generator toolchain
+branding/node_modules/
+
 # .NET build output
 windows/**/bin/
 windows/**/obj/

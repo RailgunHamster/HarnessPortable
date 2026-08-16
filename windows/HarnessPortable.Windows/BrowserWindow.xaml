@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Harness Portable"
+        Icon="/Assets/HarnessPortable.ico"
         Width="1100" Height="740"
         MinWidth="640" MinHeight="480"
         WindowStartupLocation="CenterOwner"

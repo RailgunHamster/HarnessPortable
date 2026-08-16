@@ -21,13 +21,32 @@ public sealed class TrayIconService : IDisposable
 
         _icon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = LoadAppIcon(),
             Text = "Harness Portable",
             Visible = true,
             ContextMenuStrip = menu,
         };
 
         _icon.DoubleClick += (_, _) => _showMainWindow();
+    }
+
+    private static Icon LoadAppIcon()
+    {
+        try
+        {
+            var info = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/Assets/HarnessPortable.ico"));
+            if (info?.Stream is not null)
+            {
+                return new Icon(info.Stream);
+            }
+        }
+        catch
+        {
+            // Fall back to the generic application icon.
+        }
+
+        return SystemIcons.Application;
     }
 
     public void ShowBalloon(string title, string text)

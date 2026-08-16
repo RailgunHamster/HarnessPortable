@@ -1,0 +1,13 @@
+{
+  "name": "harness-portable-branding",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Unified Harness Portable icon generator for Android, Windows and macOS",
+  "scripts": {
+    "generate": "node generate-icons.js"
+  },
+  "dependencies": {
+    "png2icons": "2.0.1",
+    "sharp": "0.35.3"
+  }
+}

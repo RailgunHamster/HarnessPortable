@@ -1,5 +1,11 @@
 # Windows 版开发、测试与发布
 
+## 图标
+
+- 源文件：`branding/source/icon.svg`
+- 生成：`cd branding && npm install && npm run generate`
+- Windows 使用：`windows/HarnessPortable.Windows/Assets/HarnessPortable.ico`
+
 ## 技术栈
 
 - .NET 10（WPF）
