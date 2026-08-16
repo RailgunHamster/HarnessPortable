@@ -81,10 +81,9 @@ public sealed partial class TunnelEngine
 
         DisconnectCurrent();
 
-        if (announce)
-        {
-            State.Set(TunnelInfo.Stopped());
-        }
+        // Always publish the terminal state: the manager and the UI need it
+        // even when the app is shutting down or stopping every tunnel.
+        State.Set(TunnelInfo.Stopped());
     }
 
     private void DisconnectCurrent()
@@ -154,17 +153,17 @@ public sealed partial class TunnelEngine
                     var password = _secrets.GetPassword(profile.Id);
                     if (string.IsNullOrEmpty(password))
                     {
-                        State.Set(new TunnelInfo(profile.Id, profile.DisplayName, TunnelStatus.Failed, "未保存密码"));
+                        Publish(generation, new TunnelInfo(profile.Id, profile.DisplayName, TunnelStatus.Failed, "未保存密码"));
                         MarkTerminated(generation);
                         return;
                     }
 
-                    State.Set(new TunnelInfo(profile.Id, profile.DisplayName, TunnelStatus.Connecting, "正在连接…"));
+                    Publish(generation, new TunnelInfo(profile.Id, profile.DisplayName, TunnelStatus.Connecting, "正在连接…"));
 
                     var resolution = await HostResolver.ResolveAsync(profile.SshHost, token).ConfigureAwait(false);
                     if (resolution is null)
                     {
-                        State.Set(new TunnelInfo(
+                        Publish(generation, new TunnelInfo(
                             profile.Id, profile.DisplayName, TunnelStatus.Failed,
                             HostResolver.FailureMessage(profile.SshHost)));
                         MarkTerminated(generation);
@@ -283,7 +282,7 @@ public sealed partial class TunnelEngine
                     }
 
                     backoff = TimeSpan.FromSeconds(3);
-                    State.Set(new TunnelInfo(
+                    Publish(generation, new TunnelInfo(
                         profile.Id,
                         profile.DisplayName,
                         TunnelStatus.Connected,
@@ -301,7 +300,7 @@ public sealed partial class TunnelEngine
                         return;
                     }
 
-                    State.Set(new TunnelInfo(
+                    Publish(generation, new TunnelInfo(
                         profile.Id, profile.DisplayName, TunnelStatus.Retrying, "连接中断，正在重连…"));
                 }
                 catch (OperationCanceledException)
@@ -318,7 +317,7 @@ public sealed partial class TunnelEngine
                     var message = ex.Message ?? ex.GetType().Name;
                     if (!string.IsNullOrEmpty(hostKeyProblem))
                     {
-                        State.Set(new TunnelInfo(
+                        Publish(generation, new TunnelInfo(
                             profile.Id, profile.DisplayName, TunnelStatus.Failed, hostKeyProblem));
                         MarkTerminated(generation);
                         return;
@@ -326,13 +325,13 @@ public sealed partial class TunnelEngine
 
                     if (LooksLikeAuthenticationFailure(message))
                     {
-                        State.Set(new TunnelInfo(
+                        Publish(generation, new TunnelInfo(
                             profile.Id, profile.DisplayName, TunnelStatus.Failed, $"认证失败：{message}"));
                         MarkTerminated(generation);
                         return;
                     }
 
-                    State.Set(new TunnelInfo(
+                    Publish(generation, new TunnelInfo(
                         profile.Id, profile.DisplayName, TunnelStatus.Retrying, message));
                 }
                 finally
@@ -406,6 +405,22 @@ public sealed partial class TunnelEngine
         finally
         {
             await watchdog.ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Publishes a state update only when this run is still the current
+    /// generation. After <see cref="Stop"/> bumps the generation, stale
+    /// workers can no longer overwrite the terminal STOPPED state.
+    /// </summary>
+    private void Publish(int generation, TunnelInfo info)
+    {
+        lock (_gate)
+        {
+            if (generation == _generation)
+            {
+                State.Set(info);
+            }
         }
     }
 

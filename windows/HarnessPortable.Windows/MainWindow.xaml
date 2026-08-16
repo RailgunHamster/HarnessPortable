@@ -54,7 +54,7 @@
                 <TextBlock x:Name="StatusText" Text="就绪" Foreground="#374151"/>
             </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right">
-                <Button x:Name="StopTunnelButton" Content="断开隧道" Padding="10,2"
+                <Button x:Name="StopTunnelButton" Content="停止全部" Padding="10,2"
                         Visibility="Collapsed" Click="StopTunnel_Click"/>
             </StatusBarItem>
         </StatusBar>
@@ -88,7 +88,7 @@
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="Medium"
                                                        Foreground="#111827" VerticalAlignment="Center"/>
-                                            <TextBlock Text="{Binding StatusText}" Foreground="#059669"
+                                            <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}"
                                                        FontSize="11" FontWeight="SemiBold"
                                                        Margin="8,0,0,0" VerticalAlignment="Center"
                                                        Visibility="{Binding StatusVisibility}"/>
@@ -99,6 +99,9 @@
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                         <Button Style="{StaticResource SmallButton}" Content="连接"
                                                 Tag="{Binding}" Click="TunnelConnect_Click"/>
+                                        <Button Style="{StaticResource SmallButton}" Content="停止"
+                                                Tag="{Binding}" Click="TunnelStop_Click"
+                                                Visibility="{Binding StopVisibility}"/>
                                         <Button Style="{StaticResource SmallButton}" Content="编辑"
                                                 Tag="{Binding}" Click="TunnelEdit_Click"/>
                                         <Button Style="{StaticResource SmallButton}" Content="删除"

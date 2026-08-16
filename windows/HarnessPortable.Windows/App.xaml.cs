@@ -44,13 +44,13 @@ public partial class App : System.Windows.Application
     private void ExitApplication()
     {
         IsExiting = true;
-        _services.Tunnel.Stop(announce: false);
+        _services.Tunnels.StopAll();
         Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _services.Tunnel.Stop(announce: false);
+        _services.Tunnels.StopAll();
         _tray?.Dispose();
         base.OnExit(e);
     }

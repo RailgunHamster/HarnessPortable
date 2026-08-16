@@ -57,9 +57,9 @@ public partial class BrowserWindow : Window
         ReconnectAction.Visibility = _isTunnel ? Visibility.Visible : Visibility.Collapsed;
         if (_isTunnel)
         {
-            _services.Tunnel.State.StateChanged += OnTunnelStateChanged;
-            Closed += (_, _) => _services.Tunnel.State.StateChanged -= OnTunnelStateChanged;
-            ApplyState(_services.Tunnel.State.Current);
+            _services.Tunnels.StateChanged += OnTunnelStateChanged;
+            Closed += (_, _) => _services.Tunnels.StateChanged -= OnTunnelStateChanged;
+            ApplyState(_services.Tunnels.GetState(_profile!.Id));
         }
 
         Loaded += async (_, _) =>
@@ -170,15 +170,15 @@ public partial class BrowserWindow : Window
     {
         if (_isTunnel && _profile is not null)
         {
-            _services.Tunnel.Start(_profile.Id);
+            _services.Tunnels.Start(_profile.Id);
         }
     }
 
     private void Back_Click(object sender, RoutedEventArgs e)
     {
-        if (_isTunnel)
+        if (_isTunnel && _profile is not null)
         {
-            _services.Tunnel.Stop();
+            _services.Tunnels.Stop(_profile.Id);
         }
 
         Close();
