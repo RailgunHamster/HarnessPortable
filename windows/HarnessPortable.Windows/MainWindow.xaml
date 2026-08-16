@@ -65,7 +65,7 @@
                 <Setter.Value>
                     <DataTemplate>
                         <avalonDock:LayoutDocumentTabItem Model="{Binding}"
-                                                          Style="{StaticResource ModernDocumentTabItemStyle}"/>
+                                                          Style="{DynamicResource ModernDocumentTabItemStyle}"/>
                     </DataTemplate>
                 </Setter.Value>
             </Setter>
