@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="HarnessPortable.Windows.Tests/HarnessPortable.Windows.Tests.csproj" />
+  <Project Path="HarnessPortable.Windows/HarnessPortable.Windows.csproj" />
+</Solution>

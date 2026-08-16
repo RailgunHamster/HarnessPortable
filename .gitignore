@@ -31,3 +31,12 @@ Thumbs.db
 debug*.png
 ui.xml
 nettcp.txt
+
+# Scratch files
+temp/
+
+# .NET build output
+windows/**/bin/
+windows/**/obj/
+windows/.vs/
+publish/

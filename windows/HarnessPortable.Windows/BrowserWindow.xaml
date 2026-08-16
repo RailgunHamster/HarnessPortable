@@ -1,0 +1,53 @@
+<Window x:Class="HarnessPortable.Windows.BrowserWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Harness Portable"
+        Width="1100" Height="740"
+        MinWidth="640" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI, Microsoft YaHei UI">
+    <Grid>
+        <wv2:WebView2 x:Name="WebView"/>
+
+        <Border x:Name="StatusOverlay" Background="#99000000" Visibility="Collapsed">
+            <Border Background="#FFFFFF" CornerRadius="14" Padding="22,18"
+                    MaxWidth="440" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock x:Name="OverlayTitle" FontSize="16" FontWeight="SemiBold"
+                               Foreground="#111827" TextWrapping="Wrap" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="OverlayMessage" FontSize="12" Foreground="#6B7280"
+                               TextWrapping="Wrap" Margin="0,8,0,0" HorizontalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
+                        <Button x:Name="OverlayReconnectButton" Content="重连" Width="88" Margin="0,0,8,0"
+                                Click="OverlayReconnect_Click"/>
+                        <Button x:Name="OverlayReturnButton" Content="返回" Width="88"
+                                Click="OverlayReturn_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <Canvas x:Name="OverlayCanvas" ClipToBounds="False">
+            <Border x:Name="FloatBall"
+                    Width="48" Height="48"
+                    Background="#3B82F6" CornerRadius="10"
+                    IsHitTestVisible="True"
+                    Cursor="Hand"
+                    Opacity="0.85"
+                    MouseLeftButtonDown="FloatBall_MouseLeftButtonDown"
+                    MouseMove="FloatBall_MouseMove"
+                    MouseLeftButtonUp="FloatBall_MouseLeftButtonUp">
+                <TextBlock x:Name="FloatBallText" Text="☰" Foreground="White" FontSize="20"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+
+            <StackPanel x:Name="ActionsPanel" Visibility="Collapsed" Width="64" IsHitTestVisible="True">
+                <Button Content="刷新" Height="38" Margin="0,0,0,6" Click="Refresh_Click"/>
+                <Button x:Name="ReconnectAction" Content="重连" Height="38" Margin="0,0,0,6"
+                        Click="Reconnect_Click"/>
+                <Button x:Name="BackAction" Content="返回" Height="38" Click="Back_Click"/>
+            </StackPanel>
+        </Canvas>
+    </Grid>
+</Window>
