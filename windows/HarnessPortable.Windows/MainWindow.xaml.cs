@@ -855,6 +855,93 @@ public partial class MainWindow : Window
         }
     }
 
+    private static string? SerializeGridLength(GridLength length)
+    {
+        return $"{length.Value}|{length.GridUnitType}";
+    }
+
+    private static GridLength? DeserializeGridLength(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var parts = value.Split('|');
+        if (parts.Length != 2 ||
+            !double.TryParse(parts[0], out var size) ||
+            !Enum.TryParse<GridUnitType>(parts[1], out var unit))
+        {
+            return null;
+        }
+
+        if (size <= 0)
+        {
+            return null;
+        }
+
+        return new GridLength(size, unit);
+    }
+
+    private static void CaptureDockSizes(ILayoutElement element, LayoutNode node)
+    {
+        switch (element)
+        {
+            case LayoutPanel panel:
+                node.DockWidth = SerializeGridLength(panel.DockWidth);
+                node.DockHeight = SerializeGridLength(panel.DockHeight);
+                break;
+            case LayoutDocumentPaneGroup group:
+                node.DockWidth = SerializeGridLength(group.DockWidth);
+                node.DockHeight = SerializeGridLength(group.DockHeight);
+                break;
+            case LayoutDocumentPane pane:
+                node.DockWidth = SerializeGridLength(pane.DockWidth);
+                node.DockHeight = SerializeGridLength(pane.DockHeight);
+                break;
+        }
+    }
+
+    private static void ApplyDockSizes(LayoutNode node, ILayoutElement element)
+    {
+        var width = DeserializeGridLength(node.DockWidth);
+        var height = DeserializeGridLength(node.DockHeight);
+
+        void SetWidth(Action<GridLength> setter)
+        {
+            if (width is { } w)
+            {
+                setter(w);
+            }
+        }
+
+        void SetHeight(Action<GridLength> setter)
+        {
+            if (height is { } h)
+            {
+                setter(h);
+            }
+        }
+
+        switch (element)
+        {
+            case LayoutPanel panel:
+                SetWidth(v => panel.DockWidth = v);
+                SetHeight(v => panel.DockHeight = v);
+                break;
+
+            case LayoutDocumentPaneGroup group:
+                SetWidth(v => group.DockWidth = v);
+                SetHeight(v => group.DockHeight = v);
+                break;
+
+            case LayoutDocumentPane pane:
+                SetWidth(v => pane.DockWidth = v);
+                SetHeight(v => pane.DockHeight = v);
+                break;
+        }
+    }
+
     private LayoutNode? CaptureLayoutNode(ILayoutElement element)
     {
         switch (element)
@@ -868,7 +955,14 @@ public partial class MainWindow : Window
                     .Select(t => t!)
                     .ToList();
 
-                return tabs.Count == 0 ? null : new LayoutNode { Kind = "pane", Tabs = tabs };
+                if (tabs.Count == 0)
+                {
+                    return null;
+                }
+
+                var node = new LayoutNode { Kind = "pane", Tabs = tabs };
+                CaptureDockSizes(pane, node);
+                return node;
             }
 
             case LayoutPanel panel:
@@ -879,16 +973,21 @@ public partial class MainWindow : Window
                     .Select(n => n!)
                     .ToList();
 
-                return children.Count == 0
-                    ? null
-                    : new LayoutNode
-                    {
-                        Kind = "split",
-                        Orientation = panel.Orientation == System.Windows.Controls.Orientation.Horizontal
-                            ? "horizontal"
-                            : "vertical",
-                        Children = children,
-                    };
+                if (children.Count == 0)
+                {
+                    return null;
+                }
+
+                var node = new LayoutNode
+                {
+                    Kind = "split",
+                    Orientation = panel.Orientation == System.Windows.Controls.Orientation.Horizontal
+                        ? "horizontal"
+                        : "vertical",
+                    Children = children,
+                };
+                CaptureDockSizes(panel, node);
+                return node;
             }
 
             case LayoutDocumentPaneGroup group:
@@ -899,16 +998,21 @@ public partial class MainWindow : Window
                     .Select(n => n!)
                     .ToList();
 
-                return children.Count == 0
-                    ? null
-                    : new LayoutNode
-                    {
-                        Kind = "split",
-                        Orientation = group.Orientation == System.Windows.Controls.Orientation.Horizontal
-                            ? "horizontal"
-                            : "vertical",
-                        Children = children,
-                    };
+                if (children.Count == 0)
+                {
+                    return null;
+                }
+
+                var node = new LayoutNode
+                {
+                    Kind = "split",
+                    Orientation = group.Orientation == System.Windows.Controls.Orientation.Horizontal
+                        ? "horizontal"
+                        : "vertical",
+                    Children = children,
+                };
+                CaptureDockSizes(group, node);
+                return node;
             }
 
             default:
@@ -947,7 +1051,13 @@ public partial class MainWindow : Window
                 CreateSessionForTab(tab, pane);
             }
 
-            return pane.Children.Count == 0 ? null : pane;
+            if (pane.Children.Count == 0)
+            {
+                return null;
+            }
+
+            ApplyDockSizes(node, pane);
+            return pane;
         }
 
         var panel = new LayoutPanel
@@ -965,7 +1075,13 @@ public partial class MainWindow : Window
             }
         }
 
-        return panel.Children.Count == 0 ? null : panel;
+        if (panel.Children.Count == 0)
+        {
+            return null;
+        }
+
+        ApplyDockSizes(node, panel);
+        return panel;
     }
 
     private void CreateSessionForTab(LayoutTabRef tab, LayoutDocumentPane pane)

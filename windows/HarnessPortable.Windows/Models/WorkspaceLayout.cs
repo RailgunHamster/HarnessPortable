@@ -19,6 +19,12 @@ public sealed class LayoutNode
 
     /// <summary>Tab references for pane nodes, in left-to-right tab order.</summary>
     public List<LayoutTabRef> Tabs { get; set; } = [];
+
+    /// <summary>Serialized AvalonDock DockWidth, e.g. "1|Star" or "320|Pixel".</summary>
+    public string? DockWidth { get; set; }
+
+    /// <summary>Serialized AvalonDock DockHeight, e.g. "1|Star" or "240|Pixel".</summary>
+    public string? DockHeight { get; set; }
 }
 
 public sealed class LayoutTabRef

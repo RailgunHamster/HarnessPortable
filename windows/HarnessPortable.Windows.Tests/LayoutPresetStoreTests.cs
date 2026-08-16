@@ -30,6 +30,8 @@ public sealed class LayoutPresetStoreTests : IDisposable
                     {
                         Kind = "pane",
                         Tabs = [new LayoutTabRef { Kind = "management" }],
+                        DockWidth = "0.6|Star",
+                        DockHeight = "1|Star",
                     },
                     new LayoutNode
                     {
@@ -70,6 +72,7 @@ public sealed class LayoutPresetStoreTests : IDisposable
         Assert.Equal("split", restored.Root.Kind);
         Assert.Equal(3, restored.Root.Children.Count);
         Assert.Equal("management", restored.Root.Children[0].Tabs[0].Kind);
+        Assert.Equal("0.6|Star", restored.Root.Children[0].DockWidth);
         Assert.Equal("生产环境", restored.Root.Children[1].Tabs[0].Label);
         Assert.Equal("p2", restored.Root.Children[2].Children[0].Tabs[0].ProfileId);
         Assert.Equal("http://a:4096", restored.Root.Children[2].Children[0].Tabs[1].Url);
