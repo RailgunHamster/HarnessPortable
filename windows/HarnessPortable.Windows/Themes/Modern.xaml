@@ -17,11 +17,12 @@
     <SolidColorBrush x:Key="TextMutedBrush" Color="#9BA1A8"/>
 
     <Style x:Key="ModernButton" TargetType="Button">
-        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Background" Value="#FFFFFF"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-        <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Padding" Value="14,7"/>
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="BorderBrush" Value="#D9DDE3"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="FontSize" Value="13"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -30,7 +31,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="18"
+                            CornerRadius="10"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
@@ -39,10 +40,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#0F263148"/>
+                            <Setter TargetName="Border" Property="Background" Value="#F1F3F5"/>
+                            <Setter TargetName="Border" Property="BorderBrush" Value="#C6CBD3"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#19263148"/>
+                            <Setter TargetName="Border" Property="Background" Value="#E9ECF2"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4"/>
@@ -56,14 +58,16 @@
     <Style x:Key="ModernPrimaryButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
         <Setter Property="Background" Value="{StaticResource PrimaryButtonBrush}"/>
         <Setter Property="Foreground" Value="White"/>
+        <Setter Property="BorderBrush" Value="{StaticResource PrimaryButtonBrush}"/>
         <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Border"
                             Background="{TemplateBinding Background}"
-                            BorderThickness="0"
-                            CornerRadius="18"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
@@ -73,6 +77,7 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Border" Property="Background" Value="{StaticResource PrimaryButtonHoverBrush}"/>
+                            <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource PrimaryButtonHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Border" Property="Background" Value="#111418"/>
@@ -88,12 +93,15 @@
 
     <Style x:Key="ModernDangerButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
         <Setter Property="Foreground" Value="#EC1313"/>
+        <Setter Property="BorderBrush" Value="#F3C1C1"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Border"
                             Background="{TemplateBinding Background}"
-                            CornerRadius="18"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
@@ -102,10 +110,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#0DEC1313"/>
+                            <Setter TargetName="Border" Property="Background" Value="#FDE8E8"/>
+                            <Setter TargetName="Border" Property="BorderBrush" Value="#EC1313"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#14EC1313"/>
+                            <Setter TargetName="Border" Property="Background" Value="#FBDADA"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4"/>

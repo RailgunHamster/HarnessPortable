@@ -107,6 +107,20 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <Separator Margin="0,12,0,12"/>
+
+                <TextBlock Text="设置" Style="{StaticResource ModernGroupHeader}" Margin="0,0,0,8"/>
+                <Border Style="{StaticResource ModernCardBorder}">
+                    <StackPanel>
+                        <TextBlock Text="关闭主窗口时" FontSize="13" Foreground="#111827"/>
+                        <ComboBox x:Name="CloseBehaviorBox" Width="240" Margin="0,8,0,0"
+                                  Style="{StaticResource ModernComboBox}"
+                                  SelectionChanged="CloseBehaviorBox_SelectionChanged"/>
+                        <TextBlock Margin="0,10,0,0" Style="{StaticResource ModernMutedText}"
+                                   Text="所有配置保存在 %APPDATA%\HarnessPortable（系统用户目录），不会写入 exe 所在文件夹。"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

@@ -37,6 +37,7 @@ public partial class ManagementView : System.Windows.Controls.UserControl
     private readonly AppServices _services;
     private readonly ObservableCollection<TunnelListItem> _tunnelItems = [];
     private readonly ObservableCollection<DirectListItem> _directItems = [];
+    private bool _suppressSettings;
 
     public event Action<TunnelProfile>? TunnelConnectRequested;
     public event Action<string>? TunnelStopRequested;
@@ -51,6 +52,7 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         DirectList.ItemsSource = _directItems;
 
         _services.Tunnels.StateChanged += OnTunnelStateChanged;
+        InitializeCloseBehaviorSettings();
         RefreshLists();
     }
 
@@ -108,6 +110,35 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         TunnelCountText.Text = _tunnelItems.Count.ToString();
         EmptyTunnelsHint.Visibility = _tunnelItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyDirectHint.Visibility = _directItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void InitializeCloseBehaviorSettings()
+    {
+        _suppressSettings = true;
+
+        CloseBehaviorBox.Items.Add(new ComboBoxItem { Content = "直接退出程序", Tag = "exit" });
+        CloseBehaviorBox.Items.Add(new ComboBoxItem { Content = "最小化到托盘", Tag = "tray" });
+
+        var current = _services.Settings.Load().CloseBehavior;
+        CloseBehaviorBox.SelectedItem = CloseBehaviorBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(i => string.Equals(i.Tag as string, current, StringComparison.OrdinalIgnoreCase))
+            ?? CloseBehaviorBox.Items[0];
+
+        _suppressSettings = false;
+    }
+
+    private void CloseBehaviorBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressSettings || CloseBehaviorBox.SelectedItem is not ComboBoxItem item ||
+            item.Tag is not string value)
+        {
+            return;
+        }
+
+        var settings = _services.Settings.Load();
+        settings.CloseBehavior = value;
+        _services.Settings.Save(settings);
     }
 
     private void AddTunnel_Click(object sender, RoutedEventArgs e)

@@ -5,6 +5,7 @@ public sealed class AppServices
     public ProfileStore Profiles { get; } = new();
     public SecureStore Secrets { get; } = new();
     public KnownHostsStore KnownHosts { get; } = new();
+    public AppSettingsStore Settings { get; } = new();
     public TunnelManager Tunnels { get; }
 
     public AppServices()

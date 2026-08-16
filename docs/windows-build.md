@@ -21,8 +21,9 @@
 - 右键标签可**切换为其他隧道/直连**，在原布局位置替换当前标签
 - **布局预设**：保存当前分屏结构 + 每个标签对应的隧道/直连，顶部下拉一键切换，可保存多个
 - **F11 全屏**：按显示器物理边界覆盖任务栏（含 DPI 换算），Esc 退出
+- 关闭主窗口默认**直接退出**；管理页“设置”里可改为“最小化到托盘”
 - 关闭标签不停止隧道；停止隧道才关闭对应标签
-- DeepSeek Harness 风格 UI：黑色胶囊主按钮、幽灵按钮、浅灰 pill 标签
+- DeepSeek Harness 风格 UI：黑底主按钮、白底描边按钮、描边 pill 标签
 - 支持**直连多开**：每次点击直连项都会新开一个标签
 
 ## 目录
@@ -118,6 +119,9 @@ dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
 - `%APPDATA%\HarnessPortable\secrets.json` —— DPAPI 加密的 SSH 密码
 - `%APPDATA%\HarnessPortable\known_hosts.json` —— TOFU 主机密钥
 - `%APPDATA%\HarnessPortable\layouts.json` —— 布局预设
+- `%APPDATA%\HarnessPortable\settings.json` —— 应用设置（关闭行为等）
 - `%APPDATA%\HarnessPortable\WebView2\` —— 浏览器用户数据
+
+> 所有配置都写系统用户目录（`%APPDATA%`），不会在 exe 旁边生成任何文件。
 
 字段约定见 `spec/config-schema.md`。

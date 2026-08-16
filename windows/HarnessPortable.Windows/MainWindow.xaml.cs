@@ -1112,6 +1112,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_services.Settings.Load().CloseBehavior != "tray")
+        {
+            // Default: closing the main window exits the app and stops tunnels.
+            return;
+        }
+
         e.Cancel = true;
         Hide();
 

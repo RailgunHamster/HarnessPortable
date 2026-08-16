@@ -78,7 +78,7 @@
         </Style>
 
         <Style TargetType="{x:Type avalonDock:LayoutDocumentTabItem}">
-            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="Foreground" Value="#61666B"/>
             <Setter Property="Padding" Value="12,5"/>
             <Setter Property="Template">
@@ -89,9 +89,9 @@
                             DropDownContextMenuDataContext="{Binding LayoutItem, RelativeSource={RelativeSource TemplatedParent}}">
                             <Border x:Name="TabBorder"
                                     Background="{TemplateBinding Background}"
-                                    BorderBrush="Transparent"
+                                    BorderBrush="#D9DDE3"
                                     BorderThickness="1"
-                                    CornerRadius="16"
+                                    CornerRadius="10"
                                     Padding="{TemplateBinding Padding}"
                                     Margin="1,4,1,2">
                                 <Grid>
@@ -119,7 +119,8 @@
                                                 <Border x:Name="Bd" Background="Transparent" CornerRadius="8"
                                                         UseLayoutRounding="True" SnapsToDevicePixels="True">
                                                     <Path x:Name="CloseGlyph" Data="M4,4 L12,12 M12,4 L4,12"
-                                                          Stroke="#61666B" StrokeThickness="1.4"
+                                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type avalonDock:LayoutDocumentTabItem}}}"
+                                                          StrokeThickness="1.4"
                                                           StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                                           SnapsToDevicePixels="True"
                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -138,9 +139,9 @@
                         </avalonDock:DropDownControlArea>
                         <ControlTemplate.Triggers>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="#EBEEF2"/>
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#19000000"/>
-                                <Setter Property="Foreground" Value="#0F1115"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="#0F1115"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#0F1115"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
                             </DataTrigger>
                             <MultiDataTrigger>
                                 <MultiDataTrigger.Conditions>
@@ -148,6 +149,7 @@
                                     <Condition Binding="{Binding IsSelected}" Value="False"/>
                                 </MultiDataTrigger.Conditions>
                                 <Setter TargetName="TabBorder" Property="Background" Value="#F1F3F5"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#C6CBD3"/>
                             </MultiDataTrigger>
                             <MultiDataTrigger>
                                 <MultiDataTrigger.Conditions>
