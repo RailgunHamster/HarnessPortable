@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const sharp = require("sharp");
 const png2icons = require("png2icons");
+const pngToIco = require("png-to-ico").default;
 
 const root = path.resolve(__dirname, "..");
 const sourceDir = path.join(__dirname, "source");
@@ -64,21 +65,28 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
-  // 3. Windows .ico
+  // 3. Windows .ico and a PNG asset for WPF window/title-bar icons
   // ---------------------------------------------------------------------
-  const ico = png2icons.createICO(
-    masterSquare,
-    png2icons.BICUBIC2,
-    0,
-    true,
-    true
-  );
-  if (!ico) {
-    throw new Error("png2icons failed to create ICO");
+  const icoSizes = [16, 24, 32, 48, 64, 128, 256];
+  const icoFiles = [];
+  for (const size of icoSizes) {
+    const file = path.join(generatedDir, `ico-${size}.png`);
+    fs.writeFileSync(file, await renderPng("icon.svg", size));
+    icoFiles.push(file);
   }
+
+  const ico = await pngToIco(icoFiles);
   write(windowsAssetsDir, "HarnessPortable.ico", ico);
   write(generatedDir, "HarnessPortable.ico", ico);
-  console.log("windows: HarnessPortable.ico");
+
+  for (const file of icoFiles) {
+    fs.rmSync(file, { force: true });
+  }
+
+  const windowPng = await renderPng("icon.svg", 256);
+  write(windowsAssetsDir, "HarnessPortable.png", windowPng);
+  write(generatedDir, "HarnessPortable.png", windowPng);
+  console.log("windows: HarnessPortable.ico + HarnessPortable.png");
 
   // ---------------------------------------------------------------------
   // 4. macOS .icns

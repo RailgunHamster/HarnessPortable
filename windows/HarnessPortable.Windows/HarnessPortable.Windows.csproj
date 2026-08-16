@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\HarnessPortable.ico" />
+    <Resource Include="Assets\HarnessPortable.png" />
   </ItemGroup>
 
   <ItemGroup>
