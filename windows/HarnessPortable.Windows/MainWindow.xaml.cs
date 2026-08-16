@@ -59,6 +59,7 @@ public partial class MainWindow : Window
         _services.Tunnels.StateChanged += OnTunnelStateChanged;
         RefreshStatusBar();
         RefreshPresetBox(null);
+        RestoreLastLayoutIfEnabled();
     }
 
     private void InitializeDockLayout()
@@ -762,6 +763,28 @@ public partial class MainWindow : Window
         _suppressPresetSelection = false;
     }
 
+    private void RestoreLastLayoutIfEnabled()
+    {
+        var settings = _services.Settings.Load();
+        if (!settings.RestoreLastLayoutOnStartup || string.IsNullOrWhiteSpace(settings.LastLayoutName))
+        {
+            return;
+        }
+
+        var preset = _layoutPresets.Load().FirstOrDefault(p =>
+            string.Equals(p.Name, settings.LastLayoutName, StringComparison.OrdinalIgnoreCase));
+        if (preset is null)
+        {
+            return;
+        }
+
+        _suppressPresetSelection = true;
+        LayoutPresetBox.SelectedItem = preset;
+        _suppressPresetSelection = false;
+
+        ApplyLayoutPreset(preset);
+    }
+
     private void ApplyLayoutPreset(WorkspaceLayout layout)
     {
         _pendingProfiles.Clear();
@@ -783,6 +806,10 @@ public partial class MainWindow : Window
         }
 
         DockManager.Layout = new LayoutRoot { RootPanel = rootPanel };
+
+        var appSettings = _services.Settings.Load();
+        appSettings.LastLayoutName = layout.Name;
+        _services.Settings.Save(appSettings);
 
         var firstSession = AllSessionDocs().FirstOrDefault();
         if (firstSession is not null)

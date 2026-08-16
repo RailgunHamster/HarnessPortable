@@ -125,6 +125,8 @@ public partial class ManagementView : System.Windows.Controls.UserControl
             .FirstOrDefault(i => string.Equals(i.Tag as string, current, StringComparison.OrdinalIgnoreCase))
             ?? CloseBehaviorBox.Items[0];
 
+        RestoreLayoutBox.IsChecked = _services.Settings.Load().RestoreLastLayoutOnStartup;
+
         _suppressSettings = false;
     }
 
@@ -138,6 +140,18 @@ public partial class ManagementView : System.Windows.Controls.UserControl
 
         var settings = _services.Settings.Load();
         settings.CloseBehavior = value;
+        _services.Settings.Save(settings);
+    }
+
+    private void RestoreLayoutBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressSettings)
+        {
+            return;
+        }
+
+        var settings = _services.Settings.Load();
+        settings.RestoreLastLayoutOnStartup = RestoreLayoutBox.IsChecked == true;
         _services.Settings.Save(settings);
     }
 

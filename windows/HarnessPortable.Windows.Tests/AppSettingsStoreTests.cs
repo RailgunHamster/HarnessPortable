@@ -17,15 +17,27 @@ public sealed class AppSettingsStoreTests : IDisposable
     [Fact]
     public void MissingFile_ReturnsDefaultExitBehavior()
     {
-        Assert.Equal("exit", _store.Load().CloseBehavior);
+        var settings = _store.Load();
+
+        Assert.Equal("exit", settings.CloseBehavior);
+        Assert.True(settings.RestoreLastLayoutOnStartup);
+        Assert.Equal("", settings.LastLayoutName);
     }
 
     [Fact]
     public void Settings_RoundTrip()
     {
-        _store.Save(new AppSettings { CloseBehavior = "tray" });
+        _store.Save(new AppSettings
+        {
+            CloseBehavior = "tray",
+            RestoreLastLayoutOnStartup = false,
+            LastLayoutName = "三列",
+        });
 
-        Assert.Equal("tray", _store.Load().CloseBehavior);
+        var settings = _store.Load();
+        Assert.Equal("tray", settings.CloseBehavior);
+        Assert.False(settings.RestoreLastLayoutOnStartup);
+        Assert.Equal("三列", settings.LastLayoutName);
     }
 
     public void Dispose()
