@@ -502,7 +502,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var dialog = new LayoutNameWindow(view.CustomLabel ?? view.SessionTitle)
+        var dialog = new LayoutNameWindow(view.DisplayLabel)
         {
             Owner = this,
             Title = "重命名标签",
@@ -510,6 +510,8 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog() == true)
         {
+            // An explicit user rename replaces any duplicate suffix like " (2)".
+            _docSuffixes[doc] = "";
             view.SetCustomLabel(dialog.LayoutName);
         }
     }
@@ -612,6 +614,7 @@ public partial class MainWindow : Window
             ReplaceDocumentContent(doc, oldView, newView, newTunnelProfileId: profile.Id);
             if (target.Label is { } label)
             {
+                _docSuffixes[doc] = "";
                 newView.SetCustomLabel(label);
             }
 
@@ -626,6 +629,7 @@ public partial class MainWindow : Window
             ReplaceDocumentContent(doc, oldView, newView, newTunnelProfileId: null);
             if (target.Label is { } label)
             {
+                _docSuffixes[doc] = "";
                 newView.SetCustomLabel(label);
             }
         }
@@ -985,6 +989,7 @@ public partial class MainWindow : Window
             var doc = CreateTunnelDoc(profile, port, pane, activate: false);
             if (tab.Label is { } label && doc.Content is SessionView tunnelView)
             {
+                _docSuffixes[doc] = "";
                 tunnelView.SetCustomLabel(label);
             }
 
@@ -998,6 +1003,7 @@ public partial class MainWindow : Window
             var doc = CreateDirectDoc(url, NextDirectSuffix(url), pane, activate: false);
             if (tab.Label is { } label && doc.Content is SessionView directView)
             {
+                _docSuffixes[doc] = "";
                 directView.SetCustomLabel(label);
             }
         }

@@ -43,6 +43,11 @@ public partial class SessionView : System.Windows.Controls.UserControl
     public bool AppFullScreenActive { get; set; }
     public string? CustomLabel => _customLabel;
 
+    /// <summary>Label shown in the rename dialog: never includes the status dot.</summary>
+    public string DisplayLabel => _customLabel
+        ?? (_isTunnel ? _profile?.DisplayName : ProfileStore.HostOf(_url))
+        ?? "";
+
     public SessionView(AppServices services, TunnelProfile profile, int localPort)
     {
         _services = services;
