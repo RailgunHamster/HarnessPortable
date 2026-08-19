@@ -26,7 +26,6 @@ final class KeychainStore {
         _ = SecItemDelete(query as CFDictionary)
 
         query[kSecValueData as String] = Data(password.utf8)
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         let status = SecItemAdd(query as CFDictionary, nil)
         guard status == errSecSuccess else {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [NSLocalizedDescriptionKey: "无法写入 macOS Keychain（\(status)）"])
@@ -42,7 +41,6 @@ final class KeychainStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: profileID,
-            kSecUseDataProtectionKeychain as String: true,
         ]
     }
 }
