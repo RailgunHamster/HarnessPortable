@@ -38,6 +38,7 @@ struct WorkspaceView: View {
                 onOpenDirect: openDirect,
                 onSwitch: switchTab,
                 onDelete: deleteProfile
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if !isFullScreen {
