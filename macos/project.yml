@@ -22,7 +22,7 @@ targets:
           - Resources/**
           - Info.plist
     resources:
-      - path: HarnessPortable/Resources
+      - path: HarnessPortable/Resources/Assets.xcassets
     dependencies:
       - sdk: AppKit.framework
       - sdk: WebKit.framework
