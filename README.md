@@ -17,7 +17,7 @@
 - **密码安全存储**：
   - Android：Android Keystore
   - Windows：DPAPI
-  - macOS（规划）：Keychain
+  - macOS：macOS Keychain
 - **内嵌 WebView**：应用内直接打开隧道后的本地端口或任意直连 URL
 - **标签页 + 自由分屏**（桌面端）：
   - 拖动标签到窗口边缘分屏
@@ -35,7 +35,7 @@
 |---|---|---|
 | Android | ✅ 已可用 | Kotlin + Jetpack Compose + JSch + Android WebView |
 | Windows | ✅ 已可用 | .NET 10 WPF + WebView2 + SSH.NET + AvalonDock |
-| macOS | 🚧 规划中 | SwiftUI + WKWebView + NMSSH/libssh2（见 `docs/mac-setup.md`） |
+| macOS | 开发中 | SwiftUI + AppKit + WKWebView + Keychain + 系统 SSH 转发 |
 
 ---
 
@@ -44,6 +44,9 @@
 ```text
 harness-portable/
 ├─ app/                        # Android 应用（现有，可独立构建）
+├─ macos/                      # macOS 原生桌面端（XcodeGen + SwiftUI/AppKit）
+│  ├─ HarnessPortable/         # 应用源码
+│  └─ HarnessPortableTests/    # macOS 单元测试
 ├─ windows/                    # Windows 桌面端
 │  ├─ HarnessPortable.Windows/ # WPF 应用
 │  └─ HarnessPortable.Windows.Tests/
@@ -155,9 +158,9 @@ npm run generate
 
 ---
 
-## macOS / Android 后续规划
+## macOS / Android
 
-- macOS：见 [`docs/mac-setup.md`](docs/mac-setup.md)（远程构建准备步骤）
+- macOS：构建与远程验收见 [`docs/macos-build.md`](docs/macos-build.md) 和 [`docs/mac-setup.md`](docs/mac-setup.md)；
 - Android 多标签 / 折叠屏 / 平板分屏：见 [`docs/android-multipane-plan.md`](docs/android-multipane-plan.md)
 
 ---

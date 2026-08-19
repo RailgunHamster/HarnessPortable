@@ -43,3 +43,9 @@ windows/**/bin/
 windows/**/obj/
 windows/.vs/
 publish/
+
+# macOS/Xcode generated output
+macos/build/
+macos/*.xcodeproj/
+macos/*.xcworkspace/
+macos/**/*.xcuserstate

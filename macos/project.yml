@@ -1,0 +1,48 @@
+name: HarnessPortable
+options:
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    PRODUCT_BUNDLE_IDENTIFIER: com.harness.portable
+    PRODUCT_NAME: HarnessPortable
+    INFOPLIST_KEY_CFBundleDisplayName: Harness Portable
+    INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+    CODE_SIGN_IDENTITY: "-"
+targets:
+  HarnessPortable:
+    type: application
+    platform: macOS
+    sources:
+      - path: HarnessPortable
+        excludes:
+          - Resources/**
+          - Info.plist
+    resources:
+      - path: HarnessPortable/Resources
+    dependencies:
+      - sdk: AppKit.framework
+      - sdk: WebKit.framework
+      - sdk: Security.framework
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: HarnessPortable/Info.plist
+    scheme:
+      testTargets:
+        - HarnessPortableTests
+  HarnessPortableTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: HarnessPortableTests
+    dependencies:
+      - target: HarnessPortable
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.harness.portable.tests
+        GENERATE_INFOPLIST_FILE: YES
