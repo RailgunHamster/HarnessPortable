@@ -5,16 +5,13 @@ import SwiftUI
 
 @MainActor
 final class WebSessionStore: ObservableObject {
-    private let processPool = WKProcessPool()
     private var webViews: [UUID: WKWebView] = [:]
     private var loadedURLs: [UUID: String] = [:]
 
     func webView(for tabID: UUID) -> WKWebView {
         if let existing = webViews[tabID] { return existing }
         let configuration = WKWebViewConfiguration()
-        configuration.processPool = processPool
         configuration.websiteDataStore = .default()
-        configuration.preferences.isDeveloperExtrasEnabled = true
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
         webViews[tabID] = webView
