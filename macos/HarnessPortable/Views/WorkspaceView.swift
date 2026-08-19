@@ -10,6 +10,7 @@ struct WorkspaceView: View {
 
     @State private var isFullScreen = false
     @State private var passwordProfile: TunnelProfile?
+    @State private var keychainError: String?
     @State private var saveLayoutPresented = false
     @State private var layoutName = ""
     @State private var selectedLayoutName: String?
@@ -58,8 +59,14 @@ struct WorkspaceView: View {
         }
         .sheet(item: $passwordProfile) { profile in
             PasswordPromptView(profile: profile) { password in
-                try? services.keychain.setPassword(password, for: profile.id)
-                connect(profile)
+                do {
+                    try services.keychain.setPassword(password, for: profile.id)
+                    connect(profile)
+                    return true
+                } catch {
+                    keychainError = error.localizedDescription
+                    return false
+                }
             }
         }
         .alert("保存布局", isPresented: $saveLayoutPresented) {
@@ -71,6 +78,11 @@ struct WorkspaceView: View {
             TextField("标签名称", text: $workspace.renameText)
             Button("取消", role: .cancel) { workspace.cancelRename() }
             Button("保存") { workspace.commitRename() }
+        }
+        .alert("无法保存 SSH 密码", isPresented: keychainErrorPresented) {
+            Button("确定", role: .cancel) { keychainError = nil }
+        } message: {
+            Text(keychainError ?? "未知 Keychain 错误")
         }
     }
 
@@ -162,6 +174,15 @@ struct WorkspaceView: View {
         Binding(
             get: { workspace.renameTarget != nil },
             set: { presented in if !presented { workspace.cancelRename() } }
+        )
+    }
+
+    private var keychainErrorPresented: Binding<Bool> {
+        Binding(
+            get: { keychainError != nil },
+            set: { isPresented in
+                if !isPresented { keychainError = nil }
+            }
         )
     }
 

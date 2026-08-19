@@ -378,7 +378,7 @@ struct ProfileEditorView: View {
 @MainActor
 struct PasswordPromptView: View {
     let profile: TunnelProfile
-    let onSave: (String) -> Void
+    let onSave: (String) -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var password = ""
 
@@ -395,8 +395,7 @@ struct PasswordPromptView: View {
                 Button("取消") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("保存并连接") {
-                    onSave(password)
-                    dismiss()
+                    if onSave(password) { dismiss() }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(password.isEmpty)

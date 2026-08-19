@@ -57,6 +57,15 @@ final class HarnessPortableTests: XCTestCase {
         XCTAssertTrue(layout.root.children[0].tabs.contains { $0.kind == .management })
     }
 
+    func testKeychainRoundTrip() throws {
+        let store = KeychainStore()
+        let account = "test-\(UUID().uuidString)"
+        defer { store.deletePassword(for: account) }
+
+        try store.setPassword("secret", for: account)
+        XCTAssertEqual(store.password(for: account), "secret")
+    }
+
     func testHostClassification() {
         XCTAssertTrue(HostResolver.isTailscaleAddress("100.101.4.83"))
         XCTAssertFalse(HostResolver.isTailscaleAddress("192.168.1.10"))
