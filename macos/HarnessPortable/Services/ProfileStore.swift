@@ -71,7 +71,7 @@ final class ProfileStore: ObservableObject {
         return tunnels.first { $0.id == id }
     }
 
-    static func normalizeURL(_ raw: String) -> String? {
+    nonisolated static func normalizeURL(_ raw: String) -> String? {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
         if value.range(of: "://") != nil {
@@ -80,7 +80,7 @@ final class ProfileStore: ObservableObject {
         return "http://\(value.contains(":") ? value : value + ":4096")"
     }
 
-    static func host(of url: String) -> String {
+    nonisolated static func host(of url: String) -> String {
         guard let parsed = URL(string: url), let host = parsed.host, !host.isEmpty else {
             return url
         }
