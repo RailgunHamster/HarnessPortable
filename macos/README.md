@@ -31,7 +31,7 @@ xcodebuild -project HarnessPortable.xcodeproj \
 - 每个标签独立 `WKWebView`，使用持久化 WebKit 数据；
 - `profiles.json`、`layouts.json`、`settings.json` 与 Windows 字段兼容；
 - `http://127.0.0.1` 和局域网 HTTP 由应用 Info.plist 的网络策略允许；正式上架前应把 ATS 例外收窄并重新验证；
-- SSH 密码写入 macOS Keychain；
+- SSH 密码可在 profile 编辑器中保存/清除，实际存储在 macOS Keychain；
 - TOFU 主机密钥保存到 `known_hosts.json`，连接前用 `ssh-keyscan` 校验；
 - 每个 profile 一个系统 SSH 转发进程，支持端口递增和断线重连。
 

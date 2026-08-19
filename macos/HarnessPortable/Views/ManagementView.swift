@@ -5,6 +5,7 @@ struct ManagementView: View {
     @ObservedObject var profiles: ProfileStore
     @ObservedObject var tunnels: TunnelManager
     @ObservedObject var settings: SettingsStore
+    let keychain: KeychainStore
     let onConnect: (TunnelProfile) -> Void
     let onStop: (String) -> Void
     let onOpenDirect: (String) -> Void
@@ -107,7 +108,7 @@ struct ManagementView: View {
             .frame(maxWidth: 900, alignment: .leading)
         }
         .sheet(item: $editingProfile) { profile in
-            ProfileEditorView(profile: profile) { saved in
+            ProfileEditorView(profile: profile, keychain: keychain) { saved in
                 profiles.upsertTunnel(saved)
                 editingProfile = nil
             }
@@ -133,6 +134,11 @@ struct ManagementView: View {
             }
             Spacer()
             statusBadge(state)
+            if keychain.hasPassword(for: profile.id) {
+                Image(systemName: "key.fill")
+                    .foregroundStyle(.secondary)
+                    .help("密码已保存在 macOS Keychain")
+            }
             if state.status == .connected || state.status == .connecting || state.status == .retrying {
                 Button {
                     onStop(profile.id)
@@ -224,6 +230,7 @@ struct ManagementView: View {
 @MainActor
 struct ProfileEditorView: View {
     let original: TunnelProfile
+    let keychain: KeychainStore
     let onSave: (TunnelProfile) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -234,9 +241,13 @@ struct ProfileEditorView: View {
     @State private var remoteHost: String
     @State private var remotePort: String
     @State private var localPort: String
+    @State private var password = ""
+    @State private var removeStoredPassword = false
+    @State private var keychainError: String?
 
-    init(profile: TunnelProfile, onSave: @escaping (TunnelProfile) -> Void) {
+    init(profile: TunnelProfile, keychain: KeychainStore, onSave: @escaping (TunnelProfile) -> Void) {
         original = profile
+        self.keychain = keychain
         self.onSave = onSave
         _name = State(initialValue: profile.name)
         _sshHost = State(initialValue: profile.sshHost)
@@ -259,6 +270,45 @@ struct ProfileEditorView: View {
                 TextField("远端主机", text: $remoteHost)
                 TextField("远端端口", text: $remotePort)
                 TextField("本地端口", text: $localPort)
+
+                Section("SSH 认证") {
+                    SecureField("密码（留空保持当前密码）", text: $password)
+                        .onChange(of: password) { newValue in
+                            if !newValue.isEmpty { removeStoredPassword = false }
+                        }
+                    HStack(spacing: 8) {
+                        if hasStoredPassword && !removeStoredPassword {
+                            Label("已保存在 Keychain", systemImage: "key.fill")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button {
+                                password = ""
+                                removeStoredPassword = true
+                            } label: {
+                                Image(systemName: "key.slash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("清除已保存密码")
+                        } else if removeStoredPassword {
+                            Label("保存时清除密码", systemImage: "trash")
+                                .foregroundStyle(.orange)
+                            Spacer()
+                            Button {
+                                removeStoredPassword = false
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("保留已保存密码")
+                        } else {
+                            Label("未保存密码", systemImage: "key")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("密码只保存到 macOS Keychain，不写入配置文件。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             HStack {
                 Spacer()
@@ -270,7 +320,25 @@ struct ProfileEditorView: View {
             }
         }
         .padding(24)
-        .frame(width: 420)
+        .frame(width: 460)
+        .alert("无法保存密码", isPresented: keychainErrorPresented) {
+            Button("确定", role: .cancel) { keychainError = nil }
+        } message: {
+            Text(keychainError ?? "未知 Keychain 错误")
+        }
+    }
+
+    private var hasStoredPassword: Bool {
+        keychain.hasPassword(for: original.id)
+    }
+
+    private var keychainErrorPresented: Binding<Bool> {
+        Binding(
+            get: { keychainError != nil },
+            set: { isPresented in
+                if !isPresented { keychainError = nil }
+            }
+        )
     }
 
     private var canSave: Bool {
@@ -293,8 +361,17 @@ struct ProfileEditorView: View {
 
     private func save() {
         guard canSave else { return }
-        onSave(makeProfile())
-        dismiss()
+        do {
+            if removeStoredPassword {
+                keychain.deletePassword(for: original.id)
+            } else if !password.isEmpty {
+                try keychain.setPassword(password, for: original.id)
+            }
+            onSave(makeProfile())
+            dismiss()
+        } catch {
+            keychainError = error.localizedDescription
+        }
     }
 }
 

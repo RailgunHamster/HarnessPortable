@@ -497,6 +497,7 @@ private struct WorkspacePaneView: View {
                     profiles: services.profiles,
                     tunnels: services.tunnels,
                     settings: services.settings,
+                    keychain: services.keychain,
                     onConnect: onConnect,
                     onStop: onStop,
                     onOpenDirect: onOpenDirect,
