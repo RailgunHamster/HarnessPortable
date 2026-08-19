@@ -37,6 +37,8 @@ public partial class ManagementView : System.Windows.Controls.UserControl
     private readonly AppServices _services;
     private readonly ObservableCollection<TunnelListItem> _tunnelItems = [];
     private readonly ObservableCollection<DirectListItem> _directItems = [];
+    private readonly ObservableCollection<string> _lanMachines = [];
+    private CancellationTokenSource? _discoveryCts;
     private bool _suppressSettings;
 
     public event Action<TunnelProfile>? TunnelConnectRequested;
@@ -50,8 +52,10 @@ public partial class ManagementView : System.Windows.Controls.UserControl
 
         TunnelList.ItemsSource = _tunnelItems;
         DirectList.ItemsSource = _directItems;
+        DirectInput.ItemsSource = _lanMachines;
 
         _services.Tunnels.StateChanged += OnTunnelStateChanged;
+        Unloaded += (_, _) => _discoveryCts?.Cancel();
         InitializeCloseBehaviorSettings();
         RefreshLists();
     }
@@ -252,6 +256,70 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         _services.Secrets.ClearPassword(item.Profile.Id);
 
         RefreshLists();
+    }
+
+    private async void DirectInput_DropDownOpened(object sender, EventArgs e)
+    {
+        await LoadLanMachinesAsync(force: false);
+    }
+
+    private async void RefreshDirectMachines_Click(object sender, RoutedEventArgs e)
+    {
+        await LoadLanMachinesAsync(force: true);
+        DirectInput.IsDropDownOpen = true;
+    }
+
+    private async Task LoadLanMachinesAsync(bool force)
+    {
+        if (force)
+        {
+            HostResolver.ResetLanMachineDiscovery();
+        }
+
+        _discoveryCts?.Cancel();
+        _discoveryCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _discoveryCts = cts;
+
+        try
+        {
+            var machines = await HostResolver.DiscoverLanMachinesAsync(cts.Token);
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var text = DirectInput.Text;
+            _lanMachines.Clear();
+            foreach (var machine in machines)
+            {
+                _lanMachines.Add(machine.Name);
+            }
+
+            DirectInput.SelectedIndex = -1;
+            DirectInput.Text = text;
+        }
+        catch (OperationCanceledException)
+        {
+            // The window was unloaded or another refresh superseded this one.
+        }
+        finally
+        {
+            if (ReferenceEquals(_discoveryCts, cts))
+            {
+                _discoveryCts = null;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private void DirectInput_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DirectInput.SelectedItem is string name)
+        {
+            DirectInput.Text = name;
+        }
     }
 
     private void AddDirect_Click(object sender, RoutedEventArgs e)

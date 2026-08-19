@@ -1,5 +1,7 @@
+using System.Collections.ObjectModel;
 using System.Windows;
 using HarnessPortable.Windows.Models;
+using HarnessPortable.Windows.Services;
 
 namespace HarnessPortable.Windows;
 
@@ -8,6 +10,8 @@ public partial class TunnelEditorWindow : Window
     public sealed record EditorResult(TunnelProfile Profile, string? Password);
 
     private readonly TunnelProfile? _initial;
+    private readonly ObservableCollection<string> _lanMachines = [];
+    private CancellationTokenSource? _discoveryCts;
 
     public EditorResult? Result { get; private set; }
 
@@ -15,6 +19,8 @@ public partial class TunnelEditorWindow : Window
     {
         _initial = initial;
         InitializeComponent();
+        HostBox.ItemsSource = _lanMachines;
+        Closed += (_, _) => _discoveryCts?.Cancel();
 
         if (initial is not null)
         {
@@ -27,6 +33,70 @@ public partial class TunnelEditorWindow : Window
             RemotePortBox.Text = initial.RemotePort.ToString();
             LocalPortBox.Text = initial.LocalPort.ToString();
             PasswordCaption.Text = "密码（留空保持不变）";
+        }
+    }
+
+    private async void HostBox_DropDownOpened(object sender, EventArgs e)
+    {
+        await LoadLanMachinesAsync(force: false);
+    }
+
+    private async void RefreshMachines_Click(object sender, RoutedEventArgs e)
+    {
+        await LoadLanMachinesAsync(force: true);
+        HostBox.IsDropDownOpen = true;
+    }
+
+    private async Task LoadLanMachinesAsync(bool force)
+    {
+        if (force)
+        {
+            HostResolver.ResetLanMachineDiscovery();
+        }
+
+        _discoveryCts?.Cancel();
+        _discoveryCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _discoveryCts = cts;
+
+        try
+        {
+            var machines = await HostResolver.DiscoverLanMachinesAsync(cts.Token);
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var text = HostBox.Text;
+            _lanMachines.Clear();
+            foreach (var machine in machines)
+            {
+                _lanMachines.Add(machine.Name);
+            }
+
+            HostBox.SelectedIndex = -1;
+            HostBox.Text = text;
+        }
+        catch (OperationCanceledException)
+        {
+            // The window was closed or another refresh superseded this one.
+        }
+        finally
+        {
+            if (ReferenceEquals(_discoveryCts, cts))
+            {
+                _discoveryCts = null;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private void HostBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (HostBox.SelectedItem is string name)
+        {
+            HostBox.Text = name;
         }
     }
 

@@ -38,4 +38,30 @@ public sealed class HostResolverTests
         Assert.Equal("192.168.0.104", resolution.Ip);
         Assert.Equal("ip", resolution.Source);
     }
+
+    [Theory]
+    [InlineData("http://winserver:4096", "192.168.0.104", "http://192.168.0.104:4096")]
+    [InlineData("http://winserver:4096/", "192.168.0.104", "http://192.168.0.104:4096/")]
+    [InlineData("http://winserver:4096/console?x=1#frag", "10.1.2.3", "http://10.1.2.3:4096/console?x=1#frag")]
+    [InlineData("https://winserver", "10.1.2.3", "https://10.1.2.3")]
+    [InlineData("http://user:pass@winserver:4096/x", "10.1.2.3", "http://user:pass@10.1.2.3:4096/x")]
+    [InlineData("http://[::1]:4096/x", "10.1.2.3", null)] // bracketed IPv6 is not located verbatim
+    [InlineData("http://winserver:4096", "", null)]
+    [InlineData("winserver:4096", "192.168.0.104", null)] // no http(s) scheme
+    [InlineData("ftp://winserver:21/x", "192.168.0.104", null)]
+    [InlineData("not a url", "192.168.0.104", null)]
+    public void ReplaceHost_SwapsOnlyTheHost(string url, string ip, string? expected)
+    {
+        Assert.Equal(expected, HostResolver.ReplaceHost(url, ip));
+    }
+
+    [Theory]
+    [InlineData("http://192.168.0.104:4096/")] // already an IP
+    [InlineData("http://[2001:db8::1]:4096/")] // already an IPv6 literal
+    [InlineData("ftp://winserver:21")] // non-http scheme
+    [InlineData("not a url")]
+    public async Task ResolveUrlAsync_NonResolvableInput_ReturnsNullWithoutLookup(string url)
+    {
+        Assert.Null(await HostResolver.ResolveUrlAsync(url));
+    }
 }

@@ -224,7 +224,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
             WebView.PreviewKeyDown += OnWebViewPreviewKeyDown;
-            Navigate(_url);
+            Navigate(await ResolveDirectUrlAsync());
         }
         catch (Exception ex)
         {
@@ -234,6 +234,24 @@ public partial class SessionView : System.Windows.Controls.UserControl
             OverlayReturnButton.Content = "关闭标签";
             StatusOverlay.Visibility = Visibility.Visible;
         }
+    }
+
+    /// <summary>
+    /// Direct sessions can be opened by machine name (http://winserver:4096),
+    /// which the embedded browser may not resolve on its own. Resolve the name
+    /// to an IP first; only when the name is unknown do we fall back to the
+    /// original URL and let the browser's resolver try (previous behavior).
+    /// The tab's identity (DirectUrl, layouts, saved list) keeps the name.
+    /// </summary>
+    private async Task<string> ResolveDirectUrlAsync()
+    {
+        if (_isTunnel)
+        {
+            return _url;
+        }
+
+        var resolved = await HostResolver.ResolveUrlAsync(_url);
+        return resolved ?? _url;
     }
 
     private void Navigate(string url)

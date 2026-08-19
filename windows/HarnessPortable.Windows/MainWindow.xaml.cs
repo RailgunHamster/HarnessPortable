@@ -76,6 +76,7 @@ public partial class MainWindow : Window
         Title = "管理",
         ContentId = "management",
         CanClose = false,
+        CanFloat = false,
         Content = _managementView,
     };
 
@@ -247,6 +248,7 @@ public partial class MainWindow : Window
             Title = view.SessionTitle + suffix,
             ContentId = $"tunnel:{profile.Id}:{Guid.NewGuid():N}",
             CanClose = true,
+            CanFloat = false,
             Content = view,
         };
 
@@ -289,6 +291,7 @@ public partial class MainWindow : Window
             Title = view.SessionTitle + suffix,
             ContentId = $"direct:{Guid.NewGuid():N}",
             CanClose = true,
+            CanFloat = false,
             Content = view,
         };
 

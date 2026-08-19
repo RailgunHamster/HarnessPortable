@@ -19,7 +19,17 @@
                 <TextBox x:Name="NameBox" Style="{StaticResource ModernTextBox}"/>
 
                 <TextBlock Text="服务器地址" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
-                <TextBox x:Name="HostBox" Style="{StaticResource ModernTextBox}"/>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="↻" Padding="9,6" Margin="8,0,0,0"
+                            Style="{StaticResource ModernToolbarButton}"
+                            ToolTip="刷新局域网机器"
+                            Click="RefreshMachines_Click"/>
+                    <ComboBox x:Name="HostBox"
+                              Style="{StaticResource ModernEditableComboBox}"
+                              ToolTip="输入 IP、机器名或域名；下拉可选择局域网机器"
+                              DropDownOpened="HostBox_DropDownOpened"
+                              SelectionChanged="HostBox_SelectionChanged"/>
+                </DockPanel>
 
                 <TextBlock Text="SSH 端口" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
                 <TextBox x:Name="SshPortBox" Style="{StaticResource ModernTextBox}" Text="22"/>
@@ -40,7 +50,7 @@
                 <TextBox x:Name="LocalPortBox" Style="{StaticResource ModernTextBox}" Text="3080"/>
 
                 <TextBlock Margin="0,12,0,0" Foreground="#6B7280" FontSize="12" TextWrapping="Wrap"
-                           Text="等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器&#10;服务器可填 IP / 域名 / NetBIOS 名；Tailscale MagicDNS 也会被系统解析。&#10;密码使用 Windows DPAPI 加密存储，仅用于建立隧道。"/>
+                           Text="等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器&#10;服务器可填 IP / 域名 / NetBIOS 名；打开地址下拉可选择局域网机器；Tailscale MagicDNS 也会被系统解析。&#10;密码使用 Windows DPAPI 加密存储，仅用于建立隧道。"/>
             </StackPanel>
         </ScrollViewer>
 

@@ -78,11 +78,18 @@
                     <Button DockPanel.Dock="Right" Content="添加" Padding="14,6" Margin="8,0,0,0"
                             Style="{StaticResource ModernPrimaryButton}"
                             Click="AddDirect_Click"/>
-                    <TextBox x:Name="DirectInput" Style="{StaticResource ModernTextBox}"
-                             ToolTip="IP 或完整 URL，如 192.168.0.104"/>
+                    <Button DockPanel.Dock="Right" Content="↻" Padding="9,6" Margin="0,0,8,0"
+                            Style="{StaticResource ModernToolbarButton}"
+                            ToolTip="刷新局域网机器"
+                            Click="RefreshDirectMachines_Click"/>
+                    <ComboBox x:Name="DirectInput"
+                              Style="{StaticResource ModernEditableComboBox}"
+                              ToolTip="输入 IP、机器名或完整 URL；下拉可选择局域网机器"
+                              DropDownOpened="DirectInput_DropDownOpened"
+                              SelectionChanged="DirectInput_SelectionChanged"/>
                 </DockPanel>
                 <TextBlock x:Name="EmptyDirectHint" Style="{StaticResource ModernMutedText}" Margin="0,0,0,10"
-                           Text="也可直接添加 http(s) 地址，不经过 SSH 隧道访问。"/>
+                           Text="也可直接添加 http(s) 地址，不经过 SSH 隧道访问；打开输入框下拉可选择局域网机器。"/>
                 <ItemsControl x:Name="DirectList">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
