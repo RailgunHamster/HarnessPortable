@@ -45,4 +45,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.harness.portable.tests
+        PRODUCT_NAME: HarnessPortableTests
+        SWIFT_MODULE_NAME: HarnessPortableTests
         GENERATE_INFOPLIST_FILE: YES
