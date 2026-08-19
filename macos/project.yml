@@ -21,8 +21,8 @@ targets:
         excludes:
           - Resources/**
           - Info.plist
-    resources:
       - path: HarnessPortable/Resources/Assets.xcassets
+        type: resources
     dependencies:
       - sdk: AppKit.framework
       - sdk: WebKit.framework
