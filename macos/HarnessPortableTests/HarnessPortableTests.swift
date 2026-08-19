@@ -3,7 +3,7 @@ import XCTest
 
 final class HarnessPortableTests: XCTestCase {
     func testProfileFixtureUsesCrossPlatformKeysAndDefaults() throws {
-        let data = Data(#"{
+        let data = Data(#"""{
           "Version": 1,
           "Tunnels": [{
             "Id": "one",
@@ -15,7 +15,7 @@ final class HarnessPortableTests: XCTestCase {
             "LocalPort": 3080
           }],
           "Directs": ["http://192.168.0.10:4096"]
-        }"#.utf8)
+        }"""#.utf8)
 
         let config = try decodeJSON(ProfileConfig.self, from: data)
         XCTAssertEqual(config.tunnels.first?.sshPort, 22)
@@ -30,7 +30,7 @@ final class HarnessPortableTests: XCTestCase {
     }
 
     func testLayoutFixtureRestoresNestedSplitAndManagementTab() throws {
-        let data = Data(#"{
+        let data = Data(#"""{
           "name": "quad",
           "savedAt": "2026-01-01T00:00:00Z",
           "root": {
@@ -44,7 +44,7 @@ final class HarnessPortableTests: XCTestCase {
               ] }
             ]
           }
-        }"#.utf8)
+        }"""#.utf8)
 
         let layout = try JSONDecoder().decode(WorkspaceLayout.self, from: data)
         XCTAssertEqual(layout.root.kind, .split)
