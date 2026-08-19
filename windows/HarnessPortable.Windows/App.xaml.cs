@@ -36,7 +36,7 @@ public partial class App : System.Windows.Application
         catch (Exception ex)
         {
             WriteCrash("startup", ex);
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 $"Harness Portable 启动失败。\n\n{ex.Message}\n\n详细信息已写入：\n{AppPaths.CrashLogFile}",
                 "Harness Portable",
                 MessageBoxButton.OK,
