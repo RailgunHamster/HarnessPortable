@@ -11,6 +11,8 @@ struct WorkspaceView: View {
     @State private var isFullScreen = false
     @State private var passwordProfile: TunnelProfile?
     @State private var keychainError: String?
+    @State private var directPromptPresented = false
+    @State private var directURLInput = ""
     @State private var saveLayoutPresented = false
     @State private var layoutName = ""
     @State private var selectedLayoutName: String?
@@ -74,6 +76,11 @@ struct WorkspaceView: View {
             Button("取消", role: .cancel) {}
             Button("保存") { saveLayout() }
         }
+        .alert("新建直连", isPresented: $directPromptPresented) {
+            TextField("主机或 URL", text: $directURLInput)
+            Button("取消", role: .cancel) {}
+            Button("打开") { openDirectInput() }
+        }
         .alert("重命名标签", isPresented: renameAlertPresented) {
             TextField("标签名称", text: $workspace.renameText)
             Button("取消", role: .cancel) { workspace.cancelRename() }
@@ -97,8 +104,8 @@ struct WorkspaceView: View {
                 Label("管理", systemImage: "slider.horizontal.3")
             }
             Button {
-                let value = ProfileStore.normalizeURL("127.0.0.1") ?? "http://127.0.0.1:4096"
-                openDirect(value)
+                directURLInput = ""
+                directPromptPresented = true
             } label: {
                 Label("新建直连", systemImage: "plus")
             }
@@ -247,6 +254,11 @@ struct WorkspaceView: View {
 
     private func openDirect(_ url: String) {
         workspace.openDirect(url)
+    }
+
+    private func openDirectInput() {
+        guard let url = services.profiles.addDirect(directURLInput) else { return }
+        openDirect(url)
     }
 
     private func switchTab(_ tabID: UUID, target: WorkspaceTab) {
@@ -467,6 +479,7 @@ private struct WorkspacePaneView: View {
     let onOpenDirect: (String) -> Void
     let onSwitch: (UUID, WorkspaceTab) -> Void
     let onDelete: (TunnelProfile) -> Void
+    @State private var activeDropDirection: SplitDirection?
 
     var body: some View {
         ZStack {
@@ -572,17 +585,7 @@ private struct WorkspacePaneView: View {
         .overlay(RoundedRectangle(cornerRadius: 5).stroke(selected ? Color(nsColor: .controlAccentColor).opacity(0.55) : Color(nsColor: .separatorColor), lineWidth: 1))
         .contentShape(Rectangle())
         .zIndex(3)
-        .onDrag {
-            let provider = NSItemProvider()
-            provider.registerDataRepresentation(
-                forTypeIdentifier: UTType.plainText.identifier,
-                visibility: .all
-            ) { completion in
-                completion(Data(tab.id.uuidString.utf8), nil)
-                return nil
-            }
-            return provider
-        }
+        .modifier(WorkspaceTabDragModifier(tab: tab))
         .contextMenu { contextMenu(for: tab) }
     }
 
@@ -648,13 +651,22 @@ private struct WorkspacePaneView: View {
     }
 
     private func edgeDrop(direction: SplitDirection) -> some View {
-        Color.black.opacity(0.001)
-            .frame(width: direction == .left || direction == .right ? 24 : nil,
-                   height: direction == .up || direction == .down ? 24 : nil)
+        let highlighted = activeDropDirection == direction
+        return Color(nsColor: .controlAccentColor)
+            .opacity(highlighted ? 0.18 : 0.001)
+            .frame(width: direction == .left || direction == .right ? 64 : nil,
+                   height: direction == .up || direction == .down ? 64 : nil)
             .frame(maxWidth: direction == .up || direction == .down ? .infinity : nil,
                    maxHeight: direction == .left || direction == .right ? .infinity : nil)
-            .onDrop(of: [UTType.plainText], isTargeted: nil) { providers, _ in
-                loadTabID(from: providers) { id in
+            .onDrop(
+                of: [UTType.plainText],
+                isTargeted: Binding(
+                    get: { activeDropDirection == direction },
+                    set: { activeDropDirection = $0 ? direction : nil }
+                )
+            ) { providers, _ in
+                activeDropDirection = nil
+                return loadTabID(from: providers) { id in
                     workspace.moveTabToSplit(id, paneID: paneID, direction: direction)
                 }
             }
@@ -674,5 +686,27 @@ private struct WorkspacePaneView: View {
             DispatchQueue.main.async { action(id) }
         }
         return true
+    }
+}
+
+private struct WorkspaceTabDragModifier: ViewModifier {
+    let tab: WorkspaceTab
+
+    func body(content: Content) -> some View {
+        if tab.kind == .management {
+            content
+        } else {
+            content.onDrag {
+                let provider = NSItemProvider()
+                provider.registerDataRepresentation(
+                    forTypeIdentifier: UTType.plainText.identifier,
+                    visibility: .all
+                ) { completion in
+                    completion(Data(tab.id.uuidString.utf8), nil)
+                    return nil
+                }
+                return provider
+            }
+        }
     }
 }

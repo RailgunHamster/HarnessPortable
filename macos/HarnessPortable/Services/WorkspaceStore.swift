@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-enum SplitDirection {
+enum SplitDirection: Equatable {
     case left
     case right
     case up
