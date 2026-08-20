@@ -207,7 +207,7 @@ final class SSHProcessTunnel {
     private func scanHostKey(host: String, port: Int) throws -> ScannedKey {
         let command = Process()
         command.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keyscan")
-        command.arguments = ["-T", "10", "-p", String(port), host]
+        command.arguments = ["-4", "-T", "10", "-t", "ed25519", "-p", String(port), host]
         let output = Pipe()
         command.standardOutput = output
         command.standardError = FileHandle.nullDevice
@@ -252,6 +252,7 @@ final class SSHProcessTunnel {
         let forward = "127.0.0.1:\(localPort):\(remote):\(profile.remotePort)"
         command.arguments = [
             "-N",
+            "-4",
             "-L", forward,
             "-p", String(profile.sshPort),
             "-o", "ExitOnForwardFailure=yes",
