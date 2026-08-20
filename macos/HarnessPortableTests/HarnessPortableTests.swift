@@ -63,7 +63,8 @@ final class HarnessPortableTests: XCTestCase {
         defer { store.deletePassword(for: account) }
 
         try store.setPassword("secret", for: account)
-        XCTAssertEqual(store.password(for: account), "secret")
+        let reader = KeychainStore()
+        XCTAssertEqual(reader.password(for: account), "secret")
     }
 
     func testHostClassification() {
