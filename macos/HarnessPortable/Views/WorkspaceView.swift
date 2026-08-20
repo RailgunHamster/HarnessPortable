@@ -560,14 +560,9 @@ private struct WorkspacePaneView: View {
     private func tabItem(_ tab: WorkspaceTab) -> some View {
         let selected = workspace.selectedTab(in: paneID)?.id == tab.id
         return HStack(spacing: 5) {
-            Button {
-                workspace.selectTab(tab.id, in: paneID)
-            } label: {
-                Text(title(for: tab))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            .buttonStyle(.plain)
+            Text(title(for: tab))
+                .lineLimit(1)
+                .truncationMode(.middle)
             if tab.kind != .management {
                 Button {
                     closeTab(tab.id)
@@ -584,6 +579,7 @@ private struct WorkspacePaneView: View {
         .background(selected ? Color(nsColor: .controlAccentColor).opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
         .overlay(RoundedRectangle(cornerRadius: 5).stroke(selected ? Color(nsColor: .controlAccentColor).opacity(0.55) : Color(nsColor: .separatorColor), lineWidth: 1))
         .contentShape(Rectangle())
+        .onTapGesture { workspace.selectTab(tab.id, in: paneID) }
         .zIndex(3)
         .modifier(WorkspaceTabDragModifier(tab: tab))
         .contextMenu { contextMenu(for: tab) }

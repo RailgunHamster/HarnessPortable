@@ -149,6 +149,14 @@ struct ManagementView: View {
                 }
                 .help("重新信任当前主机密钥")
             }
+            if state.status == .connected {
+                Button {
+                    onConnect(profile)
+                } label: {
+                    Image(systemName: "rectangle.badge.plus")
+                }
+                .help("打开网页标签")
+            }
             if state.status == .connected || state.status == .connecting || state.status == .retrying {
                 Button {
                     onStop(profile.id)
