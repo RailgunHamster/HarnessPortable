@@ -132,8 +132,8 @@ xcodebuild -project HarnessPortable.xcodeproj \
 - UI：SwiftUI + AppKit（WKWebView 通过 `NSViewRepresentable` 嵌入）。
 - 图标：Asset Catalog + `HarnessPortable.icns` 后备资源；源文件与生成方式见
   `branding/README.md`；
-- SSH：第一版使用系统 `/usr/bin/ssh` + Keychain askpass；连接前由
-  `ssh-keyscan` 获取主机密钥并写入/检查 `known_hosts.json`，后续可替换为
+- SSH：第一版使用系统 `/usr/bin/ssh` + Security API/临时 askpass 文件；连接前由
+  `ssh-keyscan` 获取主机密钥并写入/检查 `known_hosts.json`，隧道停止时删除临时密码文件，后续可替换为
   libssh2/C wrapper 而不改变 TunnelManager 契约。
 - 配置：与 Windows 版共用 `spec/config-schema.md` 定义的 JSON 约定。
 - 密码：macOS Keychain。

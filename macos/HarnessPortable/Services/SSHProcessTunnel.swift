@@ -72,19 +72,26 @@ final class SSHProcessTunnel {
         stateLock.unlock()
 
         oldProcess?.terminate()
+        removePasswordFile(for: profile.id)
         emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .stopped, message: "隧道已停止"))
     }
 
     private func run(profile: TunnelProfile, generation: Int) {
         var backoff: TimeInterval = 3
+        var passwordFile: URL?
+        defer { removePasswordFile(for: profile.id) }
 
         while isCurrent(generation) {
             var child: Process?
             do {
-                guard keychain.password(for: profile.id) != nil else {
+                guard let password = keychain.password(for: profile.id) else {
                     emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .failed, message: TunnelProcessError.missingPassword.localizedDescription))
                     return
                 }
+                if passwordFile == nil {
+                    passwordFile = try preparePasswordFile(for: profile.id, password: password)
+                }
+                guard let passwordFile else { throw TunnelProcessError.missingPassword }
 
                 emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .connecting, message: "正在连接…"))
                 let resolution = HostResolver.resolve(profile.sshHost)
@@ -113,7 +120,8 @@ final class SSHProcessTunnel {
                             profile: profile,
                             resolvedHost: resolution.ip,
                             localPort: candidate,
-                            knownHostsFile: knownHostsFile
+                            knownHostsFile: knownHostsFile,
+                            passwordFile: passwordFile
                         )
                         child = launched
                         connectedPort = candidate
@@ -230,7 +238,13 @@ final class SSHProcessTunnel {
         return url
     }
 
-    private func launch(profile: TunnelProfile, resolvedHost: String, localPort: Int, knownHostsFile: URL) throws -> Process {
+    private func launch(
+        profile: TunnelProfile,
+        resolvedHost: String,
+        localPort: Int,
+        knownHostsFile: URL,
+        passwordFile: URL
+    ) throws -> Process {
         let askpass = try prepareAskpass()
         let command = Process()
         command.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
@@ -257,6 +271,7 @@ final class SSHProcessTunnel {
         environment["SSH_ASKPASS_REQUIRE"] = "force"
         environment["DISPLAY"] = "1"
         environment["HARNESS_PROFILE_ID"] = profile.id
+        environment["HARNESS_PASSWORD_FILE"] = passwordFile.path
         command.environment = environment
         command.standardInput = FileHandle.nullDevice
         command.standardOutput = FileHandle.nullDevice
@@ -275,13 +290,25 @@ final class SSHProcessTunnel {
 
     private func prepareAskpass() throws -> URL {
         let url = AppPaths.askpassScript
-        let script = "#!/bin/sh\nexec /usr/bin/security find-generic-password -s com.harness.portable -a \"$HARNESS_PROFILE_ID\" -w\n"
+        let script = "#!/bin/sh\n[ -n \"$HARNESS_PASSWORD_FILE\" ] || exit 1\n[ -r \"$HARNESS_PASSWORD_FILE\" ] || exit 1\nexec /bin/cat \"$HARNESS_PASSWORD_FILE\"\n"
         if !FileManager.default.fileExists(atPath: url.path) ||
             String(data: (try? Data(contentsOf: url)) ?? Data(), encoding: .utf8) != script {
             try Data(script.utf8).write(to: url, options: .atomic)
         }
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: Int(0o700))], ofItemAtPath: url.path)
         return url
+    }
+
+    private func preparePasswordFile(for profileID: String, password: String) throws -> URL {
+        AppPaths.ensure()
+        let url = AppPaths.passwordFile(for: profileID)
+        try Data(password.utf8).write(to: url, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: Int(0o600))], ofItemAtPath: url.path)
+        return url
+    }
+
+    private func removePasswordFile(for profileID: String) {
+        try? FileManager.default.removeItem(at: AppPaths.passwordFile(for: profileID))
     }
 
     private func processErrorMessage(from process: Process) -> String {

@@ -49,7 +49,7 @@ open build/Build/Products/Debug/HarnessPortable.app
 
 `WKWebView` 使用系统持久化 data store，数据目录由 WebKit 管理。
 
-SSH 密码可在 profile 编辑器中保存或清除，不写入 JSON，而是保存在 Keychain：service 为 `com.harness.portable`，account 为 tunnel profile id。转发由系统 `/usr/bin/ssh` 进程负责，每个 profile 独立运行，端口从 profile 的 `localPort` 起最多尝试 10 个端口，断线按 3 到 30 秒退避重连。
+SSH 密码可在 profile 编辑器中保存或清除，不写入 JSON，而是保存在 Keychain：service 为 `com.harness.portable`，account 为 tunnel profile id。应用通过 Security API 读取 Keychain，并在隧道运行期间创建仅当前用户可读的临时 askpass 密码文件，停止或退出时删除。转发由系统 `/usr/bin/ssh` 进程负责，每个 profile 独立运行，端口从 profile 的 `localPort` 起最多尝试 10 个端口，断线按 3 到 30 秒退避重连。
 
 ## 远程构建
 

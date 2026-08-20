@@ -16,6 +16,7 @@ enum AppPaths {
     static func ensure() {
         try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
+        try? FileManager.default.setAttributes([.posixPermissions: NSNumber(value: Int(0o700))], ofItemAtPath: supportDirectory.path)
     }
 
     static func knownHostFile(for profileID: String) -> URL {
@@ -24,6 +25,10 @@ enum AppPaths {
 
     static var askpassScript: URL {
         supportDirectory.appendingPathComponent("ssh-askpass.sh")
+    }
+
+    static func passwordFile(for profileID: String) -> URL {
+        supportDirectory.appendingPathComponent("ssh-password-\(profileID).tmp")
     }
 }
 

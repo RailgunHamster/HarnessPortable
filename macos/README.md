@@ -35,7 +35,7 @@ xcodebuild -project HarnessPortable.xcodeproj \
 - TOFU 主机密钥保存到 `known_hosts.json`，连接前用 `ssh-keyscan` 校验；
 - 每个 profile 一个系统 SSH 转发进程，支持端口递增和断线重连。
 
-系统 SSH 方案不把密码写入命令行，而是通过 Keychain 驱动的临时 askpass 脚本交给 `/usr/bin/ssh`。正式分发前仍需在 Mac 上验证键盘交互认证、沙盒/签名、睡眠唤醒和公证行为。
+系统 SSH 方案不把密码写入命令行。应用通过 Security API 从 Keychain 读取密码，写入仅当前用户可读的临时文件，再由 `/usr/bin/ssh` 的 askpass 脚本读取；隧道停止或进程退出时删除临时文件。
 
 配置目录：
 
