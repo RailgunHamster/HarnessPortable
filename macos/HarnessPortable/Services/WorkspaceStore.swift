@@ -58,7 +58,7 @@ final class WorkspaceStore: ObservableObject {
     func selectPane(_ paneID: UUID) {
         guard node(paneID)?.kind == .pane else { return }
         activePaneID = paneID
-        if let first = tabs(in: paneID).first {
+        if selectedTabIDs[paneID] == nil, let first = tabs(in: paneID).first {
             selectedTabIDs[paneID] = first.id
         }
     }
