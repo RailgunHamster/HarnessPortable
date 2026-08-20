@@ -474,6 +474,7 @@ private struct WorkspacePaneView: View {
                 tabStrip
                 Divider()
                 content
+                    .id(workspace.selectedTab(in: paneID)?.id)
             }
             HStack(spacing: 0) {
                 edgeDrop(direction: .left)
@@ -505,6 +506,8 @@ private struct WorkspacePaneView: View {
         }
         .frame(minHeight: 34, maxHeight: 36)
         .background(Color(nsColor: .windowBackgroundColor))
+        .contentShape(Rectangle())
+        .zIndex(2)
         .onDrop(of: [.text], isTargeted: nil) { providers, _ in
             loadTabID(from: providers) { id in workspace.moveTab(id, to: paneID) }
         }
@@ -565,6 +568,8 @@ private struct WorkspacePaneView: View {
         .padding(.vertical, 5)
         .background(selected ? Color(nsColor: .controlAccentColor).opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
         .overlay(RoundedRectangle(cornerRadius: 5).stroke(selected ? Color(nsColor: .controlAccentColor).opacity(0.55) : Color(nsColor: .separatorColor), lineWidth: 1))
+        .contentShape(Rectangle())
+        .zIndex(3)
         .onDrag { NSItemProvider(object: tab.id.uuidString as NSString) }
         .contextMenu { contextMenu(for: tab) }
     }
