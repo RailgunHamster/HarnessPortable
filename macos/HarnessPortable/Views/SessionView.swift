@@ -26,13 +26,17 @@ final class WebSessionStore: ObservableObject {
         case .direct:
             destination = tab.url.flatMap { HostResolver.resolveURL($0) ?? $0 }
         case .tunnel:
-            let port = state.localPort > 0 ? state.localPort : (profile?.localPort ?? 0)
-            destination = port > 0 ? "http://127.0.0.1:\(port)" : nil
+            guard state.status == .connected, state.localPort > 0 else { return }
+            destination = "http://127.0.0.1:\(state.localPort)"
         }
         guard let destination, let url = URL(string: destination) else { return }
-        guard loadedURLs[tab.id] != destination else { return }
+        let shouldReload = tab.kind == .tunnel && loadedURLs[tab.id] == destination
         loadedURLs[tab.id] = destination
-        webView(for: tab.id).load(URLRequest(url: url))
+        if shouldReload {
+            webView(for: tab.id).reload()
+        } else {
+            webView(for: tab.id).load(URLRequest(url: url))
+        }
     }
 
     func reload(tabID: UUID) {
