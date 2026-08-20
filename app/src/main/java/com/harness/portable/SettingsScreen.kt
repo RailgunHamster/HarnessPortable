@@ -22,11 +22,15 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -34,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +52,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +72,12 @@ fun SettingsScreen(
     var editorFor by remember { mutableStateOf<TunnelProfile?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var directInput by remember { mutableStateOf("") }
+
+    fun addDirect() {
+        val norm = normalizeUrl(directInput) ?: return
+        onAddDirect(norm)
+        directInput = ""
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Harness Portable") }) }
@@ -121,33 +134,20 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("直连", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                 Spacer(Modifier.height(6.dp))
-                OutlinedTextField(
+                LanMachineField(
                     value = directInput,
                     onValueChange = { directInput = it },
-                    label = { Text("IP 或完整 URL，如 192.168.0.104") },
-                    placeholder = { Text("192.168.0.104") },
-                    singleLine = true,
+                    label = "IP、机器名或完整 URL",
+                    placeholder = "192.168.0.104",
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Uri,
                         imeAction = ImeAction.Done
                     ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            val norm = normalizeUrl(directInput)
-                            if (norm != null) {
-                                onAddDirect(norm)
-                                directInput = ""
-                            }
+                    keyboardActions = KeyboardActions(onDone = { addDirect() }),
+                    trailingAction = {
+                        IconButton(onClick = { addDirect() }) {
+                            Icon(Icons.Filled.Add, contentDescription = "添加")
                         }
-                    ),
-                    trailingIcon = {
-                        IconButton(onClick = {
-                            val norm = normalizeUrl(directInput)
-                            if (norm != null) {
-                                onAddDirect(norm)
-                                directInput = ""
-                            }
-                        }) { Icon(Icons.Filled.Add, contentDescription = "添加") }
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -184,6 +184,138 @@ fun SettingsScreen(
             }
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LanMachineField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    trailingAction: (@Composable () -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var machines by remember { mutableStateOf<List<HostResolver.LanMachine>>(emptyList()) }
+    var discovering by remember { mutableStateOf(false) }
+    var hasScanned by remember { mutableStateOf(false) }
+    var refreshRequest by remember { mutableStateOf(0) }
+
+    LaunchedEffect(expanded, refreshRequest) {
+        if (!expanded || (hasScanned && refreshRequest == 0)) return@LaunchedEffect
+
+        discovering = true
+        try {
+            val result = withContext(Dispatchers.IO) {
+                HostResolver.discoverLanMachines()
+            }
+            machines = result
+            hasScanned = true
+            refreshRequest = 0
+        } finally {
+            discovering = false
+        }
+    }
+
+    val filter = machineFilterText(value)
+    val filtered = machines
+        .filter { filter.isEmpty() || it.name.contains(filter, ignoreCase = true) }
+        .take(12)
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {
+                onValueChange(it)
+                expanded = true
+            },
+            label = { Text(label) },
+            placeholder = placeholder?.let { { Text(it) } },
+            singleLine = true,
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    trailingAction?.invoke()
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                }
+            },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryEditable)
+                .fillMaxWidth()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            if (discovering) {
+                DropdownMenuItem(
+                    text = { Text("正在搜索局域网机器…") },
+                    onClick = {},
+                    enabled = false
+                )
+            }
+
+            if (!discovering && filtered.isEmpty()) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            if (hasScanned) "未发现机器名，可继续手动输入"
+                            else "打开菜单开始搜索"
+                        )
+                    },
+                    onClick = {},
+                    enabled = false
+                )
+            }
+
+            filtered.forEach { machine ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(machine.name)
+                            if (machine.ip.isNotBlank()) {
+                                Text(
+                                    machine.ip,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+                    },
+                    onClick = {
+                        onValueChange(machine.name)
+                        expanded = false
+                    }
+                )
+            }
+
+            DropdownMenuItem(
+                text = { Text("刷新局域网机器") },
+                onClick = {
+                    refreshRequest++
+                    expanded = true
+                }
+            )
+        }
+    }
+}
+
+private fun machineFilterText(value: String): String {
+    var host = value.trim()
+    host = host.substringAfter("://", host)
+    host = host.substringAfterLast('@')
+    host = host.substringBefore('/')
+    host = host.substringBefore(':')
+    return host
 }
 
 @Composable
@@ -307,7 +439,13 @@ private fun TunnelEditorDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedTextField(name, { name = it }, label = { Text("名称（可选）") }, singleLine = true)
-                OutlinedTextField(host, { host = it }, label = { Text("服务器地址") }, singleLine = true)
+                LanMachineField(
+                    value = host,
+                    onValueChange = { host = it },
+                    label = "服务器地址",
+                    placeholder = "IP、域名或机器名",
+                    modifier = Modifier.fillMaxWidth()
+                )
                 OutlinedTextField(
                     port, { port = it }, label = { Text("SSH 端口") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)

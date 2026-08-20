@@ -42,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
@@ -57,6 +58,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -212,15 +215,37 @@ fun AppRoot() {
         }
 
         current is ActiveTarget.Direct -> {
-            WebViewScreen(
-                url = current.url,
-                orientation = orientation,
-                tunnelMode = false,
-                tunnelInfo = null,
-                onToggleOrientation = { orientation = orientation.next() },
-                onChangeServer = { target = null },
-                onReconnect = { }
-            )
+            // Direct URLs may address the server by machine name
+            // (http://winserver:4096), which Android's own resolver cannot
+            // look up (no NetBIOS support). Resolve the name to an IP first;
+            // only when the name is unknown do we fall back to the original
+            // URL and let the browser's resolver try (previous behavior).
+            val directUrl = current.url
+            val needsResolve = HostResolver.urlNeedsResolve(directUrl)
+            val effectiveUrl by produceState(
+                initialValue = if (needsResolve) null else directUrl,
+                key1 = directUrl
+            ) {
+                if (needsResolve) {
+                    value = withContext(Dispatchers.IO) {
+                        HostResolver.resolveUrl(directUrl) ?: directUrl
+                    }
+                }
+            }
+            val url = effectiveUrl
+            if (url == null) {
+                DirectResolvingScreen(host = hostOf(directUrl))
+            } else {
+                WebViewScreen(
+                    url = url,
+                    orientation = orientation,
+                    tunnelMode = false,
+                    tunnelInfo = null,
+                    onToggleOrientation = { orientation = orientation.next() },
+                    onChangeServer = { target = null },
+                    onReconnect = { }
+                )
+            }
         }
 
         pending != null -> {
@@ -289,6 +314,23 @@ fun AppRoot() {
                 connectTunnel(p)
             }
         )
+    }
+}
+
+/** Shown while a direct URL's machine name is being resolved to an IP. */
+@Composable
+internal fun DirectResolvingScreen(host: String) {
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+            Text("正在解析 $host…", fontSize = 14.sp)
+        }
     }
 }
 

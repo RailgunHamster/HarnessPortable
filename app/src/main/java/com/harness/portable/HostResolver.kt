@@ -14,6 +14,7 @@ import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Socket
 import java.net.SocketTimeoutException
+import java.net.URI
 import java.net.UnknownHostException
 import kotlin.random.Random
 
@@ -31,6 +32,7 @@ import kotlin.random.Random
 object HostResolver {
 
     data class Resolution(val ip: String, val source: String)
+    data class LanMachine(val name: String, val ip: String)
 
     private const val TTL_MS = 5 * 60 * 1000L
     private val cache = HashMap<String, Pair<Resolution, Long>>()
@@ -126,6 +128,95 @@ object HostResolver {
         synchronized(cache) { cache.remove(host.trim().lowercase()) }
     }
 
+    /** Bounded NetBIOS browse used only for address-field suggestions. */
+    fun discoverLanMachines(timeoutMs: Int = 1800): List<LanMachine> =
+        NetBios.discover(timeoutMs)
+
+    /**
+     * True when [url] is an http(s) URL whose host is a *name* (not an IP
+     * literal) that [resolveUrl] would try to resolve. Cheap and I/O-free:
+     * callers use it to skip the resolving flow entirely for IP URLs.
+     */
+    fun urlNeedsResolve(url: String): Boolean {
+        val host = parseHttpUrl(url)?.host ?: return false
+        return host.isNotEmpty() && !isIpLiteral(host)
+    }
+
+    /**
+     * Resolves the host name inside an http(s) URL to an IPv4 literal, e.g.
+     * http://winserver:4096 -> http://192.168.0.104:4096. Returns null when
+     * the URL has no host name to resolve (IP literal, non-http scheme,
+     * unparseable) or the name is unknown — callers then fall back to the
+     * browser's own resolution, i.e. the original URL.
+     *
+     * Blocking (DNS + NetBIOS, up to a few seconds): call off the main thread.
+     */
+    fun resolveUrl(url: String): String? {
+        if (!urlNeedsResolve(url)) return null
+        val host = parseHttpUrl(url)?.host ?: return null
+        val res = resolve(host) ?: return null
+        return replaceHost(url, res.ip)
+    }
+
+    /**
+     * Replaces the host inside an http(s) URL with [ip], keeping scheme,
+     * userinfo, port, path, query and fragment untouched. Returns null when
+     * the URL cannot be parsed or its host cannot be located verbatim in the
+     * authority (e.g. bracketed IPv6).
+     */
+    fun replaceHost(url: String, ip: String): String? {
+        if (ip.isBlank()) return null
+        val s = url.trim()
+        val host = parseHttpUrl(s)?.host ?: return null
+        if (host.isEmpty()) return null
+
+        val schemeEnd = s.indexOf("://")
+        if (schemeEnd < 0) return null
+        val authorityStart = schemeEnd + 3
+
+        // The authority runs to the first path/query/fragment character.
+        var authorityEnd = authorityStart
+        while (authorityEnd < s.length && s[authorityEnd] !in "/?#") authorityEnd++
+
+        // Skip userinfo (may itself contain ':'); host starts after the last '@'.
+        var hostStart = authorityStart
+        for (i in authorityStart until authorityEnd) {
+            if (s[i] == '@') hostStart = i + 1
+        }
+
+        // The host ends at the port separator, if any.
+        var hostEnd = authorityEnd
+        for (i in hostStart until authorityEnd) {
+            if (s[i] == ':') {
+                hostEnd = i
+                break
+            }
+        }
+
+        val rawHost = s.substring(hostStart, hostEnd)
+        if (!rawHost.equals(host, ignoreCase = true)) {
+            return null // percent-encoded or otherwise unusual — don't guess
+        }
+
+        val replacement = if (ip.contains(':')) "[$ip]" else ip // IPv6 needs brackets
+        return s.substring(0, hostStart) + replacement + s.substring(hostEnd)
+    }
+
+    private fun parseHttpUrl(url: String): URI? {
+        val s = url.trim()
+        if (s.isEmpty()) return null
+        val uri = try {
+            URI(s)
+        } catch (_: Exception) {
+            return null
+        }
+        if (!uri.isAbsolute) return null
+        return when (uri.scheme?.lowercase()) {
+            "http", "https" -> uri
+            else -> null
+        }
+    }
+
     /**
      * Picks the NetBIOS answer IP that shares a subnet with one of our
      * interfaces (excluding loopback and Tailscale); falls back to the
@@ -191,22 +282,7 @@ private object NetBios {
         val txn = Random.nextInt(0x10000)
         val query = buildQuery(name.uppercase(), txn)
 
-        val targets = ArrayList<InetAddress>()
-        try {
-            listInterfaces().forEach { ni ->
-                if (!ni.isUp || ni.isLoopback) return@forEach
-                if (ni.name.startsWith("tailscale")) return@forEach
-                ni.interfaceAddresses.forEach { ia ->
-                    val bc = ia.broadcast ?: return@forEach
-                    if (targets.none { it == bc }) targets.add(bc)
-                }
-            }
-        } catch (_: Exception) {
-        }
-        try {
-            targets.add(InetAddress.getByName("255.255.255.255"))
-        } catch (_: Exception) {
-        }
+        val targets = broadcastTargets()
         if (targets.isEmpty()) return emptyList()
 
         try {
@@ -234,6 +310,140 @@ private object NetBios {
         } catch (_: Exception) {
         }
         return emptyList()
+    }
+
+    private fun broadcastTargets(): List<InetAddress> {
+        val targets = ArrayList<InetAddress>()
+        try {
+            listInterfaces().forEach { ni ->
+                if (!ni.isUp || ni.isLoopback) return@forEach
+                if (ni.name.startsWith("tailscale")) return@forEach
+                ni.interfaceAddresses.forEach { ia ->
+                    val bc = ia.broadcast ?: return@forEach
+                    if (targets.none { it == bc }) targets.add(bc)
+                }
+            }
+        } catch (_: Exception) {
+        }
+        try {
+            val global = InetAddress.getByName("255.255.255.255")
+            if (targets.none { it == global }) targets.add(global)
+        } catch (_: Exception) {
+        }
+        return targets
+    }
+
+    /** Broadcasts NBSTAT (*) and extracts each responder's computer name. */
+    fun discover(timeoutMs: Int): List<HostResolver.LanMachine> {
+        val targets = broadcastTargets()
+        if (targets.isEmpty()) return emptyList()
+
+        val txn = Random.nextInt(0x10000)
+        val query = buildNodeStatusQuery(txn)
+        val machines = LinkedHashMap<String, HostResolver.LanMachine>()
+
+        try {
+            DatagramSocket().use { sock ->
+                sock.broadcast = true
+                sock.soTimeout = timeoutMs
+                targets.forEach { target ->
+                    try {
+                        sock.send(DatagramPacket(query, query.size, target, 137))
+                    } catch (_: Exception) {
+                    }
+                }
+
+                val deadline = SystemClock.elapsedRealtime() + timeoutMs + 300
+                val buf = ByteArray(2048)
+                while (SystemClock.elapsedRealtime() < deadline) {
+                    val packet = DatagramPacket(buf, buf.size)
+                    try {
+                        sock.receive(packet)
+                    } catch (_: SocketTimeoutException) {
+                        break
+                    }
+
+                    parseNodeStatus(buf, packet.length, txn).forEach { name ->
+                        val ip = packet.address?.hostAddress.orEmpty()
+                        if (ip.isNotEmpty()) {
+                            machines[name.lowercase()] = HostResolver.LanMachine(name, ip)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        return machines.values.sortedBy { it.name.lowercase() }
+    }
+
+    /** NBSTAT query for the wildcard NetBIOS name '*'. */
+    private fun buildNodeStatusQuery(txn: Int): ByteArray {
+        val out = ByteArrayOutputStream(50)
+        out.write(txn shr 8); out.write(txn and 0xFF)
+        out.write(0); out.write(0) // flags
+        out.write(0); out.write(1) // QDCOUNT
+        out.write(0); out.write(0) // ANCOUNT
+        out.write(0); out.write(0) // NSCOUNT
+        out.write(0); out.write(0) // ARCOUNT
+        out.write(0x20)
+        for (i in 0 until 16) {
+            val b = if (i == 0) '*'.code else ' '.code
+            out.write((b shr 4) + 'A'.code)
+            out.write((b and 0x0F) + 'A'.code)
+        }
+        out.write(0) // empty scope
+        out.write(0); out.write(0x21) // QTYPE = NBSTAT
+        out.write(0); out.write(1) // QCLASS = IN
+        return out.toByteArray()
+    }
+
+    private fun parseNodeStatus(d: ByteArray, len: Int, txn: Int): List<String> {
+        if (len < 12 || u16(d, 0) != txn) return emptyList()
+        val flags = u16(d, 2)
+        if (flags and 0x8000 == 0 || flags and 0x000F != 0) return emptyList()
+
+        val qd = u16(d, 4)
+        val an = u16(d, 6)
+        var off = 12
+        repeat(qd) {
+            off = skipName(d, off, len) ?: return emptyList()
+            if (off + 4 > len) return emptyList()
+            off += 4
+        }
+
+        val names = ArrayList<String>()
+        repeat(an) {
+            off = skipName(d, off, len) ?: return names
+            if (off + 10 > len) return names
+            val type = u16(d, off)
+            val rdlen = u16(d, off + 8)
+            val recordStart = off + 10
+            val recordEnd = recordStart + rdlen
+            if (recordEnd > len) return names
+            if (type == 0x0021 && rdlen > 0) {
+                val count = d[recordStart].toInt() and 0xFF
+                var p = recordStart + 1
+                repeat(count) {
+                    if (p + 18 > recordEnd) return@repeat
+                    val name = String(d, p, 15, Charsets.US_ASCII).trim()
+                    val suffix = d[p + 15].toInt() and 0xFF
+                    val nameFlags = u16(d, p + 16)
+                    if (suffix == 0 && nameFlags and 0x8000 == 0 && isUsableMachineName(name)) {
+                        names.add(name)
+                    }
+                    p += 18
+                }
+            }
+            off = recordEnd
+        }
+        return names
+    }
+
+    private fun isUsableMachineName(name: String): Boolean {
+        val value = name.trim()
+        return value.length in 1..63 &&
+                value.all { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
     }
 
     /** NB name query packet: header + encoded name + QTYPE=NB(0x20)/IN. */
