@@ -5,8 +5,10 @@ import SwiftUI
 
 @MainActor
 final class WebSessionStore: ObservableObject {
+    @Published private(set) var navigationErrors: [UUID: String] = [:]
     private var webViews: [UUID: WKWebView] = [:]
     private var loadedURLs: [UUID: String] = [:]
+    private var navigationDelegates: [UUID: WebSessionNavigationDelegate] = [:]
 
     func webView(for tabID: UUID) -> WKWebView {
         if let existing = webViews[tabID] { return existing }
@@ -14,6 +16,15 @@ final class WebSessionStore: ObservableObject {
         configuration.websiteDataStore = .default()
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
+        let delegate = WebSessionNavigationDelegate(
+            onFailure: { [weak self] message in
+                DispatchQueue.main.async {
+                    self?.navigationErrors[tabID] = message
+                }
+            }
+        )
+        webView.navigationDelegate = delegate
+        navigationDelegates[tabID] = delegate
         webViews[tabID] = webView
         return webView
     }
@@ -40,13 +51,32 @@ final class WebSessionStore: ObservableObject {
     }
 
     func reload(tabID: UUID) {
+        navigationErrors.removeValue(forKey: tabID)
         webViews[tabID]?.reload()
     }
 
     func remove(tabID: UUID) {
         webViews[tabID]?.stopLoading()
         webViews.removeValue(forKey: tabID)
+        navigationDelegates.removeValue(forKey: tabID)
+        navigationErrors.removeValue(forKey: tabID)
         loadedURLs.removeValue(forKey: tabID)
+    }
+}
+
+private final class WebSessionNavigationDelegate: NSObject, WKNavigationDelegate {
+    let onFailure: (String) -> Void
+
+    init(onFailure: @escaping (String) -> Void) {
+        self.onFailure = onFailure
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation?, withError error: Error) {
+        onFailure(error.localizedDescription)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation?, withError error: Error) {
+        onFailure(error.localizedDescription)
     }
 }
 
@@ -104,10 +134,34 @@ struct SessionView: View {
             if tab.kind == .tunnel && tunnelInfo.status != .connected {
                 tunnelOverlay
             }
+            if let error = webSessions.navigationErrors[tab.id] {
+                navigationErrorOverlay(error)
+            }
         }
         .onAppear { loadIfNeeded() }
         .onChange(of: tunnelInfo.status) { _ in loadIfNeeded() }
         .onChange(of: tunnelInfo.localPort) { _ in loadIfNeeded() }
+    }
+
+    @ViewBuilder
+    private func navigationErrorOverlay(_ message: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(.red)
+            Text("页面加载失败")
+                .font(.headline)
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .textSelection(.enabled)
+            Button("重新加载") { webSessions.reload(tabID: tab.id) }
+        }
+        .padding(28)
+        .frame(maxWidth: 520)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .shadow(radius: 12)
     }
 
     @ViewBuilder

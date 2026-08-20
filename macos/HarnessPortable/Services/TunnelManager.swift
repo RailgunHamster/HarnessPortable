@@ -17,10 +17,15 @@ final class TunnelManager: ObservableObject {
 
     func start(_ profile: TunnelProfile) {
         profiles[profile.id] = profile
-        let engine = engine(for: profile.id)
         let current = states[profile.id]?.status
-        if current == .connected || current == .connecting { return }
-        engine.start(profile: profile)
+        if current == .connected || current == .connecting || current == .retrying { return }
+        states[profile.id] = TunnelInfo(
+            profileID: profile.id,
+            profileName: profile.displayName,
+            status: .connecting,
+            message: "正在连接…"
+        )
+        engine(for: profile.id).start(profile: profile)
     }
 
     func stop(_ profileID: String, announce: Bool = true) {
