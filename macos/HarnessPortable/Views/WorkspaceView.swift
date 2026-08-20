@@ -510,7 +510,7 @@ private struct WorkspacePaneView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .contentShape(Rectangle())
         .zIndex(2)
-        .onDrop(of: [.text], isTargeted: nil) { providers, _ in
+        .onDrop(of: [UTType.plainText], isTargeted: nil) { providers, _ in
             loadTabID(from: providers) { id in workspace.moveTab(id, to: paneID) }
         }
     }
@@ -572,7 +572,17 @@ private struct WorkspacePaneView: View {
         .overlay(RoundedRectangle(cornerRadius: 5).stroke(selected ? Color(nsColor: .controlAccentColor).opacity(0.55) : Color(nsColor: .separatorColor), lineWidth: 1))
         .contentShape(Rectangle())
         .zIndex(3)
-        .onDrag { NSItemProvider(object: tab.id.uuidString as NSString) }
+        .onDrag {
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(
+                forTypeIdentifier: UTType.plainText.identifier,
+                visibility: .all
+            ) { completion in
+                completion(Data(tab.id.uuidString.utf8), nil)
+                return nil
+            }
+            return provider
+        }
         .contextMenu { contextMenu(for: tab) }
     }
 
@@ -643,7 +653,7 @@ private struct WorkspacePaneView: View {
                    height: direction == .up || direction == .down ? 24 : nil)
             .frame(maxWidth: direction == .up || direction == .down ? .infinity : nil,
                    maxHeight: direction == .left || direction == .right ? .infinity : nil)
-            .onDrop(of: [.text], isTargeted: nil) { providers, _ in
+            .onDrop(of: [UTType.plainText], isTargeted: nil) { providers, _ in
                 loadTabID(from: providers) { id in
                     workspace.moveTabToSplit(id, paneID: paneID, direction: direction)
                 }
@@ -657,8 +667,10 @@ private struct WorkspacePaneView: View {
 
     private func loadTabID(from providers: [NSItemProvider], action: @escaping (UUID) -> Void) -> Bool {
         guard let provider = providers.first else { return false }
-        provider.loadObject(ofClass: NSString.self) { object, _ in
-            guard let value = object as? NSString, let id = UUID(uuidString: value as String) else { return }
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.plainText.identifier) { data, _ in
+            guard let data,
+                  let value = String(data: data, encoding: .utf8),
+                  let id = UUID(uuidString: value.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
             DispatchQueue.main.async { action(id) }
         }
         return true
