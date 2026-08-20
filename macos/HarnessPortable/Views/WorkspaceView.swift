@@ -486,6 +486,8 @@ private struct WorkspacePaneView: View {
                 Spacer(minLength: 0)
                 edgeDrop(direction: .down)
             }
+            .padding(.top, 36)
+            .padding(.bottom, 36)
         }
         .background(Color(nsColor: .textBackgroundColor))
         .onTapGesture { workspace.selectPane(paneID) }
