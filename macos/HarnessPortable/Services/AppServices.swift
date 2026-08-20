@@ -12,6 +12,7 @@ final class AppServices: ObservableObject {
 
     init() {
         AppPaths.ensure()
+        SSHProcessTunnel.cleanupOrphanedSSHProcesses()
         profiles = ProfileStore()
         settings = SettingsStore()
         layouts = LayoutPresetStore()

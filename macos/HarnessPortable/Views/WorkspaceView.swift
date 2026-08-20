@@ -225,8 +225,10 @@ struct WorkspaceView: View {
             case .connected:
                 workspace.ensureTunnelTab(profileID: profileID, focus: false)
             case .stopped:
-                let closed = workspace.closeTunnelTabs(profileID: profileID)
-                closed.forEach { webSessions.remove(tabID: $0) }
+                DispatchQueue.main.async {
+                    let closed = workspace.closeTunnelTabs(profileID: profileID)
+                    closed.forEach { webSessions.remove(tabID: $0) }
+                }
             case .idle, .connecting, .retrying, .failed:
                 break
             }
@@ -253,8 +255,10 @@ struct WorkspaceView: View {
 
     private func stop(_ profileID: String) {
         services.tunnels.stop(profileID)
-        let closed = workspace.closeTunnelTabs(profileID: profileID)
-        closed.forEach { webSessions.remove(tabID: $0) }
+        DispatchQueue.main.async {
+            let closed = workspace.closeTunnelTabs(profileID: profileID)
+            closed.forEach { webSessions.remove(tabID: $0) }
+        }
     }
 
     private func deleteProfile(_ profile: TunnelProfile) {

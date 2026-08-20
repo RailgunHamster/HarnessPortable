@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 private enum TunnelProcessError: LocalizedError {
     case missingPassword
@@ -41,6 +42,33 @@ final class SSHProcessTunnel {
     private var process: Process?
 
     var onState: ((TunnelInfo) -> Void)?
+
+    static func cleanupOrphanedSSHProcesses() {
+        let command = Process()
+        command.executableURL = URL(fileURLWithPath: "/bin/ps")
+        command.arguments = ["-axo", "pid=,command="]
+        let output = Pipe()
+        command.standardOutput = output
+        command.standardError = FileHandle.nullDevice
+        guard (try? command.run()) != nil else { return }
+        command.waitUntilExit()
+
+        let text = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let supportPath = AppPaths.supportDirectory.path
+        let currentPID = ProcessInfo.processInfo.processIdentifier
+        for line in text.split(whereSeparator: \.isNewline) {
+            let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
+            guard parts.count == 2,
+                  let pid = Int32(parts[0]),
+                  pid != currentPID else { continue }
+            let processCommand = String(parts[1])
+            guard processCommand.contains("/usr/bin/ssh -N"),
+                  processCommand.contains(supportPath) else { continue }
+            kill(pid, SIGTERM)
+            usleep(100_000)
+            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+        }
+    }
 
     init(keychain: KeychainStore, knownHosts: KnownHostsStore) {
         self.keychain = keychain
@@ -117,27 +145,22 @@ final class SSHProcessTunnel {
                 var lastError: Error?
                 var connectedPort = 0
 
-                for offset in 0..<10 {
-                    let candidate = profile.localPort + offset
-                    guard candidate <= 65535 else { break }
-                    do {
-                        let launched = try launch(
-                            profile: profile,
-                            resolvedHost: resolution.ip,
-                            localPort: candidate,
-                            knownHostsFile: knownHostsFile,
-                            passwordFile: passwordFile
-                        )
-                        child = launched
-                        connectedPort = candidate
-                        break
-                    } catch {
-                        lastError = error
-                    }
+                do {
+                    let launched = try launch(
+                        profile: profile,
+                        resolvedHost: resolution.ip,
+                        localPort: profile.localPort,
+                        knownHostsFile: knownHostsFile,
+                        passwordFile: passwordFile
+                    )
+                    child = launched
+                    connectedPort = profile.localPort
+                } catch {
+                    lastError = error
                 }
 
                 guard let child, connectedPort > 0 else {
-                    throw TunnelProcessError.noLocalPort(lastError?.localizedDescription ?? "无法绑定本地端口")
+                    throw TunnelProcessError.noLocalPort("本地端口 \(profile.localPort) 不可用：\(lastError?.localizedDescription ?? "无法建立 SSH 转发")")
                 }
 
                 stateLock.lock()

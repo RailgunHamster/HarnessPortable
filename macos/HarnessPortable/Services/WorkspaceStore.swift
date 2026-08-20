@@ -97,8 +97,10 @@ final class WorkspaceStore: ObservableObject {
             .filter { $0.tab.kind == .tunnel && $0.tab.profileID == profileID }
             .map(\.tab.id)
         guard !ids.isEmpty else { return [] }
-        removeTabs(&root, ids: Set(ids))
-        prune(&root)
+        var updated = root
+        removeTabs(&updated, ids: Set(ids))
+        prune(&updated)
+        root = updated
         normalizeSelections()
         return ids
     }
@@ -130,8 +132,10 @@ final class WorkspaceStore: ObservableObject {
 
     func closeTab(_ tabID: UUID) {
         guard let source = findTab(root, tabID: tabID), source.tab.kind != .management else { return }
-        guard removeTab(&root, tabID: tabID) != nil else { return }
-        prune(&root)
+        var updated = root
+        guard removeTab(&updated, tabID: tabID) != nil else { return }
+        prune(&updated)
+        root = updated
         normalizeSelections()
     }
 
