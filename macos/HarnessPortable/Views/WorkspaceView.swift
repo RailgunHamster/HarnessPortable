@@ -37,6 +37,7 @@ struct WorkspaceView: View {
                 services: services,
                 webSessions: webSessions,
                 onConnect: connect,
+                onOpenTunnel: openTunnel,
                 onStop: stop,
                 onOpenDirect: openDirect,
                 onSwitch: switchTab,
@@ -241,6 +242,15 @@ struct WorkspaceView: View {
         }
     }
 
+    private func openTunnel(_ profile: TunnelProfile) {
+        if services.keychain.hasPassword(for: profile.id) {
+            services.tunnels.start(profile)
+            workspace.openTunnelTab(profileID: profile.id)
+        } else {
+            passwordProfile = profile
+        }
+    }
+
     private func stop(_ profileID: String) {
         services.tunnels.stop(profileID)
         workspace.closeTunnelTabs(profileID: profileID)
@@ -350,6 +360,7 @@ private struct WorkspaceNodeView: View {
     @ObservedObject var services: AppServices
     @ObservedObject var webSessions: WebSessionStore
     let onConnect: (TunnelProfile) -> Void
+    let onOpenTunnel: (TunnelProfile) -> Void
     let onStop: (String) -> Void
     let onOpenDirect: (String) -> Void
     let onSwitch: (UUID, WorkspaceTab) -> Void
@@ -365,6 +376,7 @@ private struct WorkspaceNodeView: View {
                     services: services,
                     webSessions: webSessions,
                     onConnect: onConnect,
+                     onOpenTunnel: onOpenTunnel,
                     onStop: onStop,
                     onOpenDirect: onOpenDirect,
                     onSwitch: onSwitch,
@@ -377,6 +389,7 @@ private struct WorkspaceNodeView: View {
                     services: services,
                     webSessions: webSessions,
                     onConnect: onConnect,
+                     onOpenTunnel: onOpenTunnel,
                     onStop: onStop,
                     onOpenDirect: onOpenDirect,
                     onSwitch: onSwitch,
@@ -398,6 +411,7 @@ private struct ResizableWorkspaceSplit: View {
     @ObservedObject var services: AppServices
     @ObservedObject var webSessions: WebSessionStore
     let onConnect: (TunnelProfile) -> Void
+    let onOpenTunnel: (TunnelProfile) -> Void
     let onStop: (String) -> Void
     let onOpenDirect: (String) -> Void
     let onSwitch: (UUID, WorkspaceTab) -> Void
@@ -440,6 +454,7 @@ private struct ResizableWorkspaceSplit: View {
             services: services,
             webSessions: webSessions,
             onConnect: onConnect,
+                     onOpenTunnel: onOpenTunnel,
             onStop: onStop,
             onOpenDirect: onOpenDirect,
             onSwitch: onSwitch,
@@ -475,6 +490,7 @@ private struct WorkspacePaneView: View {
     @ObservedObject var services: AppServices
     @ObservedObject var webSessions: WebSessionStore
     let onConnect: (TunnelProfile) -> Void
+    let onOpenTunnel: (TunnelProfile) -> Void
     let onStop: (String) -> Void
     let onOpenDirect: (String) -> Void
     let onSwitch: (UUID, WorkspaceTab) -> Void
@@ -523,9 +539,6 @@ private struct WorkspacePaneView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .contentShape(Rectangle())
         .zIndex(2)
-        .onDrop(of: [UTType.plainText], isTargeted: nil) { providers, _ in
-            loadTabID(from: providers) { id in workspace.moveTab(id, to: paneID) }
-        }
     }
 
     @ViewBuilder
@@ -539,6 +552,7 @@ private struct WorkspacePaneView: View {
                     keychain: services.keychain,
                     knownHosts: services.knownHosts,
                     onConnect: onConnect,
+                     onOpenTunnel: onOpenTunnel,
                     onStop: onStop,
                     onOpenDirect: onOpenDirect,
                      onDelete: onDelete

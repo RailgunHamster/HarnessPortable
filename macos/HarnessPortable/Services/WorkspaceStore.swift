@@ -87,6 +87,10 @@ final class WorkspaceStore: ObservableObject {
         append(WorkspaceTab(kind: .tunnel, profileID: profileID), to: activePaneID)
     }
 
+    func openTunnelTab(profileID: String) {
+        append(WorkspaceTab(kind: .tunnel, profileID: profileID), to: activePaneID)
+    }
+
     @discardableResult
     func closeTunnelTabs(profileID: String) -> [UUID] {
         let ids = allTabs().filter { $0.tab.kind == .tunnel && $0.tab.profileID == profileID }.map(\.tab.id)

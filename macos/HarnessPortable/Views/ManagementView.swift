@@ -8,6 +8,7 @@ struct ManagementView: View {
     let keychain: KeychainStore
     let knownHosts: KnownHostsStore
     let onConnect: (TunnelProfile) -> Void
+    let onOpenTunnel: (TunnelProfile) -> Void
     let onStop: (String) -> Void
     let onOpenDirect: (String) -> Void
     let onDelete: (TunnelProfile) -> Void
@@ -151,7 +152,7 @@ struct ManagementView: View {
             }
             if state.status == .connected {
                 Button {
-                    onConnect(profile)
+                    onOpenTunnel(profile)
                 } label: {
                     Image(systemName: "rectangle.badge.plus")
                 }
