@@ -6,6 +6,7 @@ struct ManagementView: View {
     @ObservedObject var tunnels: TunnelManager
     @ObservedObject var settings: SettingsStore
     let keychain: KeychainStore
+    let knownHosts: KnownHostsStore
     let onConnect: (TunnelProfile) -> Void
     let onStop: (String) -> Void
     let onOpenDirect: (String) -> Void
@@ -139,6 +140,15 @@ struct ManagementView: View {
                     .foregroundStyle(.secondary)
                     .help("密码已保存在 macOS Keychain")
             }
+            if isHostKeyFailure(state.message) {
+                Button {
+                    knownHosts.remove(host: profile.sshHost, port: profile.sshPort)
+                    onConnect(profile)
+                } label: {
+                    Image(systemName: "checkmark.shield")
+                }
+                .help("重新信任当前主机密钥")
+            }
             if state.status == .connected || state.status == .connecting || state.status == .retrying {
                 Button {
                     onStop(profile.id)
@@ -169,6 +179,14 @@ struct ManagementView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
+    }
+
+    private func isHostKeyFailure(_ message: String?) -> Bool {
+        guard let message else { return false }
+        let lower = message.lowercased()
+        return lower.contains("host key") ||
+            lower.contains("ed25519 key") ||
+            lower.contains("主机密钥")
     }
 
     @ViewBuilder

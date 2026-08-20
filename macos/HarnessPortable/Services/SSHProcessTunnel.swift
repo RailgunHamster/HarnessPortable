@@ -283,6 +283,9 @@ final class SSHProcessTunnel {
         guard command.isRunning else {
             let message = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+            if isHostKeyFailure(message ?? "") {
+                throw TunnelProcessError.hostKeyChanged
+            }
             throw TunnelProcessError.launchFailed(message?.isEmpty == false ? message! : "ssh 进程未能建立转发")
         }
         return command
@@ -318,6 +321,14 @@ final class SSHProcessTunnel {
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "SSH 连接已断开" : trimmed
+    }
+
+    private func isHostKeyFailure(_ message: String) -> Bool {
+        let lower = message.lowercased()
+        return lower.contains("host key") ||
+            lower.contains("ed25519 key") ||
+            lower.contains("hostkey") ||
+            lower.contains("主机密钥")
     }
 
     private func isAuthenticationFailure(_ message: String) -> Bool {

@@ -519,6 +519,7 @@ private struct WorkspacePaneView: View {
                     tunnels: services.tunnels,
                     settings: services.settings,
                     keychain: services.keychain,
+                    knownHosts: services.knownHosts,
                     onConnect: onConnect,
                     onStop: onStop,
                     onOpenDirect: onOpenDirect,
