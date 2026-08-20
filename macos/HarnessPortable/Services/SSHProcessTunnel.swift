@@ -95,16 +95,21 @@ final class SSHProcessTunnel {
 
                 emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .connecting, message: "正在连接…"))
                 let resolution = HostResolver.resolve(profile.sshHost)
+                appendDiagnostic("profile=\(profile.id) host=\(profile.sshHost) resolved=\(resolution?.ip ?? "<nil>") sshPort=\(profile.sshPort)")
                 guard let resolution else {
                     emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .failed, message: TunnelProcessError.hostResolutionFailed(profile.sshHost).localizedDescription))
                     return
                 }
 
                 let key = try scanHostKey(host: resolution.ip, port: profile.sshPort)
+                appendDiagnostic("scanned type=\(key.type) keyPrefix=\(String(key.base64.prefix(20)))")
                 switch knownHosts.check(host: profile.sshHost, port: profile.sshPort, keyType: key.type, keyBase64: key.base64) {
-                case .trustedNew, .trustedMatch:
-                    break
+                case .trustedNew:
+                    appendDiagnostic("knownHosts=trustedNew")
+                case .trustedMatch:
+                    appendDiagnostic("knownHosts=trustedMatch")
                 case .changed:
+                    appendDiagnostic("knownHosts=changed")
                     throw TunnelProcessError.hostKeyChanged
                 }
 
@@ -235,6 +240,7 @@ final class SSHProcessTunnel {
         let hostField = profile.sshPort == 22 ? resolvedHost : "[\(resolvedHost)]:\(profile.sshPort)"
         let line = "\(hostField) \(key.type) \(key.base64)\n"
         try Data(line.utf8).write(to: url, options: .atomic)
+        appendDiagnostic("knownHostsFile=\(url.path) hostField=\(hostField) type=\(key.type) keyPrefix=\(String(key.base64.prefix(20)))")
         return url
     }
 
@@ -266,6 +272,7 @@ final class SSHProcessTunnel {
             "-o", "NumberOfPasswordPrompts=1",
             "\(profile.user)@\(resolvedHost)"
         ]
+        appendDiagnostic("launch target=\(profile.user)@\(resolvedHost) localPort=\(localPort) knownHosts=\(knownHostsFile.path)")
 
         var environment = ProcessInfo.processInfo.environment
         environment["SSH_ASKPASS"] = askpass.path
@@ -285,8 +292,10 @@ final class SSHProcessTunnel {
             let message = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if isHostKeyFailure(message ?? "") {
+                appendDiagnostic("launch hostKeyFailure stderr=\(message ?? "<empty>")")
                 throw TunnelProcessError.hostKeyChanged
             }
+            appendDiagnostic("launch exited stderr=\(message ?? "<empty>")")
             throw TunnelProcessError.launchFailed(message?.isEmpty == false ? message! : "ssh 进程未能建立转发")
         }
         return command
@@ -350,6 +359,20 @@ final class SSHProcessTunnel {
         stateLock.lock()
         if process === candidate { process = nil }
         stateLock.unlock()
+    }
+
+    private func appendDiagnostic(_ message: String) {
+        AppPaths.ensure()
+        let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
+        let data = Data(line.utf8)
+        if let handle = try? FileHandle(forWritingTo: AppPaths.sshDiagnosticFile) {
+            try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+            try? handle.close()
+        } else {
+            try? data.write(to: AppPaths.sshDiagnosticFile, options: .atomic)
+            try? FileManager.default.setAttributes([.posixPermissions: NSNumber(value: Int(0o600))], ofItemAtPath: AppPaths.sshDiagnosticFile.path)
+        }
     }
 
     private func emit(_ info: TunnelInfo) {

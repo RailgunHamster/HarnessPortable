@@ -10,6 +10,7 @@ enum AppPaths {
     static var knownHostsFile: URL { dataDirectory.appendingPathComponent("known_hosts.json") }
     static var layoutsFile: URL { dataDirectory.appendingPathComponent("layouts.json") }
     static var settingsFile: URL { dataDirectory.appendingPathComponent("settings.json") }
+    static var sshDiagnosticFile: URL { dataDirectory.appendingPathComponent("ssh-diagnostic.log") }
     static var crashLogFile: URL { dataDirectory.appendingPathComponent("crash.log") }
     static var supportDirectory: URL { dataDirectory.appendingPathComponent("Support", isDirectory: true) }
 
