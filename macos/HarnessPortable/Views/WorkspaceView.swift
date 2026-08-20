@@ -510,6 +510,8 @@ private struct WorkspacePaneView: View {
                 Spacer(minLength: 0)
                 edgeDrop(direction: .right)
             }
+            .padding(.top, 36)
+            .padding(.bottom, 36)
             VStack(spacing: 0) {
                 edgeDrop(direction: .up)
                 Spacer(minLength: 0)
