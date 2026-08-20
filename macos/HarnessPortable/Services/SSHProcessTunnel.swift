@@ -256,6 +256,8 @@ final class SSHProcessTunnel {
         command.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
         let remote = profile.remoteHost.contains(":") ? "[\(profile.remoteHost)]" : profile.remoteHost
         let forward = "127.0.0.1:\(localPort):\(remote):\(profile.remotePort)"
+        let escapedKnownHostsPath = knownHostsFile.path.replacingOccurrences(of: "\"", with: "\\\"")
+        let knownHostsOption = "UserKnownHostsFile=\"\(escapedKnownHostsPath)\""
         command.arguments = [
             "-N",
             "-4",
@@ -263,7 +265,7 @@ final class SSHProcessTunnel {
             "-p", String(profile.sshPort),
             "-o", "ExitOnForwardFailure=yes",
             "-o", "StrictHostKeyChecking=yes",
-            "-o", "UserKnownHostsFile=\(knownHostsFile.path)",
+            "-o", knownHostsOption,
             "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=4",
             "-o", "ConnectTimeout=20",
