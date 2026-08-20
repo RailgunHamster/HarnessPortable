@@ -253,7 +253,8 @@ struct WorkspaceView: View {
 
     private func stop(_ profileID: String) {
         services.tunnels.stop(profileID)
-        workspace.closeTunnelTabs(profileID: profileID)
+        let closed = workspace.closeTunnelTabs(profileID: profileID)
+        closed.forEach { webSessions.remove(tabID: $0) }
     }
 
     private func deleteProfile(_ profile: TunnelProfile) {

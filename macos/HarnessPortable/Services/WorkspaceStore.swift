@@ -93,8 +93,13 @@ final class WorkspaceStore: ObservableObject {
 
     @discardableResult
     func closeTunnelTabs(profileID: String) -> [UUID] {
-        let ids = allTabs().filter { $0.tab.kind == .tunnel && $0.tab.profileID == profileID }.map(\.tab.id)
-        for id in ids { closeTab(id) }
+        let ids = allTabs()
+            .filter { $0.tab.kind == .tunnel && $0.tab.profileID == profileID }
+            .map(\.tab.id)
+        guard !ids.isEmpty else { return [] }
+        removeTabs(&root, ids: Set(ids))
+        prune(&root)
+        normalizeSelections()
         return ids
     }
 
@@ -127,13 +132,7 @@ final class WorkspaceStore: ObservableObject {
         guard let source = findTab(root, tabID: tabID), source.tab.kind != .management else { return }
         guard removeTab(&root, tabID: tabID) != nil else { return }
         prune(&root)
-        selectedTabIDs = selectedTabIDs.filter { node($0.key)?.kind == .pane }
-        if node(activePaneID) == nil {
-            activePaneID = firstPaneID(root) ?? activePaneID
-        }
-        if let pane = node(activePaneID), let first = pane.tabs.first, selectedTabIDs[activePaneID] == nil {
-            selectedTabIDs[activePaneID] = first.id
-        }
+        normalizeSelections()
     }
 
     func replaceTab(_ tabID: UUID, with replacement: WorkspaceTab) {
@@ -251,6 +250,31 @@ final class WorkspaceStore: ObservableObject {
             guard node.kind == .pane else { return }
             node.tabs.append(tab)
         }
+    }
+
+    private func normalizeSelections() {
+        var paneIDs = Set<UUID>()
+        collectPaneIDs(root, into: &paneIDs)
+        selectedTabIDs = selectedTabIDs.filter { paneIDs.contains($0.key) }
+        if node(activePaneID) == nil {
+            activePaneID = firstPaneID(root) ?? activePaneID
+        }
+        if selectedTabIDs[activePaneID] == nil,
+           let firstTabID = node(activePaneID)?.tabs.first?.id {
+            selectedTabIDs[activePaneID] = firstTabID
+        }
+    }
+
+    private func removeTabs(_ node: inout LayoutNode, ids: Set<UUID>) {
+        node.tabs.removeAll { ids.contains($0.id) }
+        for index in node.children.indices {
+            removeTabs(&node.children[index], ids: ids)
+        }
+    }
+
+    private func collectPaneIDs(_ node: LayoutNode, into result: inout Set<UUID>) {
+        if node.kind == .pane { result.insert(node.id) }
+        for child in node.children { collectPaneIDs(child, into: &result) }
     }
 
     private func updateTab(_ tabID: UUID, _ body: (inout WorkspaceTab) -> Void) {

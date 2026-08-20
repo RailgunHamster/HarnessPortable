@@ -67,6 +67,19 @@ final class HarnessPortableTests: XCTestCase {
         XCTAssertEqual(reader.password(for: account), "secret")
     }
 
+    @MainActor
+    func testClosingTunnelTabsRemovesAllSessions() {
+        let workspace = WorkspaceStore()
+        workspace.openTunnelTab(profileID: "one")
+        workspace.openTunnelTab(profileID: "one")
+
+        let closed = workspace.closeTunnelTabs(profileID: "one")
+
+        XCTAssertEqual(closed.count, 2)
+        XCTAssertFalse(workspace.allTabs().contains { $0.tab.profileID == "one" })
+        XCTAssertTrue(workspace.allTabs().contains { $0.tab.kind == .management })
+    }
+
     func testHostClassification() {
         XCTAssertTrue(HostResolver.isTailscaleAddress("100.101.4.83"))
         XCTAssertFalse(HostResolver.isTailscaleAddress("192.168.1.10"))
