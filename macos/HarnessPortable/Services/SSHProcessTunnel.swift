@@ -1,5 +1,4 @@
 import Foundation
-import Darwin
 
 private enum TunnelProcessError: LocalizedError {
     case missingPassword
@@ -44,29 +43,14 @@ final class SSHProcessTunnel {
     var onState: ((TunnelInfo) -> Void)?
 
     static func cleanupOrphanedSSHProcesses() {
-        let command = Process()
-        command.executableURL = URL(fileURLWithPath: "/bin/ps")
-        command.arguments = ["-axo", "pid=,command="]
-        let output = Pipe()
-        command.standardOutput = output
-        command.standardError = FileHandle.nullDevice
-        guard (try? command.run()) != nil else { return }
-        command.waitUntilExit()
-
-        let text = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let supportPath = AppPaths.supportDirectory.path
-        let currentPID = ProcessInfo.processInfo.processIdentifier
-        for line in text.split(whereSeparator: \.isNewline) {
-            let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
-            guard parts.count == 2,
-                  let pid = Int32(parts[0]),
-                  pid != currentPID else { continue }
-            let processCommand = String(parts[1])
-            guard processCommand.contains("/usr/bin/ssh -N"),
-                  processCommand.contains(supportPath) else { continue }
-            kill(pid, SIGTERM)
-            usleep(100_000)
-            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+        let pattern = "HarnessPortable/Support/known-host-"
+        for signal in ["-TERM", "-KILL"] {
+            let command = Process()
+            command.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+            command.arguments = [signal, "-f", pattern]
+            try? command.run()
+            command.waitUntilExit()
+            if signal == "-TERM" { Thread.sleep(forTimeInterval: 0.2) }
         }
     }
 
