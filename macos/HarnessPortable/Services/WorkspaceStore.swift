@@ -29,7 +29,7 @@ final class WorkspaceStore: ObservableObject {
     @Published var renameTarget: UUID?
     @Published var renameText = ""
 
-    private var selectedTabIDs: [UUID: UUID] = [:]
+    @Published private var selectedTabIDs: [UUID: UUID] = [:]
 
     init() {
         let management = WorkspaceTab(kind: .management)
