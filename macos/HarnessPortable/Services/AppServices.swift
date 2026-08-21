@@ -10,6 +10,8 @@ final class AppServices: ObservableObject {
     let knownHosts: KnownHostsStore
     let tunnels: TunnelManager
 
+    private var didShutdown = false
+
     init() {
         AppPaths.ensure()
         SSHProcessTunnel.cleanupOrphanedSSHProcesses()
@@ -21,7 +23,13 @@ final class AppServices: ObservableObject {
         tunnels = TunnelManager(keychain: keychain, knownHosts: knownHosts)
     }
 
-    func shutdown() {
+    func stopAll() {
         tunnels.stopAll()
+    }
+
+    func shutdown() {
+        guard !didShutdown else { return }
+        didShutdown = true
+        tunnels.shutdown()
     }
 }

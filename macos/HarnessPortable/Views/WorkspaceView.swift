@@ -10,6 +10,7 @@ struct WorkspaceView: View {
 
     @State private var isFullScreen = false
     @State private var passwordProfile: TunnelProfile?
+    @State private var passwordRequestID = UUID()
     @State private var keychainError: String?
     @State private var directPromptPresented = false
     @State private var directURLInput = ""
@@ -60,10 +61,16 @@ struct WorkspaceView: View {
         .onReceive(services.tunnels.$states) { states in
             handleTunnelStates(states)
         }
-        .sheet(item: $passwordProfile) { profile in
+        .sheet(item: $passwordProfile, onDismiss: { passwordRequestID = UUID() }) { profile in
+            let requestID = passwordRequestID
             PasswordPromptView(profile: profile) { password in
+                guard passwordRequestID == requestID,
+                      passwordProfile?.id == profile.id,
+                      services.profiles.findTunnel(id: profile.id) != nil else { return false }
                 do {
                     try services.keychain.setPassword(password, for: profile.id)
+                    guard passwordRequestID == requestID,
+                          passwordProfile?.id == profile.id else { return false }
                     connect(profile)
                     return true
                 } catch {
@@ -219,15 +226,29 @@ struct WorkspaceView: View {
     }
 
     private func handleTunnelStates(_ states: [String: TunnelInfo]) {
+        let workspace = workspace
+        let webSessions = webSessions
+        let tunnels = services.tunnels
+        // SwiftUI may still be reading the workspace for this update; defer mutations.
         for state in states.values {
             guard let profileID = state.profileID else { continue }
+            let generation = state.generation
             switch state.status {
             case .connected:
-                workspace.ensureTunnelTab(profileID: profileID, focus: false)
+                DispatchQueue.main.async {
+                    let current = tunnels.state(for: profileID)
+                    guard current.status == .connected, current.generation == generation else { return }
+                    workspace.ensureTunnelTab(profileID: profileID, focus: false)
+                }
             case .stopped:
                 DispatchQueue.main.async {
+                    let current = tunnels.state(for: profileID)
+                    guard current.status == .stopped, current.generation == generation else { return }
                     let closed = workspace.closeTunnelTabs(profileID: profileID)
-                    closed.forEach { webSessions.remove(tabID: $0) }
+                    guard !closed.isEmpty else { return }
+                    DispatchQueue.main.async {
+                        closed.forEach { webSessions.remove(tabID: $0) }
+                    }
                 }
             case .idle, .connecting, .retrying, .failed:
                 break
@@ -235,30 +256,45 @@ struct WorkspaceView: View {
         }
     }
 
+    private func requestPassword(for profile: TunnelProfile) {
+        passwordRequestID = UUID()
+        passwordProfile = profile
+    }
+
     private func connect(_ profile: TunnelProfile) {
         if services.keychain.hasPassword(for: profile.id) {
             services.tunnels.start(profile)
-            workspace.ensureTunnelTab(profileID: profile.id)
+            let workspace = workspace
+            let tunnels = services.tunnels
+            let generation = tunnels.state(for: profile.id).generation
+            DispatchQueue.main.async {
+                let current = tunnels.state(for: profile.id)
+                guard current.status != .stopped, current.generation == generation else { return }
+                workspace.ensureTunnelTab(profileID: profile.id)
+            }
         } else {
-            passwordProfile = profile
+            requestPassword(for: profile)
         }
     }
 
     private func openTunnel(_ profile: TunnelProfile) {
         if services.keychain.hasPassword(for: profile.id) {
             services.tunnels.start(profile)
-            workspace.openTunnelTab(profileID: profile.id)
+            let workspace = workspace
+            let tunnels = services.tunnels
+            let generation = tunnels.state(for: profile.id).generation
+            DispatchQueue.main.async {
+                let current = tunnels.state(for: profile.id)
+                guard current.status != .stopped, current.generation == generation else { return }
+                workspace.openTunnelTab(profileID: profile.id)
+            }
         } else {
-            passwordProfile = profile
+            requestPassword(for: profile)
         }
     }
 
     private func stop(_ profileID: String) {
         services.tunnels.stop(profileID)
-        DispatchQueue.main.async {
-            let closed = workspace.closeTunnelTabs(profileID: profileID)
-            closed.forEach { webSessions.remove(tabID: $0) }
-        }
     }
 
     private func deleteProfile(_ profile: TunnelProfile) {
@@ -283,7 +319,7 @@ struct WorkspaceView: View {
                 webSessions.remove(tabID: tabID)
                 services.tunnels.start(profile)
             } else {
-                passwordProfile = profile
+                requestPassword(for: profile)
             }
         } else {
             workspace.replaceTab(tabID, with: target)
@@ -504,12 +540,6 @@ private struct WorkspacePaneView: View {
 
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                tabStrip
-                Divider()
-                content
-                    .id(workspace.selectedTab(in: paneID)?.id)
-            }
             HStack(spacing: 0) {
                 edgeDrop(direction: .left)
                 Spacer(minLength: 0)
@@ -524,9 +554,15 @@ private struct WorkspacePaneView: View {
             }
             .padding(.top, 36)
             .padding(.bottom, 36)
+
+            VStack(spacing: 0) {
+                tabStrip
+                Divider()
+                content
+                    .id(workspace.selectedTab(in: paneID)?.id)
+            }
         }
         .background(Color(nsColor: .textBackgroundColor))
-        .onTapGesture { workspace.selectPane(paneID) }
     }
 
     private var tabs: [WorkspaceTab] { workspace.tabs(in: paneID) }
@@ -690,8 +726,10 @@ private struct WorkspacePaneView: View {
     }
 
     private func closeTab(_ tabID: UUID) {
-        webSessions.remove(tabID: tabID)
         workspace.closeTab(tabID)
+        DispatchQueue.main.async {
+            webSessions.remove(tabID: tabID)
+        }
     }
 
     private func loadTabID(from providers: [NSItemProvider], action: @escaping (UUID) -> Void) -> Bool {

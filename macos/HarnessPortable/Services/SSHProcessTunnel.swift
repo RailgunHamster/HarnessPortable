@@ -40,7 +40,7 @@ final class SSHProcessTunnel {
     private var generation = 0
     private var process: Process?
 
-    var onState: ((TunnelInfo) -> Void)?
+    var onState: ((TunnelInfo, Int) -> Void)?
 
     static func cleanupOrphanedSSHProcesses() {
         let pattern = "HarnessPortable/Support/known-host-"
@@ -59,7 +59,8 @@ final class SSHProcessTunnel {
         self.knownHosts = knownHosts
     }
 
-    func start(profile: TunnelProfile) {
+    @discardableResult
+    func start(profile: TunnelProfile) -> Int {
         let oldProcess: Process?
         let currentGeneration: Int
         stateLock.lock()
@@ -73,24 +74,53 @@ final class SSHProcessTunnel {
         worker.async { [weak self] in
             self?.run(profile: profile, generation: currentGeneration)
         }
+        return currentGeneration
     }
 
-    func stop(profile: TunnelProfile) {
+    @discardableResult
+    func stop(profile: TunnelProfile) -> Int {
         let oldProcess: Process?
+        let currentGeneration: Int
         stateLock.lock()
         generation += 1
+        currentGeneration = generation
         oldProcess = process
         process = nil
         stateLock.unlock()
 
         oldProcess?.terminate()
         removePasswordFile(for: profile.id)
-        emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .stopped, message: "隧道已停止"))
+        return currentGeneration
+    }
+
+    func shutdown(profile: TunnelProfile) {
+        cancel(profileID: profile.id)
+    }
+
+    func shutdown() {
+        cancel(profileID: nil)
+    }
+
+    private func cancel(profileID: String?) {
+        let oldProcess: Process?
+        stateLock.lock()
+        generation += 1
+        oldProcess = process
+        process = nil
+        onState = nil
+        stateLock.unlock()
+        oldProcess?.terminate()
+        if let profileID {
+            removePasswordFile(for: profileID)
+        }
     }
 
     private func run(profile: TunnelProfile, generation: Int) {
         var backoff: TimeInterval = 3
         var passwordFile: URL?
+        let emit: (TunnelInfo) -> Void = { [weak self] info in
+            self?.emit(info, generation: generation)
+        }
         defer { removePasswordFile(for: profile.id) }
 
         while isCurrent(generation) {
@@ -358,7 +388,7 @@ final class SSHProcessTunnel {
             lower.contains("keyboard-interactive")
     }
 
-    private func isCurrent(_ expected: Int) -> Bool {
+    func isCurrent(_ expected: Int) -> Bool {
         stateLock.lock()
         defer { stateLock.unlock() }
         return expected == generation
@@ -384,7 +414,16 @@ final class SSHProcessTunnel {
         }
     }
 
-    private func emit(_ info: TunnelInfo) {
-        onState?(info)
+    private func emit(_ info: TunnelInfo, generation expected: Int) {
+        stateLock.lock()
+        guard expected == generation else {
+            stateLock.unlock()
+            return
+        }
+        let callback = onState
+        stateLock.unlock()
+        var event = info
+        event.generation = expected
+        callback?(event, expected)
     }
 }

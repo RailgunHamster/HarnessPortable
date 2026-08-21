@@ -15,6 +15,7 @@ struct TunnelInfo: Identifiable, Equatable {
     var status: TunnelStatus
     var message: String?
     var localPort: Int
+    var generation: Int
 
     var id: String { profileID ?? "none" }
 
@@ -23,12 +24,14 @@ struct TunnelInfo: Identifiable, Equatable {
         profileName: String? = nil,
         status: TunnelStatus = .idle,
         message: String? = nil,
-        localPort: Int = 0
+        localPort: Int = 0,
+        generation: Int = 0
     ) {
         self.profileID = profileID
         self.profileName = profileName
         self.status = status
         self.message = message
         self.localPort = localPort
+        self.generation = generation
     }
 }

@@ -55,12 +55,13 @@ struct HarnessPortableApp: App {
 @MainActor
 private struct MenuBarView: View {
     @ObservedObject var services: AppServices
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button("打开工作区", systemImage: "macwindow") {
                 NSApp.activate(ignoringOtherApps: true)
-                NSApp.windows.first(where: { $0.title == "Harness Portable" })?.makeKeyAndOrderFront(nil)
+                openWindow(id: "main")
             }
 
             if !services.tunnels.activeStates.isEmpty {
@@ -76,7 +77,7 @@ private struct MenuBarView: View {
                     .frame(minWidth: 220)
                 }
                 Button("停止全部隧道", systemImage: "stop.fill") {
-                    services.shutdown()
+                    services.stopAll()
                 }
             }
 

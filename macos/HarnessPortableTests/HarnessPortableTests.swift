@@ -80,6 +80,22 @@ final class HarnessPortableTests: XCTestCase {
         XCTAssertTrue(workspace.allTabs().contains { $0.tab.kind == .management })
     }
 
+    @MainActor
+    func testClosingLastTunnelCollapsesEmptySplitAndKeepsManagement() {
+        let workspace = WorkspaceStore()
+        workspace.openTunnelTab(profileID: "one")
+        guard let tunnelID = workspace.allTabs().first(where: { $0.tab.kind == .tunnel })?.tab.id else {
+            return XCTFail("expected a tunnel tab")
+        }
+        _ = workspace.splitPane(workspace.root.id, direction: .right, duplicateTabID: tunnelID)
+
+        _ = workspace.closeTunnelTabs(profileID: "one")
+
+        XCTAssertEqual(workspace.root.kind, .pane)
+        XCTAssertEqual(workspace.allTabs().filter { $0.tab.kind == .management }.count, 1)
+        XCTAssertFalse(workspace.allTabs().contains { $0.tab.kind == .tunnel })
+    }
+
     func testHostClassification() {
         XCTAssertTrue(HostResolver.isTailscaleAddress("100.101.4.83"))
         XCTAssertFalse(HostResolver.isTailscaleAddress("192.168.1.10"))

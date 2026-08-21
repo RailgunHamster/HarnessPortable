@@ -9,21 +9,42 @@ final class WebSessionStore: ObservableObject {
     private var webViews: [UUID: WKWebView] = [:]
     private var loadedURLs: [UUID: String] = [:]
     private var navigationDelegates: [UUID: WebSessionNavigationDelegate] = [:]
+    private var activeNavigations: [UUID: WKNavigation] = [:]
+    private var loadGenerations: [UUID: Int] = [:]
+    private var retryWorkItems: [UUID: DispatchWorkItem] = [:]
+    private var retryCounts: [UUID: Int] = [:]
+    private let maximumAutomaticRetries = 3
 
     func webView(for tabID: UUID) -> WKWebView {
         if let existing = webViews[tabID] { return existing }
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
         let delegate = WebSessionNavigationDelegate(
-            onFailure: { [weak self] message in
-                DispatchQueue.main.async {
-                    self?.navigationErrors[tabID] = message
+            onStart: { [weak self] webView, navigation in
+                DispatchQueue.main.async { [weak self, weak webView] in
+                    guard let webView else { return }
+                    self?.navigationStarted(tabID: tabID, webView: webView, navigation: navigation)
+                }
+            },
+            onSuccess: { [weak self] webView, navigation in
+                DispatchQueue.main.async { [weak self, weak webView] in
+                    guard let webView else { return }
+                    self?.navigationSucceeded(tabID: tabID, webView: webView, navigation: navigation)
+                }
+            },
+            onFailure: { [weak self] webView, navigation, message in
+                DispatchQueue.main.async { [weak self, weak webView] in
+                    guard let webView else { return }
+                    self?.navigationFailed(tabID: tabID, webView: webView, navigation: navigation, message: message)
                 }
             }
         )
         webView.navigationDelegate = delegate
+        webView.uiDelegate = delegate
         navigationDelegates[tabID] = delegate
         webViews[tabID] = webView
         return webView
@@ -41,42 +62,149 @@ final class WebSessionStore: ObservableObject {
             destination = "http://127.0.0.1:\(state.localPort)"
         }
         guard let destination, let url = URL(string: destination) else { return }
-        let shouldReload = tab.kind == .tunnel && loadedURLs[tab.id] == destination
+
+        beginLoad(for: tab.id)
+        navigationErrors.removeValue(forKey: tab.id)
+
+        let shouldReload = loadedURLs[tab.id] == destination
         loadedURLs[tab.id] = destination
+        let webView = webView(for: tab.id)
         if shouldReload {
-            webView(for: tab.id).reload()
+            activeNavigations[tab.id] = webView.reload()
         } else {
-            webView(for: tab.id).load(URLRequest(url: url))
+            let cachePolicy: URLRequest.CachePolicy = tab.kind == .tunnel
+                ? .reloadIgnoringLocalCacheData
+                : .useProtocolCachePolicy
+            activeNavigations[tab.id] = webView.load(
+                URLRequest(url: url, cachePolicy: cachePolicy, timeoutInterval: 30)
+            )
         }
     }
 
     func reload(tabID: UUID) {
+        beginLoad(for: tabID)
         navigationErrors.removeValue(forKey: tabID)
-        webViews[tabID]?.reload()
+        if let webView = webViews[tabID] {
+            activeNavigations[tabID] = webView.reload()
+        }
     }
 
     func remove(tabID: UUID) {
-        webViews[tabID]?.stopLoading()
+        retryWorkItems[tabID]?.cancel()
+        retryWorkItems.removeValue(forKey: tabID)
+        retryCounts.removeValue(forKey: tabID)
+        if let webView = webViews[tabID] {
+            webView.navigationDelegate = nil
+            webView.stopLoading()
+        }
         webViews.removeValue(forKey: tabID)
+        activeNavigations.removeValue(forKey: tabID)
+        loadGenerations.removeValue(forKey: tabID)
         navigationDelegates.removeValue(forKey: tabID)
         navigationErrors.removeValue(forKey: tabID)
         loadedURLs.removeValue(forKey: tabID)
     }
+
+    private func beginLoad(for tabID: UUID) {
+        retryWorkItems[tabID]?.cancel()
+        retryWorkItems.removeValue(forKey: tabID)
+        retryCounts[tabID] = 0
+        loadGenerations[tabID] = (loadGenerations[tabID] ?? 0) + 1
+    }
+
+    private func navigationStarted(tabID: UUID, webView: WKWebView, navigation: WKNavigation?) {
+        guard webViews[tabID] === webView,
+              activeNavigations[tabID] == nil,
+              let navigation else { return }
+        activeNavigations[tabID] = navigation
+    }
+
+    private func navigationSucceeded(tabID: UUID, webView: WKWebView, navigation: WKNavigation?) {
+        guard webViews[tabID] === webView,
+              let navigation,
+              activeNavigations[tabID] === navigation else { return }
+        activeNavigations.removeValue(forKey: tabID)
+        retryWorkItems[tabID]?.cancel()
+        retryWorkItems.removeValue(forKey: tabID)
+        retryCounts.removeValue(forKey: tabID)
+        navigationErrors.removeValue(forKey: tabID)
+    }
+
+    private func navigationFailed(
+        tabID: UUID,
+        webView: WKWebView,
+        navigation: WKNavigation?,
+        message: String
+    ) {
+        guard webViews[tabID] === webView,
+              let navigation,
+              activeNavigations[tabID] === navigation else { return }
+        activeNavigations.removeValue(forKey: tabID)
+        navigationErrors[tabID] = message
+
+        let attempt = retryCounts[tabID] ?? 0
+        guard attempt < maximumAutomaticRetries else { return }
+        retryCounts[tabID] = attempt + 1
+        let loadGeneration = loadGenerations[tabID] ?? 0
+
+        retryWorkItems[tabID]?.cancel()
+        let retry = DispatchWorkItem { [weak self, weak webView] in
+            guard let self, let webView,
+                  self.webViews[tabID] === webView,
+                  self.loadGenerations[tabID] == loadGeneration else { return }
+            self.retryWorkItems.removeValue(forKey: tabID)
+            self.activeNavigations[tabID] = webView.reload()
+        }
+        retryWorkItems[tabID] = retry
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: retry)
+    }
 }
 
-private final class WebSessionNavigationDelegate: NSObject, WKNavigationDelegate {
-    let onFailure: (String) -> Void
+private final class WebSessionNavigationDelegate: NSObject, WKNavigationDelegate, WKUIDelegate {
+    let onStart: (WKWebView, WKNavigation?) -> Void
+    let onSuccess: (WKWebView, WKNavigation?) -> Void
+    let onFailure: (WKWebView, WKNavigation?, String) -> Void
 
-    init(onFailure: @escaping (String) -> Void) {
+    init(
+        onStart: @escaping (WKWebView, WKNavigation?) -> Void,
+        onSuccess: @escaping (WKWebView, WKNavigation?) -> Void,
+        onFailure: @escaping (WKWebView, WKNavigation?, String) -> Void
+    ) {
+        self.onStart = onStart
+        self.onSuccess = onSuccess
         self.onFailure = onFailure
     }
 
+    func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        guard navigationAction.targetFrame == nil else { return nil }
+        webView.load(navigationAction.request)
+        return nil
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        onStart(webView, navigation)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        onSuccess(webView, navigation)
+    }
+
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation?, withError error: Error) {
-        onFailure(error.localizedDescription)
+        reportFailure(for: webView, navigation: navigation, error: error)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation?, withError error: Error) {
-        onFailure(error.localizedDescription)
+        reportFailure(for: webView, navigation: navigation, error: error)
+    }
+
+    private func reportFailure(for webView: WKWebView, navigation: WKNavigation?, error: Error) {
+        guard (error as NSError).code != NSURLErrorCancelled else { return }
+        onFailure(webView, navigation, error.localizedDescription)
     }
 }
 
