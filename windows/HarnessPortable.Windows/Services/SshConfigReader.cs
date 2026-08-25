@@ -10,6 +10,8 @@ public sealed record SshConfigHost(string Alias, string HostName, string? User, 
         $"{(string.IsNullOrWhiteSpace(User) ? "未设置用户" : User)}@{HostName}:{Port}";
 }
 
+public sealed record SshConfigLoadResult(string? Path, IReadOnlyList<SshConfigHost> Hosts);
+
 /// <summary>
 /// Reads the small, display-safe subset of OpenSSH config needed by the
 /// tunnel editor. Authentication options such as IdentityFile are ignored.
@@ -18,26 +20,128 @@ public static class SshConfigReader
 {
     private static readonly string[] SupportedOptions = ["hostname", "user", "port"];
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".ssh",
-        "config");
+    /// <summary>
+    /// The Windows equivalent of ~/.ssh/config for the current process user.
+    /// A literal ~ is not expanded by .NET file APIs, so callers must use
+    /// ResolvePath instead of passing it directly to File.ReadAllText.
+    /// </summary>
+    public static string DefaultPath =>
+        ResolvePath(null) ?? Path.Combine(CurrentUserProfile(), ".ssh", "config");
 
-    public static IReadOnlyList<SshConfigHost> LoadDefault()
+    public static IReadOnlyList<SshConfigHost> LoadDefault() => Load().Hosts;
+
+    public static SshConfigLoadResult Load(string? configuredPath = null)
     {
+        var path = ResolvePath(configuredPath);
+        if (path is null)
+        {
+            return new SshConfigLoadResult(null, []);
+        }
+
         try
         {
-            return File.Exists(DefaultPath)
-                ? Parse(File.ReadAllText(DefaultPath))
-                : [];
+            return new SshConfigLoadResult(
+                path,
+                File.Exists(path) ? Parse(File.ReadAllText(path)) : []);
         }
         catch (IOException)
         {
-            return [];
+            return new SshConfigLoadResult(path, []);
         }
         catch (UnauthorizedAccessException)
         {
-            return [];
+            return new SshConfigLoadResult(path, []);
+        }
+    }
+
+    /// <summary>
+    /// Expands a configured path. A path beginning with ~ uses the current
+    /// process user's profile; it cannot identify a different interactive
+    /// Windows account when the app is launched as another user.
+    /// </summary>
+    public static string? ResolvePath(string? configuredPath)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            return NormalizePath(ExpandHome(configuredPath));
+        }
+
+        var candidates = DefaultConfigCandidates().ToArray();
+        return candidates.FirstOrDefault(File.Exists) ?? candidates.FirstOrDefault();
+    }
+
+    private static string ExpandHome(string path)
+    {
+        var expanded = Environment.ExpandEnvironmentVariables(path.Trim());
+        if (expanded == "~")
+        {
+            return CurrentUserProfile();
+        }
+
+        if (expanded.StartsWith("~/", StringComparison.Ordinal) ||
+            expanded.StartsWith("~\\", StringComparison.Ordinal))
+        {
+            return Path.Combine(CurrentUserProfile(), expanded[2..]);
+        }
+
+        return expanded;
+    }
+
+    private static IEnumerable<string> DefaultConfigCandidates()
+    {
+        foreach (var profile in UserProfileCandidates())
+        {
+            yield return Path.Combine(profile, ".ssh", "config");
+        }
+    }
+
+    private static string CurrentUserProfile() =>
+        UserProfileCandidates().FirstOrDefault() ?? Directory.GetCurrentDirectory();
+
+    private static IEnumerable<string> UserProfileCandidates()
+    {
+        var candidates = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetEnvironmentVariable("USERPROFILE"),
+            Environment.GetEnvironmentVariable("HOME"),
+            CombineHomeDriveAndPath(),
+        };
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            var normalized = NormalizePath(candidate);
+            if (seen.Add(normalized))
+            {
+                yield return normalized;
+            }
+        }
+    }
+
+    private static string? CombineHomeDriveAndPath()
+    {
+        var drive = Environment.GetEnvironmentVariable("HOMEDRIVE");
+        var path = Environment.GetEnvironmentVariable("HOMEPATH");
+        return string.IsNullOrWhiteSpace(drive) || string.IsNullOrWhiteSpace(path)
+            ? null
+            : Path.Combine(drive, path);
+    }
+
+    private static string NormalizePath(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch
+        {
+            return path;
         }
     }
 

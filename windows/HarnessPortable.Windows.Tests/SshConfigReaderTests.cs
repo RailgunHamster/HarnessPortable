@@ -97,4 +97,13 @@ public sealed class SshConfigReaderTests
         Assert.Null(bare.User);
         Assert.Equal(22, bare.Port);
     }
+
+    [Fact]
+    public void ResolvePathExpandsTildeUsingCurrentProcessProfile()
+    {
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var expected = Path.GetFullPath(Path.Combine(profile, ".ssh", "config"));
+
+        Assert.Equal(expected, SshConfigReader.ResolvePath("~/.ssh/config"));
+    }
 }

@@ -1,13 +1,18 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using HarnessPortable.Windows.Models;
 using HarnessPortable.Windows.Services;
+using WpfOpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
 namespace HarnessPortable.Windows;
 
 public partial class TunnelEditorWindow : Window
 {
-    public sealed record EditorResult(TunnelProfile Profile, string? Password);
+    public sealed record EditorResult(
+        TunnelProfile Profile,
+        string? Password,
+        string? SshConfigPath);
 
     private sealed record HostSuggestion(
         string Title,
@@ -18,14 +23,17 @@ public partial class TunnelEditorWindow : Window
     private readonly TunnelProfile? _initial;
     private readonly ObservableCollection<HostSuggestion> _hostSuggestions = [];
     private CancellationTokenSource? _discoveryCts;
+    private string? _sshConfigPath;
 
     public EditorResult? Result { get; private set; }
 
-    public TunnelEditorWindow(TunnelProfile? initial)
+    public TunnelEditorWindow(TunnelProfile? initial, string? sshConfigPath = null)
     {
         _initial = initial;
+        _sshConfigPath = string.IsNullOrWhiteSpace(sshConfigPath) ? null : sshConfigPath;
         InitializeComponent();
         HostBox.ItemsSource = _hostSuggestions;
+        UpdateSshConfigPathText(SshConfigReader.ResolvePath(_sshConfigPath));
         Closed += (_, _) => _discoveryCts?.Cancel();
 
         if (initial is not null)
@@ -53,6 +61,33 @@ public partial class TunnelEditorWindow : Window
         HostBox.IsDropDownOpen = true;
     }
 
+    private async void ChooseSshConfig_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new WpfOpenFileDialog
+        {
+            Title = "选择 SSH config 文件",
+            Filter = "SSH config|config|所有文件|*.*",
+            CheckFileExists = true,
+            Multiselect = false,
+        };
+
+        var currentPath = SshConfigReader.ResolvePath(_sshConfigPath);
+        if (!string.IsNullOrWhiteSpace(currentPath))
+        {
+            dialog.InitialDirectory = Path.GetDirectoryName(currentPath);
+            dialog.FileName = Path.GetFileName(currentPath);
+        }
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        _sshConfigPath = dialog.FileName;
+        await LoadHostSuggestionsAsync(force: true);
+        HostBox.IsDropDownOpen = true;
+    }
+
     private async Task LoadHostSuggestionsAsync(bool force)
     {
         if (force)
@@ -64,18 +99,20 @@ public partial class TunnelEditorWindow : Window
         _discoveryCts?.Dispose();
         var cts = new CancellationTokenSource();
         _discoveryCts = cts;
+        var selectedConfigPath = _sshConfigPath;
 
         try
         {
-            var configHosts = await Task.Run(SshConfigReader.LoadDefault, cts.Token);
+            var config = await Task.Run(() => SshConfigReader.Load(selectedConfigPath), cts.Token);
             if (cts.IsCancellationRequested)
             {
                 return;
             }
 
+            UpdateSshConfigPathText(config.Path);
             var text = HostBox.Text;
             _hostSuggestions.Clear();
-            foreach (var configHost in configHosts)
+            foreach (var configHost in config.Hosts)
             {
                 _hostSuggestions.Add(new HostSuggestion(
                     configHost.Alias,
@@ -117,6 +154,13 @@ public partial class TunnelEditorWindow : Window
         }
     }
 
+    private void UpdateSshConfigPathText(string? path)
+    {
+        SshConfigPathText.Text = string.IsNullOrWhiteSpace(path)
+            ? "SSH 配置：未找到 ~/.ssh/config"
+            : $"SSH 配置：{path}";
+    }
+
     private void HostBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (HostBox.SelectedItem is not HostSuggestion suggestion)
@@ -154,7 +198,7 @@ public partial class TunnelEditorWindow : Window
         }
 
         var password = string.IsNullOrEmpty(PasswordInput.Password) ? null : PasswordInput.Password;
-        Result = new EditorResult(profile, password);
+        Result = new EditorResult(profile, password, _sshConfigPath);
         DialogResult = true;
     }
 

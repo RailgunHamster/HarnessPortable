@@ -12,4 +12,7 @@ public sealed class AppSettings
 
     /// <summary>Name of the last layout that was applied.</summary>
     public string LastLayoutName { get; set; } = "";
+
+    /// <summary>Optional SSH config path override; empty means the current user's ~/.ssh/config.</summary>
+    public string SshConfigPath { get; set; } = "";
 }

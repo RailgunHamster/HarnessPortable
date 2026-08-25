@@ -161,9 +161,11 @@ public partial class ManagementView : System.Windows.Controls.UserControl
 
     private void AddTunnel_Click(object sender, RoutedEventArgs e)
     {
-        var editor = new TunnelEditorWindow(null) { Owner = Window.GetWindow(this) };
+        var sshConfigPath = _services.Settings.Load().SshConfigPath;
+        var editor = new TunnelEditorWindow(null, sshConfigPath) { Owner = Window.GetWindow(this) };
         if (editor.ShowDialog() == true && editor.Result is { } result)
         {
+            SaveSshConfigPath(result.SshConfigPath);
             var profiles = _services.Profiles.LoadTunnels();
             profiles.RemoveAll(p => p.Id == result.Profile.Id);
             profiles.Insert(0, result.Profile);
@@ -176,6 +178,19 @@ public partial class ManagementView : System.Windows.Controls.UserControl
 
             RefreshLists();
         }
+    }
+
+    private void SaveSshConfigPath(string? path)
+    {
+        var settings = _services.Settings.Load();
+        var normalized = path?.Trim() ?? "";
+        if (string.Equals(settings.SshConfigPath, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        settings.SshConfigPath = normalized;
+        _services.Settings.Save(settings);
     }
 
     private void TunnelConnect_Click(object sender, RoutedEventArgs e)
@@ -208,9 +223,11 @@ public partial class ManagementView : System.Windows.Controls.UserControl
             return;
         }
 
-        var editor = new TunnelEditorWindow(item.Profile) { Owner = Window.GetWindow(this) };
+        var sshConfigPath = _services.Settings.Load().SshConfigPath;
+        var editor = new TunnelEditorWindow(item.Profile, sshConfigPath) { Owner = Window.GetWindow(this) };
         if (editor.ShowDialog() == true && editor.Result is { } result)
         {
+            SaveSshConfigPath(result.SshConfigPath);
             var profiles = _services.Profiles.LoadTunnels();
             var index = profiles.FindIndex(p => p.Id == result.Profile.Id);
             if (index >= 0)

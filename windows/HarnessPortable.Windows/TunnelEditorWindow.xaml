@@ -20,6 +20,10 @@
 
                 <TextBlock Text="服务器地址" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
                 <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="..." Padding="8,6" Margin="8,0,0,0"
+                            Style="{StaticResource ModernToolbarButton}"
+                            ToolTip="选择 SSH config 文件"
+                            Click="ChooseSshConfig_Click"/>
                     <Button DockPanel.Dock="Right" Content="↻" Padding="9,6" Margin="8,0,0,0"
                             Style="{StaticResource ModernToolbarButton}"
                             ToolTip="刷新 SSH 配置和局域网机器"
@@ -39,6 +43,8 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                 </DockPanel>
+                <TextBlock x:Name="SshConfigPathText" Margin="0,4,0,0" Foreground="#6B7280"
+                           FontSize="11" TextTrimming="CharacterEllipsis" Text="SSH 配置：~/.ssh/config"/>
 
                 <TextBlock Text="SSH 端口" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
                 <TextBox x:Name="SshPortBox" Style="{StaticResource ModernTextBox}" Text="22"/>
@@ -59,7 +65,7 @@
                 <TextBox x:Name="LocalPortBox" Style="{StaticResource ModernTextBox}" Text="3080"/>
 
                 <TextBlock Margin="0,12,0,0" Foreground="#6B7280" FontSize="12" TextWrapping="Wrap"
-                           Text="等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器&#10;打开服务器地址下拉可选择 ~/.ssh/config 中的 SSH 别名；选择后会填入 HostName、User 和 Port，也可以继续手动修改。局域网机器和 Tailscale MagicDNS 仍可使用。&#10;密码使用 Windows DPAPI 加密存储，仅用于建立隧道。"/>
+                           Text="等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器&#10;打开服务器地址下拉可选择 ~/.ssh/config 中的 SSH 别名；选择后会填入 HostName、User 和 Port，也可以继续手动修改。~ 会按当前运行用户解析；若程序以其他用户运行，可用右侧 ... 直接选择 config 文件。&#10;密码使用 Windows DPAPI 加密存储，仅用于建立隧道。"/>
             </StackPanel>
         </ScrollViewer>
 
