@@ -2,7 +2,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
+using AvalonDock.Controls;
 using AvalonDock.Layout;
+using WpfMouseEventArgs = System.Windows.Input.MouseEventArgs;
+using WpfPoint = System.Windows.Point;
 using HarnessPortable.Windows.Controls;
 using HarnessPortable.Windows.Models;
 using HarnessPortable.Windows.Services;
@@ -13,6 +17,15 @@ public partial class MainWindow : Window
 {
     private enum SplitDirection
     {
+        Left,
+        Right,
+        Up,
+        Down,
+    }
+
+    private enum DropZone
+    {
+        Center,
         Left,
         Right,
         Up,
@@ -32,6 +45,15 @@ public partial class MainWindow : Window
 
     private LayoutDocument? _contextDoc;
     private bool _suppressPresetSelection;
+
+    // AvalonDock floating windows are disabled because WebView2 is an HwndHost.
+    // These fields implement an in-place tab drag so docking never reparents it.
+    private LayoutDocument? _tabDragCandidate;
+    private WpfPoint _tabDragStartPoint;
+    private bool _tabDragActive;
+    private LayoutDocumentPane? _tabDragTargetPane;
+    private Rect _tabDragTargetRect;
+    private DropZone _tabDragZone;
 
     private bool _trayHintShown;
     private bool _isFullScreen;
@@ -77,6 +99,7 @@ public partial class MainWindow : Window
         ContentId = "management",
         CanClose = false,
         CanFloat = false,
+        CanMove = false,
         Content = _managementView,
     };
 
@@ -127,6 +150,396 @@ public partial class MainWindow : Window
                     _ => $"{s.ProfileName} 重连中…",
                 })),
         };
+    }
+
+    // ------------------------------------------------------------------
+    // In-place tab dragging
+    // ------------------------------------------------------------------
+
+    private void DocumentTab_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not LayoutDocumentTabItem tab ||
+            tab.Model is not LayoutDocument doc ||
+            ReferenceEquals(doc, _managementDoc) ||
+            !doc.CanMove)
+        {
+            return;
+        }
+
+        _tabDragCandidate = doc;
+        _tabDragStartPoint = e.GetPosition(this);
+        _tabDragActive = false;
+    }
+
+    private void Window_PreviewMouseMove(object sender, WpfMouseEventArgs e)
+    {
+        if (_tabDragCandidate is null || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var point = e.GetPosition(this);
+        if (!_tabDragActive)
+        {
+            var movedEnough = Math.Abs(point.X - _tabDragStartPoint.X) >= SystemParameters.MinimumHorizontalDragDistance ||
+                              Math.Abs(point.Y - _tabDragStartPoint.Y) >= SystemParameters.MinimumVerticalDragDistance;
+            if (!movedEnough)
+            {
+                return;
+            }
+
+            // Let AvalonDock keep its native same-tab ordering. Once the
+            // pointer leaves the source tab strip, take over with an in-place
+            // drag that never creates a floating WebView2 window.
+            var sourcePane = _tabDragCandidate.Parent as LayoutDocumentPane;
+            var targetPane = FindPaneAt(point);
+            if (ReferenceEquals(sourcePane, targetPane) && IsOverDocumentTabStrip(point))
+            {
+                return;
+            }
+
+            BeginTabDrag(point);
+        }
+
+        UpdateTabDragOverlay(point);
+        e.Handled = true;
+    }
+
+    private void Window_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_tabDragActive)
+        {
+            _tabDragCandidate = null;
+            return;
+        }
+
+        var point = e.GetPosition(this);
+        UpdateTabDragOverlay(point);
+
+        var source = _tabDragCandidate;
+        var target = _tabDragTargetPane;
+        var zone = _tabDragZone;
+        EndTabDrag();
+
+        if (source is not null && target is not null)
+        {
+            ApplyTabDrop(source, target, zone);
+        }
+
+        e.Handled = true;
+    }
+
+    private void BeginTabDrag(WpfPoint point)
+    {
+        _tabDragActive = true;
+        CaptureMouse();
+        TabDragOverlay.Visibility = Visibility.Visible;
+        DragHintCard.Visibility = Visibility.Visible;
+        UpdateTabDragOverlay(point);
+    }
+
+    private void EndTabDrag()
+    {
+        if (Mouse.Captured == this)
+        {
+            ReleaseMouseCapture();
+        }
+
+        _tabDragCandidate = null;
+        _tabDragActive = false;
+        _tabDragTargetPane = null;
+        _tabDragTargetRect = Rect.Empty;
+        TabDragOverlay.Visibility = Visibility.Collapsed;
+        DragTargetHighlight.Visibility = Visibility.Collapsed;
+        DropZoneCard.Visibility = Visibility.Collapsed;
+    }
+
+    private void UpdateTabDragOverlay(WpfPoint windowPoint)
+    {
+        if (!_tabDragActive)
+        {
+            return;
+        }
+
+        var overlayPoint = PointToOverlay(windowPoint);
+        var pane = FindPaneAt(windowPoint);
+        _tabDragTargetPane = pane;
+
+        if (pane is null || FindPaneControl(pane) is not { } paneControl)
+        {
+            _tabDragTargetRect = Rect.Empty;
+            DragTargetHighlight.Visibility = Visibility.Collapsed;
+            DropZoneCard.Visibility = Visibility.Collapsed;
+            DragHintText.Text = "拖到其他标签区域后释放";
+            UpdateDragHintPosition();
+            return;
+        }
+
+        var topLeft = paneControl.TranslatePoint(new WpfPoint(0, 0), TabDragOverlay);
+        var targetRect = new Rect(topLeft, paneControl.RenderSize);
+        _tabDragTargetRect = targetRect;
+
+        Canvas.SetLeft(DragTargetHighlight, targetRect.Left);
+        Canvas.SetTop(DragTargetHighlight, targetRect.Top);
+        DragTargetHighlight.Width = targetRect.Width;
+        DragTargetHighlight.Height = targetRect.Height;
+        DragTargetHighlight.Visibility = Visibility.Visible;
+
+        var cardWidth = DropZoneCard.Width;
+        var cardHeight = DropZoneCard.Height;
+        var cardLeft = Math.Max(targetRect.Left + 8,
+            Math.Min(targetRect.Right - cardWidth - 8, targetRect.Left + (targetRect.Width - cardWidth) / 2));
+        var cardTop = Math.Max(targetRect.Top + 8,
+            Math.Min(targetRect.Bottom - cardHeight - 8, targetRect.Top + (targetRect.Height - cardHeight) / 2));
+        Canvas.SetLeft(DropZoneCard, cardLeft);
+        Canvas.SetTop(DropZoneCard, cardTop);
+        DropZoneCard.Visibility = Visibility.Visible;
+
+        var cardRect = new Rect(cardLeft, cardTop, cardWidth, cardHeight);
+        _tabDragZone = DetermineDropZone(targetRect, cardRect, overlayPoint);
+        UpdateDropZoneVisual(_tabDragZone);
+        DragHintText.Text = _tabDragZone switch
+        {
+            DropZone.Center => "放入标签区：合并为同一组",
+            DropZone.Left => "向左分屏",
+            DropZone.Right => "向右分屏",
+            DropZone.Up => "向上分屏",
+            DropZone.Down => "向下分屏",
+            _ => "拖到目标区域后释放",
+        };
+        UpdateDragHintPosition();
+    }
+
+    private void UpdateDragHintPosition()
+    {
+        var width = DragHintCard.ActualWidth > 0 ? DragHintCard.ActualWidth : 220;
+        Canvas.SetLeft(DragHintCard, Math.Max(8, (TabDragOverlay.ActualWidth - width) / 2));
+        Canvas.SetTop(DragHintCard, 8);
+    }
+
+    private void UpdateDropZoneVisual(DropZone zone)
+    {
+        var normal = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0xFF, 0xFF, 0xFF));
+        var active = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0xD9, 0xE2, 0xFF));
+        var center = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0x4D, 0x6B, 0xFE));
+
+        DropUpButton.Background = zone == DropZone.Up ? active : normal;
+        DropLeftButton.Background = zone == DropZone.Left ? active : normal;
+        DropRightButton.Background = zone == DropZone.Right ? active : normal;
+        DropDownButton.Background = zone == DropZone.Down ? active : normal;
+        DropCenterButton.Background = zone == DropZone.Center ? center : normal;
+    }
+
+    private static DropZone DetermineDropZone(Rect targetRect, Rect cardRect, WpfPoint point)
+    {
+        if (cardRect.Contains(point))
+        {
+            var column = (point.X - cardRect.Left) / cardRect.Width;
+            var row = (point.Y - cardRect.Top) / cardRect.Height;
+            if (column is >= 1.0 / 3.0 and <= 2.0 / 3.0 &&
+                row is >= 1.0 / 3.0 and <= 2.0 / 3.0)
+            {
+                return DropZone.Center;
+            }
+
+            if (row < 1.0 / 3.0) return DropZone.Up;
+            if (row > 2.0 / 3.0) return DropZone.Down;
+            if (column < 1.0 / 3.0) return DropZone.Left;
+            return DropZone.Right;
+        }
+
+        var edge = Math.Max(48, Math.Min(targetRect.Width, targetRect.Height) * 0.22);
+        if (point.X <= targetRect.Left + edge) return DropZone.Left;
+        if (point.X >= targetRect.Right - edge) return DropZone.Right;
+        if (point.Y <= targetRect.Top + edge) return DropZone.Up;
+        if (point.Y >= targetRect.Bottom - edge) return DropZone.Down;
+        return DropZone.Center;
+    }
+
+    private LayoutDocumentPane? FindPaneAt(WpfPoint windowPoint)
+    {
+        var screenPoint = PointToScreen(windowPoint);
+        var dockPoint = DockManager.PointFromScreen(screenPoint);
+        var hit = DockManager.InputHitTest(dockPoint) as DependencyObject;
+        if (FindVisualParent<LayoutDocumentPaneControl>(hit) is { Model: LayoutDocumentPane hitPane })
+        {
+            return hitPane;
+        }
+
+        foreach (var control in FindVisualChildren<LayoutDocumentPaneControl>(DockManager))
+        {
+            var topLeft = control.TranslatePoint(new WpfPoint(0, 0), DockManager);
+            if (new Rect(topLeft, control.RenderSize).Contains(dockPoint) &&
+                control.Model is LayoutDocumentPane pane)
+            {
+                return pane;
+            }
+        }
+
+        return null;
+    }
+
+    private LayoutDocumentPaneControl? FindPaneControl(LayoutDocumentPane pane)
+    {
+        return FindVisualChildren<LayoutDocumentPaneControl>(DockManager)
+            .FirstOrDefault(control => ReferenceEquals(control.Model, pane));
+    }
+
+    private bool IsOverDocumentTabStrip(WpfPoint windowPoint)
+    {
+        var screenPoint = PointToScreen(windowPoint);
+        var dockPoint = DockManager.PointFromScreen(screenPoint);
+        var hit = DockManager.InputHitTest(dockPoint) as DependencyObject;
+        return FindVisualParent<DocumentPaneTabPanel>(hit) is not null;
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject
+    {
+        var current = child;
+        while (current is not null)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is null)
+        {
+            yield break;
+        }
+
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    private static WpfPoint PointToOverlay(MainWindow window, WpfPoint point)
+    {
+        var screenPoint = window.PointToScreen(point);
+        return window.TabDragOverlay.PointFromScreen(screenPoint);
+    }
+
+    private WpfPoint PointToOverlay(WpfPoint point) => PointToOverlay(this, point);
+
+    private void ApplyTabDrop(LayoutDocument doc, LayoutDocumentPane targetPane, DropZone zone)
+    {
+        if (zone == DropZone.Center)
+        {
+            MoveDocumentToPane(doc, targetPane);
+            return;
+        }
+
+        SplitDocumentByMoving(doc, targetPane, zone);
+    }
+
+    private void MoveDocumentToPane(LayoutDocument doc, LayoutDocumentPane targetPane)
+    {
+        if (doc.Parent is not LayoutDocumentPane sourcePane || ReferenceEquals(sourcePane, targetPane))
+        {
+            doc.IsActive = true;
+            doc.IsSelected = true;
+            return;
+        }
+
+        sourcePane.Children.Remove(doc);
+        targetPane.Children.Add(doc);
+        doc.IsActive = true;
+        doc.IsSelected = true;
+        RemoveEmptyPane(sourcePane);
+    }
+
+    private void SplitDocumentByMoving(LayoutDocument doc, LayoutDocumentPane targetPane, DropZone zone)
+    {
+        if (doc.Parent is not LayoutDocumentPane sourcePane ||
+            (ReferenceEquals(sourcePane, targetPane) && sourcePane.Children.Count <= 1) ||
+            targetPane.Parent is not ILayoutContainer parent)
+        {
+            return;
+        }
+
+        sourcePane.Children.Remove(doc);
+
+        var newPane = new LayoutDocumentPane();
+        var group = new LayoutDocumentPaneGroup
+        {
+            Orientation = zone is DropZone.Left or DropZone.Right
+                ? System.Windows.Controls.Orientation.Horizontal
+                : System.Windows.Controls.Orientation.Vertical,
+        };
+
+        parent.ReplaceChild(targetPane, group);
+        if (zone is DropZone.Left or DropZone.Up)
+        {
+            group.Children.Add(newPane);
+            group.Children.Add(targetPane);
+        }
+        else
+        {
+            group.Children.Add(targetPane);
+            group.Children.Add(newPane);
+        }
+
+        newPane.Children.Add(doc);
+        doc.IsActive = true;
+        doc.IsSelected = true;
+
+        if (!ReferenceEquals(sourcePane, targetPane))
+        {
+            RemoveEmptyPane(sourcePane);
+        }
+    }
+
+    private void RemoveEmptyPane(LayoutDocumentPane pane)
+    {
+        if (pane.Children.Count != 0 || pane.Parent is not ILayoutContainer parent)
+        {
+            return;
+        }
+
+        parent.RemoveChild(pane);
+        CollapseEmptyContainer(parent);
+    }
+
+    private static void CollapseEmptyContainer(ILayoutContainer container)
+    {
+        if (container.ChildrenCount == 0 &&
+            container is ILayoutElement emptyElement &&
+            emptyElement.Parent is ILayoutContainer grandParent)
+        {
+            grandParent.RemoveChild(emptyElement);
+            CollapseEmptyContainer(grandParent);
+            return;
+        }
+
+        if (container.ChildrenCount != 1 ||
+            container is not ILayoutElement element ||
+            element.Parent is not ILayoutContainer parent)
+        {
+            return;
+        }
+
+        parent.ReplaceChild(element, container.Children.First());
     }
 
     // ------------------------------------------------------------------
@@ -249,6 +662,7 @@ public partial class MainWindow : Window
             ContentId = $"tunnel:{profile.Id}:{Guid.NewGuid():N}",
             CanClose = true,
             CanFloat = false,
+            CanMove = true,
             Content = view,
         };
 
@@ -292,6 +706,7 @@ public partial class MainWindow : Window
             ContentId = $"direct:{Guid.NewGuid():N}",
             CanClose = true,
             CanFloat = false,
+            CanMove = true,
             Content = view,
         };
 
@@ -1134,7 +1549,12 @@ public partial class MainWindow : Window
 
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == Key.F11)
+        if (_tabDragActive && e.Key == Key.Escape)
+        {
+            EndTabDrag();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F11)
         {
             ToggleFullScreen();
             e.Handled = true;

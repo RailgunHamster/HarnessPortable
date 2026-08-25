@@ -9,7 +9,9 @@
         WindowStartupLocation="CenterScreen"
         Background="#FFFFFF"
         FontFamily="Segoe UI, Microsoft YaHei UI"
-        PreviewKeyDown="Window_PreviewKeyDown">
+        PreviewKeyDown="Window_PreviewKeyDown"
+        PreviewMouseMove="Window_PreviewMouseMove"
+        PreviewMouseLeftButtonUp="Window_PreviewMouseLeftButtonUp">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
@@ -65,7 +67,8 @@
                 <Setter.Value>
                     <DataTemplate>
                         <avalonDock:LayoutDocumentTabItem Model="{Binding}"
-                                                          Style="{DynamicResource ModernDocumentTabItemStyle}"/>
+                                                          Style="{DynamicResource ModernDocumentTabItemStyle}"
+                                                          PreviewMouseLeftButtonDown="DocumentTab_PreviewMouseLeftButtonDown"/>
                     </DataTemplate>
                 </Setter.Value>
             </Setter>
@@ -185,7 +188,7 @@
                             Margin="6,0,0,0" Click="SaveLayout_Click"/>
                     <Button Content="删除" Style="{StaticResource ModernToolbarButton}"
                             Margin="6,0,0,0" Click="DeleteLayout_Click"/>
-                    <TextBlock Text="F11 全屏 · 拖动标签分屏 · 右键标签更多操作" Foreground="#9CA3AF"
+                    <TextBlock Text="F11 全屏 · 拖动标签到其他窗格分屏 · 右键标签更多操作" Foreground="#9CA3AF"
                                FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
@@ -206,34 +209,75 @@
             </StatusBarItem>
         </StatusBar>
 
-        <avalonDock:DockingManager x:Name="DockManager"
-                                   AllowMixedOrientation="True"
-                                   Background="#FFFFFF"
-                                   DocumentPaneControlStyle="{StaticResource ModernDocumentPaneControlStyle}">
-            <avalonDock:DockingManager.Theme>
-                <avalonDock:GenericTheme/>
-            </avalonDock:DockingManager.Theme>
-            <avalonDock:DockingManager.DocumentHeaderTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center" FontSize="12"/>
-                </DataTemplate>
-            </avalonDock:DockingManager.DocumentHeaderTemplate>
-            <avalonDock:DockingManager.DocumentContextMenu>
-                <ContextMenu Opened="DocumentContextMenu_Opened">
-                    <MenuItem Header="复制标签" Click="DuplicateTab_Click"/>
-                    <MenuItem Header="重命名" Click="RenameTab_Click"/>
-                    <Separator/>
-                    <MenuItem Header="向右拆分" Click="SplitRight_Click"/>
-                    <MenuItem Header="向左拆分" Click="SplitLeft_Click"/>
-                    <MenuItem Header="向上拆分" Click="SplitUp_Click"/>
-                    <MenuItem Header="向下拆分" Click="SplitDown_Click"/>
-                    <Separator/>
-                    <MenuItem x:Name="SwitchToMenu" Header="切换为…"/>
-                    <Separator/>
-                    <MenuItem Header="关闭标签" Click="CloseTab_Click"/>
-                </ContextMenu>
-            </avalonDock:DockingManager.DocumentContextMenu>
-        </avalonDock:DockingManager>
+        <Grid>
+            <avalonDock:DockingManager x:Name="DockManager"
+                                       AllowMixedOrientation="True"
+                                       Background="#FFFFFF"
+                                       DocumentPaneControlStyle="{StaticResource ModernDocumentPaneControlStyle}">
+                <avalonDock:DockingManager.Theme>
+                    <avalonDock:GenericTheme/>
+                </avalonDock:DockingManager.Theme>
+                <avalonDock:DockingManager.DocumentHeaderTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" FontSize="12"/>
+                    </DataTemplate>
+                </avalonDock:DockingManager.DocumentHeaderTemplate>
+                <avalonDock:DockingManager.DocumentContextMenu>
+                    <ContextMenu Opened="DocumentContextMenu_Opened">
+                        <MenuItem Header="复制标签" Click="DuplicateTab_Click"/>
+                        <MenuItem Header="重命名" Click="RenameTab_Click"/>
+                        <Separator/>
+                        <MenuItem Header="向右拆分" Click="SplitRight_Click"/>
+                        <MenuItem Header="向左拆分" Click="SplitLeft_Click"/>
+                        <MenuItem Header="向上拆分" Click="SplitUp_Click"/>
+                        <MenuItem Header="向下拆分" Click="SplitDown_Click"/>
+                        <Separator/>
+                        <MenuItem x:Name="SwitchToMenu" Header="切换为…"/>
+                        <Separator/>
+                        <MenuItem Header="关闭标签" Click="CloseTab_Click"/>
+                    </ContextMenu>
+                </avalonDock:DockingManager.DocumentContextMenu>
+            </avalonDock:DockingManager>
+
+            <Canvas x:Name="TabDragOverlay" Visibility="Collapsed" IsHitTestVisible="False"
+                    Panel.ZIndex="20">
+                <Border x:Name="DragTargetHighlight"
+                        Background="#164D6BFE" BorderBrush="#4D6BFE" BorderThickness="2"
+                        CornerRadius="10" Visibility="Collapsed"/>
+                <Border x:Name="DragHintCard" Background="#F7F9FF" BorderBrush="#C7D2FE"
+                        BorderThickness="1" CornerRadius="8" Padding="12,7"
+                        HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <TextBlock x:Name="DragHintText" Text="拖到目标区域后释放"
+                               Foreground="#334155" FontSize="12"/>
+                </Border>
+                <Border x:Name="DropZoneCard" Width="238" Height="174"
+                        Background="#F8FAFF" BorderBrush="#A5B4FC" BorderThickness="1"
+                        CornerRadius="12" Padding="10" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="DropUpButton" Grid.Row="0" Grid.Column="1" Content="↑ 上"
+                                Style="{StaticResource ModernToolbarButton}"/>
+                        <Button x:Name="DropLeftButton" Grid.Row="1" Grid.Column="0" Content="← 左"
+                                Style="{StaticResource ModernToolbarButton}"/>
+                        <Button x:Name="DropCenterButton" Grid.Row="1" Grid.Column="1" Content="⊙ 标签"
+                                Style="{StaticResource ModernPrimaryButton}"/>
+                        <Button x:Name="DropRightButton" Grid.Row="1" Grid.Column="2" Content="右 →"
+                                Style="{StaticResource ModernToolbarButton}"/>
+                        <Button x:Name="DropDownButton" Grid.Row="2" Grid.Column="1" Content="↓ 下"
+                                Style="{StaticResource ModernToolbarButton}"/>
+                    </Grid>
+                </Border>
+            </Canvas>
+        </Grid>
     </DockPanel>
 </Window>
