@@ -9,8 +9,14 @@ public partial class TunnelEditorWindow : Window
 {
     public sealed record EditorResult(TunnelProfile Profile, string? Password);
 
+    private sealed record HostSuggestion(
+        string Title,
+        string Detail,
+        string Value,
+        SshConfigHost? Config);
+
     private readonly TunnelProfile? _initial;
-    private readonly ObservableCollection<string> _lanMachines = [];
+    private readonly ObservableCollection<HostSuggestion> _hostSuggestions = [];
     private CancellationTokenSource? _discoveryCts;
 
     public EditorResult? Result { get; private set; }
@@ -19,7 +25,7 @@ public partial class TunnelEditorWindow : Window
     {
         _initial = initial;
         InitializeComponent();
-        HostBox.ItemsSource = _lanMachines;
+        HostBox.ItemsSource = _hostSuggestions;
         Closed += (_, _) => _discoveryCts?.Cancel();
 
         if (initial is not null)
@@ -38,16 +44,16 @@ public partial class TunnelEditorWindow : Window
 
     private async void HostBox_DropDownOpened(object sender, EventArgs e)
     {
-        await LoadLanMachinesAsync(force: false);
+        await LoadHostSuggestionsAsync(force: false);
     }
 
     private async void RefreshMachines_Click(object sender, RoutedEventArgs e)
     {
-        await LoadLanMachinesAsync(force: true);
+        await LoadHostSuggestionsAsync(force: true);
         HostBox.IsDropDownOpen = true;
     }
 
-    private async Task LoadLanMachinesAsync(bool force)
+    private async Task LoadHostSuggestionsAsync(bool force)
     {
         if (force)
         {
@@ -61,21 +67,40 @@ public partial class TunnelEditorWindow : Window
 
         try
         {
-            var machines = await HostResolver.DiscoverLanMachinesAsync(cts.Token);
+            var configHosts = await Task.Run(SshConfigReader.LoadDefault, cts.Token);
             if (cts.IsCancellationRequested)
             {
                 return;
             }
 
             var text = HostBox.Text;
-            _lanMachines.Clear();
-            foreach (var machine in machines)
+            _hostSuggestions.Clear();
+            foreach (var configHost in configHosts)
             {
-                _lanMachines.Add(machine.Name);
+                _hostSuggestions.Add(new HostSuggestion(
+                    configHost.Alias,
+                    $"SSH 配置 · {configHost.ConnectionLabel}",
+                    configHost.HostName,
+                    configHost));
             }
 
             HostBox.SelectedIndex = -1;
             HostBox.Text = text;
+
+            var machines = await HostResolver.DiscoverLanMachinesAsync(cts.Token);
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            foreach (var machine in machines)
+            {
+                _hostSuggestions.Add(new HostSuggestion(
+                    machine.Name,
+                    string.IsNullOrWhiteSpace(machine.Ip) ? "局域网发现" : $"局域网 · {machine.Ip}",
+                    machine.Name,
+                    null));
+            }
         }
         catch (OperationCanceledException)
         {
@@ -94,10 +119,24 @@ public partial class TunnelEditorWindow : Window
 
     private void HostBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (HostBox.SelectedItem is string name)
+        if (HostBox.SelectedItem is not HostSuggestion suggestion)
         {
-            HostBox.Text = name;
+            return;
         }
+
+        if (suggestion.Config is { } config)
+        {
+            NameBox.Text = config.Alias;
+            HostBox.Text = config.HostName;
+            SshPortBox.Text = config.Port.ToString();
+            UserBox.Text = config.User ?? "";
+        }
+        else
+        {
+            HostBox.Text = suggestion.Value;
+        }
+
+        HostBox.SelectedIndex = -1;
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)

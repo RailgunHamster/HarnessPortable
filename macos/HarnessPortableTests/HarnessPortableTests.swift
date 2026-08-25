@@ -102,4 +102,53 @@ final class HarnessPortableTests: XCTestCase {
         XCTAssertTrue(HostResolver.isIPLiteral("127.0.0.1"))
         XCTAssertFalse(HostResolver.isIPLiteral("macair"))
     }
+
+    func testSSHConfigParserReadsAliasesAndIgnoresPatterns() {
+        let text = """
+        Host tcloud
+          HostName 124.220.21.113
+          User root
+          Port 22
+        Host nuc
+          HostName nuc11atkc4.tail603dd.ts.net
+          User wangyuxin
+          Port 4322
+        Host *
+          ServerAliveInterval 60
+        Host *.example
+          HostName ignored.example
+        """
+
+        let hosts = SSHConfigReader.parse(text)
+
+        XCTAssertEqual(hosts.map(\.alias), ["tcloud", "nuc"])
+        XCTAssertEqual(hosts[0].hostName, "124.220.21.113")
+        XCTAssertEqual(hosts[0].user, "root")
+        XCTAssertEqual(hosts[0].port, 22)
+        XCTAssertEqual(hosts[1].connectionLabel, "wangyuxin@nuc11atkc4.tail603dd.ts.net:4322")
+    }
+
+    func testSSHConfigParserUsesFirstMatchingValueAndDefaults() {
+        let hosts = SSHConfigReader.parse("""
+        Host invalid
+          Port not-a-port
+        Host *
+          User global
+          Port 2200
+        Host target
+          HostName target.internal
+          User local
+          Port 70000
+        Host bare
+        """)
+
+        XCTAssertEqual(hosts.map(\.alias), ["target", "bare"])
+        guard hosts.count == 2 else { return }
+        XCTAssertEqual(hosts[0].hostName, "target.internal")
+        XCTAssertEqual(hosts[0].user, "global")
+        XCTAssertEqual(hosts[0].port, 2200)
+        XCTAssertEqual(hosts[1].hostName, "bare")
+        XCTAssertEqual(hosts[1].user, "global")
+        XCTAssertEqual(hosts[1].port, 2200)
+    }
 }

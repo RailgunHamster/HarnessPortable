@@ -14,6 +14,7 @@
 - **多隧道并发**：同一进程可同时连接多个服务器，每个隧道独立重连/停止
 - **TOFU 主机密钥**：首次连接记住服务器公钥；密钥变化直接拒绝，防中间人
 - **智能主机名解析**：IP / 域名 / Tailscale MagicDNS / NetBIOS 名
+- **SSH 配置选择**：Windows/macOS 添加隧道时可从 `~/.ssh/config` 选择别名，自动填充 HostName / User / Port
 - **密码安全存储**：
   - Android：Android Keystore
   - Windows：DPAPI

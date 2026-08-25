@@ -268,6 +268,8 @@ struct ProfileEditorView: View {
     @State private var remoteHost: String
     @State private var remotePort: String
     @State private var localPort: String
+    @State private var sshConfigHosts: [SSHConfigHost] = []
+    @State private var selectedSSHConfigAlias = ""
     @State private var password = ""
     @State private var removeStoredPassword = false
     @State private var keychainError: String?
@@ -291,7 +293,41 @@ struct ProfileEditorView: View {
                 .font(.title2.weight(.semibold))
             Form {
                 TextField("名称", text: $name)
-                TextField("SSH 主机", text: $sshHost)
+                HStack(spacing: 8) {
+                    TextField("SSH 主机", text: $sshHost)
+                    Menu {
+                        if sshConfigHosts.isEmpty {
+                            Text("未找到 ~/.ssh/config")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Button("清除配置选择") {
+                                selectedSSHConfigAlias = ""
+                            }
+                            Divider()
+                            ForEach(sshConfigHosts) { configHost in
+                                Button("\(configHost.alias) · \(configHost.connectionLabel)") {
+                                    applySSHConfig(configHost)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(
+                            selectedSSHConfigAlias.isEmpty ? "选择 SSH 配置" : selectedSSHConfigAlias,
+                            systemImage: "terminal"
+                        )
+                    }
+                    .help("从 ~/.ssh/config 选择主机")
+                    Button {
+                        reloadSSHConfig()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("重新读取 ~/.ssh/config")
+                }
+                Text("选择配置后会填入 HostName、User 和 Port；这些字段仍可手动修改。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 TextField("SSH 端口", text: $sshPort)
                 TextField("用户名", text: $user)
                 TextField("远端主机", text: $remoteHost)
@@ -348,6 +384,7 @@ struct ProfileEditorView: View {
         }
         .padding(24)
         .frame(width: 460)
+        .onAppear { reloadSSHConfig() }
         .alert("无法保存密码", isPresented: keychainErrorPresented) {
             Button("确定", role: .cancel) { keychainError = nil }
         } message: {
@@ -366,6 +403,21 @@ struct ProfileEditorView: View {
                 if !isPresented { keychainError = nil }
             }
         )
+    }
+
+    private func reloadSSHConfig() {
+        sshConfigHosts = SSHConfigReader.loadDefault()
+        if !sshConfigHosts.contains(where: { $0.alias.caseInsensitiveCompare(selectedSSHConfigAlias) == .orderedSame }) {
+            selectedSSHConfigAlias = ""
+        }
+    }
+
+    private func applySSHConfig(_ configHost: SSHConfigHost) {
+        selectedSSHConfigAlias = configHost.alias
+        name = configHost.alias
+        sshHost = configHost.hostName
+        sshPort = String(configHost.port)
+        user = configHost.user ?? ""
     }
 
     private var canSave: Bool {
