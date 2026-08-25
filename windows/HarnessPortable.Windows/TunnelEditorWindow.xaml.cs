@@ -22,7 +22,7 @@ public partial class TunnelEditorWindow : Window
 
     private readonly TunnelProfile? _initial;
     private readonly ObservableCollection<HostSuggestion> _hostSuggestions = [];
-    private CancellationTokenSource? _discoveryCts;
+    private CancellationTokenSource? _configLoadCts;
     private string? _sshConfigPath;
 
     public EditorResult? Result { get; private set; }
@@ -34,7 +34,7 @@ public partial class TunnelEditorWindow : Window
         InitializeComponent();
         HostBox.ItemsSource = _hostSuggestions;
         UpdateSshConfigPathText(SshConfigReader.ResolvePath(_sshConfigPath));
-        Closed += (_, _) => _discoveryCts?.Cancel();
+        Closed += (_, _) => _configLoadCts?.Cancel();
 
         if (initial is not null)
         {
@@ -52,12 +52,12 @@ public partial class TunnelEditorWindow : Window
 
     private async void HostBox_DropDownOpened(object sender, EventArgs e)
     {
-        await LoadHostSuggestionsAsync(force: false);
+        await LoadSshConfigAsync();
     }
 
-    private async void RefreshMachines_Click(object sender, RoutedEventArgs e)
+    private async void RefreshSshConfig_Click(object sender, RoutedEventArgs e)
     {
-        await LoadHostSuggestionsAsync(force: true);
+        await LoadSshConfigAsync();
         HostBox.IsDropDownOpen = true;
     }
 
@@ -84,21 +84,16 @@ public partial class TunnelEditorWindow : Window
         }
 
         _sshConfigPath = dialog.FileName;
-        await LoadHostSuggestionsAsync(force: true);
+        await LoadSshConfigAsync();
         HostBox.IsDropDownOpen = true;
     }
 
-    private async Task LoadHostSuggestionsAsync(bool force)
+    private async Task LoadSshConfigAsync()
     {
-        if (force)
-        {
-            HostResolver.ResetLanMachineDiscovery();
-        }
-
-        _discoveryCts?.Cancel();
-        _discoveryCts?.Dispose();
+        _configLoadCts?.Cancel();
+        _configLoadCts?.Dispose();
         var cts = new CancellationTokenSource();
-        _discoveryCts = cts;
+        _configLoadCts = cts;
         var selectedConfigPath = _sshConfigPath;
 
         try
@@ -124,20 +119,6 @@ public partial class TunnelEditorWindow : Window
             HostBox.SelectedIndex = -1;
             HostBox.Text = text;
 
-            var machines = await HostResolver.DiscoverLanMachinesAsync(cts.Token);
-            if (cts.IsCancellationRequested)
-            {
-                return;
-            }
-
-            foreach (var machine in machines)
-            {
-                _hostSuggestions.Add(new HostSuggestion(
-                    machine.Name,
-                    string.IsNullOrWhiteSpace(machine.Ip) ? "局域网发现" : $"局域网 · {machine.Ip}",
-                    machine.Name,
-                    null));
-            }
         }
         catch (OperationCanceledException)
         {
@@ -145,9 +126,9 @@ public partial class TunnelEditorWindow : Window
         }
         finally
         {
-            if (ReferenceEquals(_discoveryCts, cts))
+            if (ReferenceEquals(_configLoadCts, cts))
             {
-                _discoveryCts = null;
+                _configLoadCts = null;
             }
 
             cts.Dispose();
@@ -168,19 +149,20 @@ public partial class TunnelEditorWindow : Window
             return;
         }
 
+        var hostValue = suggestion.Value;
         if (suggestion.Config is { } config)
         {
             NameBox.Text = config.Alias;
-            HostBox.Text = config.HostName;
+            hostValue = config.HostName;
             SshPortBox.Text = config.Port.ToString();
             UserBox.Text = config.User ?? "";
         }
-        else
-        {
-            HostBox.Text = suggestion.Value;
-        }
 
-        HostBox.SelectedIndex = -1;
+        // Keep the selected item while WPF finishes the ComboBox selection
+        // transaction; clearing SelectedIndex here would restore the old text.
+        Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.DataBind,
+            new Action(() => HostBox.Text = hostValue));
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)

@@ -26,11 +26,11 @@
                             Click="ChooseSshConfig_Click"/>
                     <Button DockPanel.Dock="Right" Content="↻" Padding="9,6" Margin="8,0,0,0"
                             Style="{StaticResource ModernToolbarButton}"
-                            ToolTip="刷新 SSH 配置和局域网机器"
-                            Click="RefreshMachines_Click"/>
+                            ToolTip="刷新 SSH 配置"
+                            Click="RefreshSshConfig_Click"/>
                     <ComboBox x:Name="HostBox"
                               Style="{StaticResource ModernEditableComboBox}"
-                              ToolTip="输入 IP、机器名或域名；下拉可选择 SSH 配置别名或局域网机器"
+                              ToolTip="输入 IP、机器名或域名；下拉可选择 SSH 配置别名"
                               DropDownOpened="HostBox_DropDownOpened"
                               SelectionChanged="HostBox_SelectionChanged">
                         <ComboBox.ItemTemplate>
