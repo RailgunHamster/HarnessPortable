@@ -10,6 +10,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import com.jcraft.jsch.HostKey
 import com.jcraft.jsch.HostKeyRepository
@@ -41,6 +43,15 @@ class SshTunnelService : Service() {
         private const val NO_PW_MSG = "未保存密码"
         private const val TAG = "HarnessTunnel"
 
+        // Keep sending inexpensive SSH keepalives, but tolerate a full ten
+        // minutes of unanswered probes while the UI is in the background.
+        // The extra four probes are scheduling margin around the ten-minute
+        // wake-lock window.
+        private const val SERVER_ALIVE_INTERVAL_MS = 15_000
+        private const val FOREGROUND_SERVER_ALIVE_COUNT_MAX = 4
+        private const val BACKGROUND_SERVER_ALIVE_COUNT_MAX = 44
+        private const val BACKGROUND_GRACE_MS = 10 * 60 * 1_000L
+
         fun start(ctx: Context, profileId: String) {
             val intent = Intent(ctx, SshTunnelService::class.java)
                 .setAction(ACTION_START)
@@ -58,10 +69,26 @@ class SshTunnelService : Service() {
                 // Androids; the OS will tear the tunnel down on its own then.
             }
         }
+
+        fun activeProfileId(ctx: Context): String? =
+            ctx.getSharedPreferences(SVC_PREFS, Context.MODE_PRIVATE)
+                .getString(PREF_ACTIVE, null)
     }
 
     private var profile: TunnelProfile? = null
+    @Volatile
     private var session: Session? = null
+
+    private val sessionPolicyLock = Any()
+
+    private var backgroundWakeLock: PowerManager.WakeLock? = null
+
+    @Volatile
+    private var backgroundSinceElapsed = 0L
+
+    private val visibilityListener: (Boolean) -> Unit = { visible ->
+        applyVisibilityPolicy(visible)
+    }
 
     @Volatile
     private var generation = 0
@@ -70,6 +97,12 @@ class SshTunnelService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        backgroundWakeLock =
+            (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "$packageName:ssh-background-grace"
+            ).apply { setReferenceCounted(false) }
+        AppVisibility.addListener(visibilityListener)
         if (Build.VERSION.SDK_INT >= 26) {
             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(
@@ -93,6 +126,7 @@ class SshTunnelService : Service() {
                 profile = p
                 svcPrefs().edit().putString(PREF_ACTIVE, p.id).apply()
                 enterForeground("正在连接 ${p.name}…")
+                applyVisibilityPolicy(AppVisibility.isVisible)
                 startWorker(p)
             }
 
@@ -112,6 +146,7 @@ class SshTunnelService : Service() {
                 }
                 profile = p
                 enterForeground("正在恢复 ${p.name}…")
+                applyVisibilityPolicy(AppVisibility.isVisible)
                 startWorker(p)
             }
         }
@@ -120,9 +155,11 @@ class SshTunnelService : Service() {
 
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
+        AppVisibility.removeListener(visibilityListener)
         generation++
         try { session?.disconnect() } catch (_: Exception) {}
         session = null
+        releaseBackgroundWakeLock()
         super.onDestroy()
     }
 
@@ -175,6 +212,9 @@ class SshTunnelService : Service() {
         generation++
         try { session?.disconnect() } catch (_: Exception) {}
         session = null
+        profile = null
+        backgroundSinceElapsed = 0L
+        releaseBackgroundWakeLock()
         if (announce) {
             TunnelState.set(TunnelState.Info(status = TunnelState.Status.STOPPED))
         }
@@ -216,12 +256,15 @@ class SshTunnelService : Service() {
                         }
                     })
                 }
-                // Detect dead links within ~60s and let the loop reconnect.
-                sess.setServerAliveInterval(15_000)
-                sess.setServerAliveCountMax(4)
-
+                // In the foreground, detect a dead link within about a minute.
+                // In the background, allow the requested ten-minute grace
+                // window before JSch tears down an otherwise healthy session.
                 s = sess
-                session = sess
+                synchronized(sessionPolicyLock) {
+                    session = sess
+                    sess.setServerAliveInterval(SERVER_ALIVE_INTERVAL_MS)
+                    sess.setServerAliveCountMax(serverAliveCountMax())
+                }
                 stage("ssh connect")
                 sess.connect(20_000)
                 stage("setting up forward")
@@ -335,10 +378,65 @@ class SshTunnelService : Service() {
 
     // ----- foreground plumbing -----
 
+    private fun serverAliveCountMax(): Int =
+        if (AppVisibility.isVisible) {
+            FOREGROUND_SERVER_ALIVE_COUNT_MAX
+        } else {
+            BACKGROUND_SERVER_ALIVE_COUNT_MAX
+        }
+
+    private fun applyVisibilityPolicy(visible: Boolean) {
+        synchronized(sessionPolicyLock) {
+            session?.setServerAliveCountMax(
+                if (visible) {
+                    FOREGROUND_SERVER_ALIVE_COUNT_MAX
+                } else {
+                    BACKGROUND_SERVER_ALIVE_COUNT_MAX
+                }
+            )
+        }
+
+        if (visible || profile == null) {
+            backgroundSinceElapsed = 0L
+            releaseBackgroundWakeLock()
+            return
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        val since = backgroundSinceElapsed.takeIf { it != 0L } ?: now.also {
+            backgroundSinceElapsed = it
+        }
+        val remaining = BACKGROUND_GRACE_MS - (now - since)
+        val lock = backgroundWakeLock ?: return
+        if (remaining > 0L && !lock.isHeld) {
+            try {
+                lock.acquire(remaining)
+                Log.d(TAG, "background grace: wake lock held for ${remaining}ms")
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "background grace: unable to acquire wake lock", e)
+            }
+        }
+    }
+
+    private fun releaseBackgroundWakeLock() {
+        val lock = backgroundWakeLock ?: return
+        if (lock.isHeld) {
+            try {
+                lock.release()
+            } catch (_: RuntimeException) {
+                // A timed wake lock may have expired between isHeld and release.
+            }
+        }
+    }
+
     private fun enterForeground(text: String) {
         val n = buildNotification(text)
         if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            startForeground(
+                NOTIFICATION_ID,
+                n,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            )
         } else {
             startForeground(NOTIFICATION_ID, n)
         }

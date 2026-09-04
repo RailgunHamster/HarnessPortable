@@ -75,6 +75,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        AppVisibility.setVisible(true)
+    }
+
+    override fun onStop() {
+        AppVisibility.setVisible(false)
+        super.onStop()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) applyImmersive()
@@ -146,7 +156,18 @@ fun AppRoot() {
         mutableStateOf(OrientationMode.fromStorage(prefs.getString(KEY_ORIENTATION, null)))
     }
     val tunnelInfo by TunnelState.flow.collectAsState()
-    var target by remember { mutableStateOf<ActiveTarget?>(null) }
+    // A foreground tunnel outlives the Activity. If Android reclaims and later
+    // recreates the UI while the app is switched away, reopen that tunnel
+    // instead of making the user select it again.
+    var target by remember {
+        mutableStateOf<ActiveTarget?>(
+            SshTunnelService.activeProfileId(ctx)?.let { activeId ->
+                tunnels.firstOrNull { it.id == activeId }?.let {
+                    ActiveTarget.Tunnel(it.id, it.name)
+                }
+            }
+        )
+    }
     var pending by remember { mutableStateOf<TunnelProfile?>(null) }
     var passwordFor by remember { mutableStateOf<TunnelProfile?>(null) }
 
