@@ -17,8 +17,18 @@ data class TunnelProfile(
     val user: String,
     val remoteHost: String = "127.0.0.1",
     val remotePort: Int = 3080,
-    val localPort: Int = 3080
-)
+    val localPort: Int = 3080,
+    /** How the web login token is obtained; see [AUTH_MODE_NSSM]/[AUTH_MODE_MANUAL]. */
+    val authMode: String = AUTH_MODE_NSSM
+) {
+    companion object {
+        /** On connect, locate the dsh web launch-token URL via NSSM on the server (default). */
+        const val AUTH_MODE_NSSM = "nssm"
+
+        /** Let the user paste the token URL when the page rejects (fallback: 401 dialog). */
+        const val AUTH_MODE_MANUAL = "manual"
+    }
+}
 
 object ProfileStore {
 
@@ -48,7 +58,9 @@ object ProfileStore {
                     user = o.optString("user"),
                     remoteHost = o.optString("remote_host", "127.0.0.1"),
                     remotePort = o.optInt("remote_port", 3080),
-                    localPort = o.optInt("local_port", 3080)
+                    localPort = o.optInt("local_port", 3080),
+                    authMode = o.optString("auth_mode", TunnelProfile.AUTH_MODE_NSSM)
+                        .ifBlank { TunnelProfile.AUTH_MODE_NSSM }
                 )
             }.toMutableList()
         } catch (e: Exception) {
@@ -69,6 +81,7 @@ object ProfileStore {
                     .put("remote_host", p.remoteHost)
                     .put("remote_port", p.remotePort)
                     .put("local_port", p.localPort)
+                    .put("auth_mode", p.authMode)
             )
         }
         prefs(ctx).edit().putString(KEY_TUNNELS, arr.toString()).apply()

@@ -26,6 +26,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -422,6 +423,12 @@ private fun TunnelEditorDialog(
     var remoteHost by remember { mutableStateOf(initial?.remoteHost ?: "127.0.0.1") }
     var remotePort by remember { mutableStateOf((initial?.remotePort ?: 3080).toString()) }
     var localPort by remember { mutableStateOf((initial?.localPort ?: 3080).toString()) }
+    var authMode by remember {
+        mutableStateOf(
+            if (initial?.authMode == TunnelProfile.AUTH_MODE_MANUAL)
+                TunnelProfile.AUTH_MODE_MANUAL else TunnelProfile.AUTH_MODE_NSSM
+        )
+    }
 
     fun portOr(v: String, def: Int) = v.trim().toIntOrNull() ?: def
     val valid = host.isNotBlank() && user.isNotBlank() &&
@@ -477,11 +484,26 @@ private fun TunnelEditorDialog(
                     localPort, { localPort = it }, label = { Text("本地端口") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
+                Text("Web 登录方式", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = authMode == TunnelProfile.AUTH_MODE_NSSM,
+                        onClick = { authMode = TunnelProfile.AUTH_MODE_NSSM },
+                        label = { Text("NSSM 自动") }
+                    )
+                    FilterChip(
+                        selected = authMode == TunnelProfile.AUTH_MODE_MANUAL,
+                        onClick = { authMode = TunnelProfile.AUTH_MODE_MANUAL },
+                        label = { Text("手动输入") }
+                    )
+                }
                 Text(
                     "等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器\n" +
                             "服务器可填 IP / 域名 / NetBIOS 名（如 winserver）：局域网自动发现；" +
                             "装有 Tailscale 并开启 MagicDNS 时自动解析到 Tailscale IP。\n" +
-                            "密码用 Android Keystore 加密存储。",
+                            "密码用 Android Keystore 加密存储。\n" +
+                            "NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志并自动登录；" +
+                            "手动方式：页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -500,7 +522,8 @@ private fun TunnelEditorDialog(
                             user = user.trim(),
                             remoteHost = remoteHost.trim(),
                             remotePort = portOr(remotePort, 3080),
-                            localPort = portOr(localPort, 3080)
+                            localPort = portOr(localPort, 3080),
+                            authMode = authMode
                         ),
                         pass.takeIf { it.isNotEmpty() }
                     )

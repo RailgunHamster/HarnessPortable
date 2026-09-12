@@ -26,6 +26,7 @@ enum SplitDirection: Equatable {
 final class WorkspaceStore: ObservableObject {
     @Published private(set) var root: LayoutNode
     @Published private(set) var activePaneID: UUID
+    @Published private(set) var tabCount: Int
     @Published var renameTarget: UUID?
     @Published var renameText = ""
 
@@ -36,6 +37,7 @@ final class WorkspaceStore: ObservableObject {
         let pane = LayoutNode.pane([management])
         root = pane
         activePaneID = pane.id
+        tabCount = 1
         selectedTabIDs[pane.id] = management.id
     }
 
@@ -45,6 +47,10 @@ final class WorkspaceStore: ObservableObject {
 
     func tabs(in paneID: UUID) -> [WorkspaceTab] {
         node(paneID)?.tabs ?? []
+    }
+
+    func selectedTabID(in paneID: UUID) -> UUID? {
+        selectedTabIDs[paneID]
     }
 
     func selectedTab(in paneID: UUID) -> WorkspaceTab? {
@@ -102,6 +108,7 @@ final class WorkspaceStore: ObservableObject {
         prune(&updated)
         root = updated
         normalizeSelections()
+        refreshTabCount()
         return ids
     }
 
@@ -137,6 +144,7 @@ final class WorkspaceStore: ObservableObject {
         prune(&updated)
         root = updated
         normalizeSelections()
+        refreshTabCount()
     }
 
     func replaceTab(_ tabID: UUID, with replacement: WorkspaceTab) {
@@ -155,6 +163,7 @@ final class WorkspaceStore: ObservableObject {
         append(tab, to: paneID)
         activePaneID = paneID
         selectedTabIDs[paneID] = tab.id
+        refreshTabCount()
     }
 
     @discardableResult
@@ -177,6 +186,7 @@ final class WorkspaceStore: ObservableObject {
         root = updated
         if let first = newPane.tabs.first { selectedTabIDs[newPaneID] = first.id }
         if duplicateTabID != nil { activePaneID = newPaneID }
+        refreshTabCount()
         return newPaneID
     }
 
@@ -188,6 +198,7 @@ final class WorkspaceStore: ObservableObject {
         append(moved, to: newPaneID)
         activePaneID = newPaneID
         selectedTabIDs[newPaneID] = moved.id
+        refreshTabCount()
         return newPaneID
     }
 
@@ -240,12 +251,14 @@ final class WorkspaceStore: ObservableObject {
         selectedTabIDs = [:]
         initializeSelections(root)
         activePaneID = firstPaneID(root) ?? root.id
+        refreshTabCount()
     }
 
     private func append(_ tab: WorkspaceTab, to paneID: UUID) {
         _ = append(tab, to: paneID, root: &root)
         activePaneID = paneID
         selectedTabIDs[paneID] = tab.id
+        refreshTabCount()
     }
 
     @discardableResult
@@ -269,6 +282,14 @@ final class WorkspaceStore: ObservableObject {
         }
     }
 
+    private func refreshTabCount() {
+        tabCount = countTabs(root)
+    }
+
+    private func countTabs(_ node: LayoutNode) -> Int {
+        node.tabs.count + node.children.reduce(0) { $0 + countTabs($1) }
+    }
+
     private func removeTabs(_ node: inout LayoutNode, ids: Set<UUID>) {
         node.tabs.removeAll { ids.contains($0.id) }
         for index in node.children.indices {
@@ -286,6 +307,7 @@ final class WorkspaceStore: ObservableObject {
             guard let index = node.tabs.firstIndex(where: { $0.id == tabID }) else { return }
             body(&node.tabs[index])
         }
+        refreshTabCount()
     }
 
     @discardableResult

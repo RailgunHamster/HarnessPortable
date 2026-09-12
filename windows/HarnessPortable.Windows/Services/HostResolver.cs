@@ -110,7 +110,11 @@ public static class HostResolver
         IPAddress[] addresses;
         try
         {
-            addresses = await Dns.GetHostAddressesAsync(key, token).ConfigureAwait(false);
+            // Bound the resolution: after sleep/resume or a network switch
+            // the OS resolver can wedge and stall callers for minutes.
+            using var dnsTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+            dnsTimeout.CancelAfter(TimeSpan.FromSeconds(15));
+            addresses = await Dns.GetHostAddressesAsync(key, dnsTimeout.Token).ConfigureAwait(false);
         }
         catch
         {

@@ -34,7 +34,7 @@ struct WorkspaceView: View {
 
             WorkspaceNodeView(
                 workspace: workspace,
-                nodeID: workspace.root.id,
+                node: workspace.root,
                 services: services,
                 webSessions: webSessions,
                 onConnect: connect,
@@ -54,13 +54,12 @@ struct WorkspaceView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
-            startWorkspaceIfNeeded()
             installKeyMonitor()
+            DispatchQueue.main.async {
+                startWorkspaceIfNeeded()
+            }
         }
         .onDisappear { removeKeyMonitor() }
-        .onReceive(services.tunnels.$states) { states in
-            handleTunnelStates(states)
-        }
         .sheet(item: $passwordProfile, onDismiss: { passwordRequestID = UUID() }) { profile in
             let requestID = passwordRequestID
             PasswordPromptView(profile: profile) { password in
@@ -166,7 +165,7 @@ struct WorkspaceView: View {
                 }
             }
             Spacer()
-            Text("\(workspace.allTabs().count) 个标签")
+            Text("\(workspace.tabCount) 个标签")
                 .foregroundStyle(.secondary)
         }
         .font(.caption)
@@ -180,7 +179,9 @@ struct WorkspaceView: View {
             set: { name in
                 selectedLayoutName = name
                 guard let name, let layout = services.layouts.named(name) else { return }
-                apply(layout)
+                DispatchQueue.main.async {
+                    apply(layout)
+                }
             }
         )
     }
@@ -225,37 +226,6 @@ struct WorkspaceView: View {
         }
     }
 
-    private func handleTunnelStates(_ states: [String: TunnelInfo]) {
-        let workspace = workspace
-        let webSessions = webSessions
-        let tunnels = services.tunnels
-        // SwiftUI may still be reading the workspace for this update; defer mutations.
-        for state in states.values {
-            guard let profileID = state.profileID else { continue }
-            let generation = state.generation
-            switch state.status {
-            case .connected:
-                DispatchQueue.main.async {
-                    let current = tunnels.state(for: profileID)
-                    guard current.status == .connected, current.generation == generation else { return }
-                    workspace.ensureTunnelTab(profileID: profileID, focus: false)
-                }
-            case .stopped:
-                DispatchQueue.main.async {
-                    let current = tunnels.state(for: profileID)
-                    guard current.status == .stopped, current.generation == generation else { return }
-                    let closed = workspace.closeTunnelTabs(profileID: profileID)
-                    guard !closed.isEmpty else { return }
-                    DispatchQueue.main.async {
-                        closed.forEach { webSessions.remove(tabID: $0) }
-                    }
-                }
-            case .idle, .connecting, .retrying, .failed:
-                break
-            }
-        }
-    }
-
     private func requestPassword(for profile: TunnelProfile) {
         passwordRequestID = UUID()
         passwordProfile = profile
@@ -263,14 +233,11 @@ struct WorkspaceView: View {
 
     private func connect(_ profile: TunnelProfile) {
         if services.keychain.hasPassword(for: profile.id) {
-            services.tunnels.start(profile)
             let workspace = workspace
             let tunnels = services.tunnels
-            let generation = tunnels.state(for: profile.id).generation
             DispatchQueue.main.async {
-                let current = tunnels.state(for: profile.id)
-                guard current.status != .stopped, current.generation == generation else { return }
                 workspace.ensureTunnelTab(profileID: profile.id)
+                tunnels.start(profile)
             }
         } else {
             requestPassword(for: profile)
@@ -279,14 +246,11 @@ struct WorkspaceView: View {
 
     private func openTunnel(_ profile: TunnelProfile) {
         if services.keychain.hasPassword(for: profile.id) {
-            services.tunnels.start(profile)
             let workspace = workspace
             let tunnels = services.tunnels
-            let generation = tunnels.state(for: profile.id).generation
             DispatchQueue.main.async {
-                let current = tunnels.state(for: profile.id)
-                guard current.status != .stopped, current.generation == generation else { return }
                 workspace.openTunnelTab(profileID: profile.id)
+                tunnels.start(profile)
             }
         } else {
             requestPassword(for: profile)
@@ -295,6 +259,12 @@ struct WorkspaceView: View {
 
     private func stop(_ profileID: String) {
         services.tunnels.stop(profileID)
+        let workspace = workspace
+        let webSessions = webSessions
+        DispatchQueue.main.async {
+            let closed = workspace.closeTunnelTabs(profileID: profileID)
+            closed.forEach { webSessions.remove(tabID: $0) }
+        }
     }
 
     private func deleteProfile(_ profile: TunnelProfile) {
@@ -397,7 +367,7 @@ struct WorkspaceView: View {
 @MainActor
 private struct WorkspaceNodeView: View {
     @ObservedObject var workspace: WorkspaceStore
-    let nodeID: UUID
+    let node: LayoutNode
     @ObservedObject var services: AppServices
     @ObservedObject var webSessions: WebSessionStore
     let onConnect: (TunnelProfile) -> Void
@@ -407,38 +377,34 @@ private struct WorkspaceNodeView: View {
     let onSwitch: (UUID, WorkspaceTab) -> Void
     let onDelete: (TunnelProfile) -> Void
     var body: some View {
-        if let node = workspace.node(nodeID) {
-            if node.kind == .split, node.children.count >= 2 {
-                ResizableWorkspaceSplit(
-                    workspace: workspace,
-                    node: node,
-                    first: node.children[0],
-                    second: node.children[1],
-                    services: services,
-                    webSessions: webSessions,
-                    onConnect: onConnect,
-                     onOpenTunnel: onOpenTunnel,
-                    onStop: onStop,
-                    onOpenDirect: onOpenDirect,
-                    onSwitch: onSwitch,
-                    onDelete: onDelete
-                )
-            } else {
-                WorkspacePaneView(
-                    workspace: workspace,
-                    paneID: node.id,
-                    services: services,
-                    webSessions: webSessions,
-                    onConnect: onConnect,
-                     onOpenTunnel: onOpenTunnel,
-                    onStop: onStop,
-                    onOpenDirect: onOpenDirect,
-                    onSwitch: onSwitch,
-                    onDelete: onDelete
-                )
-            }
+        if node.kind == .split, node.children.count >= 2 {
+            ResizableWorkspaceSplit(
+                workspace: workspace,
+                node: node,
+                first: node.children[0],
+                second: node.children[1],
+                services: services,
+                webSessions: webSessions,
+                onConnect: onConnect,
+                onOpenTunnel: onOpenTunnel,
+                onStop: onStop,
+                onOpenDirect: onOpenDirect,
+                onSwitch: onSwitch,
+                onDelete: onDelete
+            )
         } else {
-            Color.clear
+            WorkspacePaneView(
+                workspace: workspace,
+                node: node,
+                services: services,
+                webSessions: webSessions,
+                onConnect: onConnect,
+                onOpenTunnel: onOpenTunnel,
+                onStop: onStop,
+                onOpenDirect: onOpenDirect,
+                onSwitch: onSwitch,
+                onDelete: onDelete
+            )
         }
     }
 }
@@ -491,7 +457,7 @@ private struct ResizableWorkspaceSplit: View {
     private func childView(_ child: LayoutNode) -> some View {
         WorkspaceNodeView(
             workspace: workspace,
-            nodeID: child.id,
+            node: child,
             services: services,
             webSessions: webSessions,
             onConnect: onConnect,
@@ -527,7 +493,7 @@ private struct ResizableWorkspaceSplit: View {
 @MainActor
 private struct WorkspacePaneView: View {
     @ObservedObject var workspace: WorkspaceStore
-    let paneID: UUID
+    let node: LayoutNode
     @ObservedObject var services: AppServices
     @ObservedObject var webSessions: WebSessionStore
     let onConnect: (TunnelProfile) -> Void
@@ -559,13 +525,20 @@ private struct WorkspacePaneView: View {
                 tabStrip
                 Divider()
                 content
-                    .id(workspace.selectedTab(in: paneID)?.id)
+                    .id(selectedTab?.id)
             }
         }
         .background(Color(nsColor: .textBackgroundColor))
     }
 
-    private var tabs: [WorkspaceTab] { workspace.tabs(in: paneID) }
+    private var paneID: UUID { node.id }
+
+    private var tabs: [WorkspaceTab] { node.tabs }
+
+    private var selectedTab: WorkspaceTab? {
+        guard let selectedID = workspace.selectedTabID(in: paneID) else { return tabs.first }
+        return tabs.first(where: { $0.id == selectedID }) ?? tabs.first
+    }
 
     private var tabStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -586,7 +559,7 @@ private struct WorkspacePaneView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let tab = workspace.selectedTab(in: paneID) {
+        if let tab = selectedTab {
             if tab.kind == .management {
                 ManagementView(
                     profiles: services.profiles,
@@ -615,7 +588,7 @@ private struct WorkspacePaneView: View {
     }
 
     private func tabItem(_ tab: WorkspaceTab) -> some View {
-        let selected = workspace.selectedTab(in: paneID)?.id == tab.id
+        let selected = selectedTab?.id == tab.id
         return HStack(spacing: 5) {
             Text(title(for: tab))
                 .lineLimit(1)

@@ -151,4 +151,54 @@ final class HarnessPortableTests: XCTestCase {
         XCTAssertEqual(hosts[1].user, "global")
         XCTAssertEqual(hosts[1].port, 2200)
     }
+
+    func testProfileAuthModeDefaultsToNssmAndDecodesManual() throws {
+        let base = TunnelProfile(id: "p1", name: "n", sshHost: "h", user: "u")
+        XCTAssertEqual(base.authMode, TunnelProfile.authModeNssm)
+
+        let manual = TunnelProfile(
+            id: "p2", name: "n", sshHost: "h", user: "u",
+            authMode: TunnelProfile.authModeManual
+        )
+        let decoded = try JSONDecoder().decode(TunnelProfile.self, from: JSONEncoder().encode(manual))
+        XCTAssertEqual(decoded.authMode, TunnelProfile.authModeManual)
+    }
+
+    func testNssmAuthUrlRewriteAndExtraction() {
+        XCTAssertEqual(
+            NssmAuthUrl.rewriteToLocal("http://127.0.0.1:3080/?token=abc", localPort: 4080, expectedRemotePort: 0),
+            "http://127.0.0.1:4080/?token=abc"
+        )
+        XCTAssertNil(
+            NssmAuthUrl.rewriteToLocal("http://127.0.0.1:3080/?token=abc", localPort: 4080, expectedRemotePort: 9999)
+        )
+        XCTAssertNil(NssmAuthUrl.rewriteToLocal("not a url", localPort: 4080, expectedRemotePort: 0))
+        XCTAssertNil(NssmAuthUrl.rewriteToLocal(nil, localPort: 4080, expectedRemotePort: 0))
+
+        XCTAssertEqual(
+            NssmAuthUrl.extractUrl(from: "noise\nhttp://127.0.0.1:1/?t=a\nhttp://127.0.0.1:2/?t=b\n"),
+            "http://127.0.0.1:2/?t=b"
+        )
+        XCTAssertNil(NssmAuthUrl.extractUrl(from: "no url here"))
+
+        XCTAssertTrue(NssmAuthUrl.looksLikeAuthRequired("dsh web authentication required; reopen the URL printed by dsh web."))
+        XCTAssertFalse(NssmAuthUrl.looksLikeAuthRequired("hello world"))
+    }
+
+    func testNssmAuthUrlBuildsTargetFromPastedInput() {
+        XCTAssertEqual(
+            NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "http://127.0.0.1:3080/?token=abc"),
+            "http://127.0.0.1:4080/?token=abc"
+        )
+        XCTAssertEqual(
+            NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080/?stale=1", input: "?token=abc"),
+            "http://127.0.0.1:4080?token=abc"
+        )
+        XCTAssertEqual(
+            NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "token=abc"),
+            "http://127.0.0.1:4080/?token=abc"
+        )
+        XCTAssertNil(NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "garbage"))
+        XCTAssertNil(NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "http://127.0.0.1:3080/"))
+    }
 }

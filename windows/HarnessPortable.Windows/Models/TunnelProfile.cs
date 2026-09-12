@@ -6,6 +6,12 @@ namespace HarnessPortable.Windows.Models;
 /// </summary>
 public sealed record TunnelProfile
 {
+    /// <summary>On connect, locate the dsh web launch-token URL via NSSM on the server (default).</summary>
+    public const string AuthModeNssm = "nssm";
+
+    /// <summary>Let the user paste the token URL when the page rejects (fallback: 401 overlay).</summary>
+    public const string AuthModeManual = "manual";
+
     public string Id { get; init; } = Guid.NewGuid().ToString();
     public string Name { get; init; } = "";
     public string SshHost { get; init; } = "";
@@ -14,6 +20,7 @@ public sealed record TunnelProfile
     public string RemoteHost { get; init; } = "127.0.0.1";
     public int RemotePort { get; init; } = 3080;
     public int LocalPort { get; init; } = 3080;
+    public string AuthMode { get; init; } = AuthModeNssm;
 
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? SshHost : Name;
 

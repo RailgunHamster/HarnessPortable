@@ -218,8 +218,14 @@ fun AppRoot() {
             val port =
                 if (tunnelInfo.profileId == current.profileId && tunnelInfo.localPort > 0)
                     tunnelInfo.localPort else fallbackPort
+            // Prefer the token URL fetched by the service (NSSM mode): it
+            // logs in fresh sessions and revalidates silently when the
+            // cookie is still good (server answers a harmless 303).
+            val tunnelAuthUrl =
+                if (tunnelInfo.profileId == current.profileId) tunnelInfo.authUrl else null
             WebViewScreen(
-                url = "http://127.0.0.1:$port",
+                url = NssmAuthUrl.rewriteToLocal(tunnelAuthUrl, port, 0)
+                    ?: "http://127.0.0.1:$port",
                 orientation = orientation,
                 tunnelMode = true,
                 tunnelInfo = if (tunnelInfo.profileId == current.profileId) tunnelInfo

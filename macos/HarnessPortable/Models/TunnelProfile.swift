@@ -1,6 +1,12 @@
 import Foundation
 
 struct TunnelProfile: Codable, Identifiable, Hashable {
+    /// On connect, locate the dsh web launch-token URL via NSSM on the server (default).
+    static let authModeNssm = "nssm"
+
+    /// Let the user paste the token URL when the page rejects (fallback: 401 sheet).
+    static let authModeManual = "manual"
+
     var id: String
     var name: String
     var sshHost: String
@@ -9,6 +15,7 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
     var remoteHost: String
     var remotePort: Int
     var localPort: Int
+    var authMode: String
 
     init(
         id: String = UUID().uuidString,
@@ -18,7 +25,8 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
         user: String = "",
         remoteHost: String = "127.0.0.1",
         remotePort: Int = 3080,
-        localPort: Int = 3080
+        localPort: Int = 3080,
+        authMode: String = TunnelProfile.authModeNssm
     ) {
         self.id = id
         self.name = name
@@ -28,10 +36,11 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
         self.remoteHost = remoteHost
         self.remotePort = remotePort
         self.localPort = localPort
+        self.authMode = authMode
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, sshHost, sshPort, user, remoteHost, remotePort, localPort
+        case id, name, sshHost, sshPort, user, remoteHost, remotePort, localPort, authMode
     }
 
     init(from decoder: Decoder) throws {
@@ -44,6 +53,7 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
         remoteHost = try container.decodeIfPresent(String.self, forKey: .remoteHost) ?? "127.0.0.1"
         remotePort = try container.decodeIfPresent(Int.self, forKey: .remotePort) ?? 3080
         localPort = try container.decodeIfPresent(Int.self, forKey: .localPort) ?? 3080
+        authMode = try container.decodeIfPresent(String.self, forKey: .authMode) ?? TunnelProfile.authModeNssm
     }
 
     var displayName: String {

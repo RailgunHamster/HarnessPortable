@@ -71,33 +71,49 @@ public sealed partial class TunnelEngine
 
     public void Stop(bool announce = true)
     {
-        lock (_gate)
-        {
-            _generation++;
-            _activeProfile = null;
-            _cts?.Cancel();
-            _cts = null;
-        }
-
-        DisconnectCurrent();
+        DetachCurrentForTeardown();
 
         // Always publish the terminal state: the manager and the UI need it
         // even when the app is shutting down or stopping every tunnel.
         State.Set(TunnelInfo.Stopped());
     }
 
-    private void DisconnectCurrent()
+    /// <summary>
+    /// Drops the current client/forwarder and tears them down on a background
+    /// thread. SSH.NET's <see cref="ForwardedPortLocal.Stop"/> and
+    /// <see cref="SshClient.Disconnect"/> can block for a long time — or
+    /// forever — when the TCP connection is half-dead (sleep/resume, network
+    /// switch, NAT timeout) or while forwarded channels are still open.
+    /// Callers reach this from the UI thread (stop buttons, tray exit, window
+    /// close), so the teardown must never run there.
+    /// </summary>
+    private void DetachCurrentForTeardown()
     {
         SshClient? client;
         ForwardedPortLocal? forward;
+
         lock (_gate)
         {
+            _generation++;
+            _activeProfile = null;
+            _cts?.Cancel();
+            _cts = null;
             client = _client;
             forward = _forward;
             _client = null;
             _forward = null;
         }
 
+        if (client is null && forward is null)
+        {
+            return;
+        }
+
+        _ = Task.Run(() => TearDown(client, forward));
+    }
+
+    private static void TearDown(SshClient? client, ForwardedPortLocal? forward)
+    {
         try
         {
             forward?.Stop();
@@ -282,12 +298,27 @@ public sealed partial class TunnelEngine
                     }
 
                     backoff = TimeSpan.FromSeconds(3);
+
+                    // dsh-web style services gate the browser behind a
+                    // launch token printed on the server. In NSSM mode grab
+                    // it on every connect (cheap) so the first navigation
+                    // carries it; failure falls back to the bare URL, whose
+                    // 401 page opens the manual paste overlay.
+                    string? authUrl = null;
+                    if (profile.AuthMode == TunnelProfile.AuthModeNssm)
+                    {
+                        authUrl = await NssmAuthUrlFetcher
+                            .TryFetchAsync(client, profile.RemotePort, token)
+                            .ConfigureAwait(false);
+                    }
+
                     Publish(generation, new TunnelInfo(
                         profile.Id,
                         profile.DisplayName,
                         TunnelStatus.Connected,
                         $"127.0.0.1:{bound} → {profile.RemoteHost}:{profile.RemotePort}{viaLabel}",
-                        bound));
+                        bound,
+                        authUrl));
 
                     // Monitor: leave the connected state as soon as the session dies.
                     while (generation == Volatile.Read(ref _generation) && client.IsConnected)
@@ -420,6 +451,10 @@ public sealed partial class TunnelEngine
             if (generation == _generation)
             {
                 State.Set(info);
+                FlickerLog.Log(
+                    "tunnel-publish",
+                    "gen=" + generation + " " + info.Status +
+                    " port=" + info.LocalPort + " " + (info.Message ?? ""));
             }
         }
     }
@@ -459,7 +494,7 @@ public sealed partial class TunnelEngine
         {
             // A connect attempt stalled (vendor power management, wedged
             // network stack): tear the worker down and start over.
-            DisconnectCurrent();
+            DetachCurrentForTeardown();
             Start(profile.Id);
         }
     }

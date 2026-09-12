@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -36,14 +37,17 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.StayCurrentLandscape
 import androidx.compose.material.icons.filled.StayCurrentPortrait
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -109,6 +113,40 @@ internal fun WebViewScreen(
         tunnelWasDown = !tunnelUp
     }
 
+    // dsh-web style services print a one-time token URL on the server; the
+    // bare host:port answers 401 until that URL has been opened once. Detect
+    // the rejection page and let the user paste the URL (the tunnel service
+    // usually fetches it automatically in NSSM mode — this is the fallback).
+    var showAuthPrompt by remember { mutableStateOf(false) }
+    var authInput by remember { mutableStateOf("") }
+    var authHint by remember { mutableStateOf<String?>(null) }
+
+    fun openAuthInput(raw: String) {
+        val input = raw.trim()
+        val base = url.substringBefore('?').trimEnd('/')
+        val target = when {
+            input.startsWith("http://", true) || input.startsWith("https://", true) -> {
+                val uri = runCatching { java.net.URI(input) }.getOrNull()
+                val pathAndQuery = buildString {
+                    append(uri?.rawPath?.takeIf { it.isNotEmpty() } ?: "/")
+                    uri?.rawQuery?.let { append('?').append(it) }
+                }
+                if (pathAndQuery.contains('?')) base + pathAndQuery else null
+            }
+            input.startsWith("?") -> base + input
+            input.contains('=') && !input.contains('/') && !input.contains(' ') ->
+                "$base/?$input"
+            else -> null
+        }
+        if (target == null) {
+            authHint = "无法识别输入。请粘贴 dsh web 打印的完整 URL（应包含 ?token=… 之类的参数）。"
+        } else {
+            showAuthPrompt = false
+            authHint = null
+            webRef?.loadUrl(target)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
@@ -133,6 +171,22 @@ internal fun WebViewScreen(
                         override fun onPageFinished(view: WebView, url: String?) {
                             super.onPageFinished(view, url)
                             canGoBack = view.canGoBack()
+
+                            val current = url ?: return
+                            if (!current.startsWith("http")) return
+                            view.evaluateJavascript(
+                                "(document.body ? (document.body.innerText || '') : '').slice(0, 4000)"
+                            ) { result ->
+                                if (result == null || result == "null") return@evaluateJavascript
+                                val text = runCatching {
+                                    org.json.JSONObject("{\"v\":$result}").optString("v")
+                                }.getOrDefault("")
+                                if (text.isNotEmpty() && NssmAuthUrl.looksLikeAuthRequired(text)) {
+                                    authInput = ""
+                                    authHint = null
+                                    showAuthPrompt = true
+                                }
+                            }
                         }
                     }
                     loadUrl(url)
@@ -192,6 +246,44 @@ internal fun WebViewScreen(
                     }
                 }
             }
+        }
+
+        // Auth-required paste dialog (manual fallback for token-gated pages).
+        if (showAuthPrompt) {
+            AlertDialog(
+                onDismissRequest = { showAuthPrompt = false },
+                title = { Text("网页要求重新认证", fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。" +
+                                    "请复制服务器上 dsh web 打印的完整 URL 粘贴到下面，" +
+                                    "将直接在内置浏览器中完成认证。",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        OutlinedTextField(
+                            value = authInput,
+                            onValueChange = {
+                                authInput = it
+                                authHint = null
+                            },
+                            label = { Text("完整 URL 或 ?token=…") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        authHint?.let {
+                            Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { openAuthInput(authInput) }) { Text("打开") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAuthPrompt = false }) { Text("取消") }
+                }
+            )
         }
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {

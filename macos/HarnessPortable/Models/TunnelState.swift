@@ -16,6 +16,8 @@ struct TunnelInfo: Identifiable, Equatable {
     var message: String?
     var localPort: Int
     var generation: Int
+    /// Verified launch-token URL fetched from the server (NSSM mode), if any.
+    var authUrl: String?
 
     var id: String { profileID ?? "none" }
 
@@ -25,7 +27,8 @@ struct TunnelInfo: Identifiable, Equatable {
         status: TunnelStatus = .idle,
         message: String? = nil,
         localPort: Int = 0,
-        generation: Int = 0
+        generation: Int = 0,
+        authUrl: String? = nil
     ) {
         self.profileID = profileID
         self.profileName = profileName
@@ -33,5 +36,6 @@ struct TunnelInfo: Identifiable, Equatable {
         self.message = message
         self.localPort = localPort
         self.generation = generation
+        self.authUrl = authUrl
     }
 }

@@ -26,7 +26,8 @@ Windows / macOS / Android 各自实现存储与 UI，但**配置字段语义保�
       "user": "用户名",
       "remoteHost": "127.0.0.1",
       "remotePort": 3080,
-      "localPort": 3080
+      "localPort": 3080,
+      "authMode": "nssm"
     }
   ],
   "directs": [
@@ -49,6 +50,7 @@ Windows / macOS / Android 各自实现存储与 UI，但**配置字段语义保�
 | `tunnels[].remoteHost` | string | 否 | 127.0.0.1 | 服务器侧目标 |
 | `tunnels[].remotePort` | int | 否 | 3080 | 1–65535 |
 | `tunnels[].localPort` | int | 否 | 3080 | 本地监听端口；被占用时依次 +1 到 +9 |
+| `tunnels[].authMode` | string | 否 | `nssm` | Web 登录方式：`nssm`（连接后自动经 SSH 在服务器上定位 NSSM 托管的 dsh web 日志，提取带 token 的 URL 并在内置浏览器自动登录）/ `manual`（页面被拒时手动粘贴 URL，登录后凭 cookie 保持约 30 天）。Android 端键名为 `auth_mode` |
 | `directs` | array<string> | 否 | `[]` | 直连 URL，保持添加顺序，去重 |
 
 ## 多隧道运行约定（桌面端）

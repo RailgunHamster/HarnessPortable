@@ -111,5 +111,12 @@ public partial class App : System.Windows.Application
         _services.Tunnels.StopAll();
         _tray?.Dispose();
         base.OnExit(e);
+
+        // Hard-exit once the WPF shutdown path is done: teardown still
+        // running on background threads (SSH.NET disconnect on a half-dead
+        // connection, SSH.NET's own non-background threads, WebView2 browser
+        // shutdown) must never leave a zombie process the user has to kill
+        // by hand in Task Manager.
+        Environment.Exit(e.ApplicationExitCode);
     }
 }

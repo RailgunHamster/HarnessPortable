@@ -286,10 +286,24 @@ class SshTunnelService : Service() {
 
                 stage("connected")
                 backoff = 3_000L
+
+                // dsh-web style services gate the browser behind a launch
+                // token printed on the server. In NSSM mode grab it on every
+                // connect (cheap) so the first navigation carries it;
+                // failure falls back to the bare URL, whose 401 page opens
+                // the manual paste dialog.
+                var authUrl: String? = null
+                if (p.authMode == TunnelProfile.AUTH_MODE_NSSM) {
+                    stage("auth-url fetch")
+                    authUrl = NssmAuthUrl.fetch(sess, p.remotePort)
+                    stage("auth-url " + (authUrl?.let { "ok" } ?: "miss"))
+                }
+
                 TunnelState.set(
                     TunnelState.Info(
                         p.id, p.name, TunnelState.Status.CONNECTED,
-                        "127.0.0.1:$bound → ${p.remoteHost}:${p.remotePort}$viaLabel", bound
+                        "127.0.0.1:$bound → ${p.remoteHost}:${p.remotePort}$viaLabel", bound,
+                        authUrl
                     )
                 )
                 updateNotification("${p.name} 已连接 · 127.0.0.1:$bound → ${p.remoteHost}:${p.remotePort}$viaLabel")

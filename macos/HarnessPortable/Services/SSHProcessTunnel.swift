@@ -190,12 +190,37 @@ final class SSHProcessTunnel {
 
                 backoff = 3
                 let via = resolution.source == "tailscale" ? " · Tailscale \(resolution.ip)" : ""
+
+                // dsh-web style services gate the browser behind a launch
+                // token printed on the server. In NSSM mode grab it on every
+                // connect (cheap) so the first navigation carries it;
+                // failure falls back to the bare URL, whose 401 page opens
+                // the manual paste sheet.
+                var authUrl: String? = nil
+                if profile.authMode == TunnelProfile.authModeNssm {
+                    authUrl = NssmAuthUrl.fetch(
+                        user: profile.user,
+                        host: resolution.ip,
+                        port: profile.sshPort,
+                        knownHostsFile: knownHostsFile,
+                        passwordFile: passwordFile,
+                        askpass: (try? prepareAskpass()) ?? AppPaths.askpassScript
+                    )
+                    if let authUrl, let remote = NssmAuthUrl.port(of: authUrl),
+                       remote != profile.remotePort {
+                        appendDiagnostic("authUrl port mismatch (\(remote) != \(profile.remotePort)), ignoring")
+                        authUrl = nil
+                    }
+                    appendDiagnostic("authUrl " + (authUrl != nil ? "ok" : "miss"))
+                }
+
                 emit(TunnelInfo(
                     profileID: profile.id,
                     profileName: profile.displayName,
                     status: .connected,
                     message: "127.0.0.1:\(connectedPort) -> \(profile.remoteHost):\(profile.remotePort)\(via)",
-                    localPort: connectedPort
+                    localPort: connectedPort,
+                    authUrl: authUrl
                 ))
 
                 while child.isRunning && isCurrent(generation) {

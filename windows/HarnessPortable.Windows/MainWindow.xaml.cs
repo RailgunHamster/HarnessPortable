@@ -72,12 +72,23 @@ public partial class MainWindow : Window
         _layoutPresets = new LayoutPresetStore();
         InitializeComponent();
 
+        // Flicker diagnostics: system-wide focus events + this window's
+        // focus/geometry transitions land in %APPDATA%\HarnessPortable\flicker.log.
+        FlickerLog.Start();
+        Activated += (_, _) => FlickerLog.Log("window", "Activated");
+        Deactivated += (_, _) => FlickerLog.Log("window", "Deactivated");
+        PreviewGotKeyboardFocus += (_, e) => FlickerLog.Log("wpf-focus", "got " + (e.NewFocus?.GetType().Name ?? "?"));
+        PreviewLostKeyboardFocus += (_, e) => FlickerLog.Log("wpf-focus", "lost " + (e.OldFocus?.GetType().Name ?? "?"));
+        SizeChanged += (_, _) => FlickerLog.Log("window", "SizeChanged");
+        LocationChanged += (_, _) => FlickerLog.Log("window", "LocationChanged");
+
         _managementView = new ManagementView(_services);
         _managementView.TunnelConnectRequested += ConnectTunnel;
         _managementView.TunnelStopRequested += CloseTunnelDocs;
         _managementView.DirectOpenRequested += OpenDirectSession;
 
         InitializeDockLayout();
+        DockManager.ActiveContentChanged += DockLayout_ActiveContentChanged;
         _services.Tunnels.StateChanged += OnTunnelStateChanged;
         RefreshStatusBar();
         RefreshPresetBox(null);
@@ -91,6 +102,31 @@ public partial class MainWindow : Window
         var group = new LayoutDocumentPaneGroup(pane);
         DockManager.Layout = new LayoutRoot { RootPanel = new LayoutPanel(group) };
         _managementDoc.IsActive = true;
+    }
+
+    /// <summary>
+    /// Keeps the keyboard chain alive across tab switches. Without this, the
+    /// hidden webview that held Win32 focus drops it during the document swap
+    /// and the newly activated one never claims it, so the next Ctrl+Tab (or
+    /// any keystroke) is lost until the user clicks into the page.
+    /// </summary>
+    private void DockLayout_ActiveContentChanged(object? sender, EventArgs e)
+    {
+        FlickerLog.Log("dock", "active=" + (DockManager.Layout.ActiveContent as LayoutDocument)?.Title);
+
+        // Don't steal focus from another application (e.g. while a layout is
+        // being restored in the background on startup).
+        if (!IsActive)
+        {
+            return;
+        }
+
+        if (DockManager.Layout.ActiveContent is not LayoutDocument { Content: SessionView view })
+        {
+            return;
+        }
+
+        view.FocusWebView();
     }
 
     private LayoutDocument CreateManagementDoc() => new()

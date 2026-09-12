@@ -26,6 +26,32 @@
             </Border>
         </Border>
 
+        <Border x:Name="AuthOverlay" Background="#99000000" Visibility="Collapsed">
+            <Border Background="#FFFFFF" CornerRadius="14" Padding="22,18"
+                    MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="#111827"
+                               Text="网页要求重新认证" HorizontalAlignment="Center"/>
+                    <TextBlock FontSize="12" Foreground="#6B7280" TextWrapping="Wrap"
+                               Margin="0,8,0,0" HorizontalAlignment="Center"
+                               Text="服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。请在服务器上复制 dsh web 打印的完整 URL，粘贴到下面，将直接在内置浏览器中完成认证，无需再用外部浏览器打开。"/>
+                    <TextBox x:Name="AuthUrlBox" FontSize="13" Margin="0,12,0,0"
+                                 Style="{StaticResource ModernTextBox}"
+                                 KeyDown="AuthUrlBox_KeyDown" TextChanged="AuthUrlBox_TextChanged"/>
+                    <TextBlock x:Name="AuthHint" FontSize="11" Foreground="#DC2626" Margin="0,6,0,0"
+                               TextWrapping="Wrap" Visibility="Collapsed"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
+                        <Button Content="打开" Width="88" Margin="0,0,8,0"
+                                    Style="{StaticResource ModernPrimaryButton}"
+                                    Click="AuthOpen_Click"/>
+                        <Button Content="取消" Width="88"
+                                    Style="{StaticResource ModernButton}"
+                                    Click="AuthCancel_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
         <Canvas x:Name="OverlayCanvas" ClipToBounds="False">
             <Border x:Name="FloatBall"
                     Width="48" Height="48"

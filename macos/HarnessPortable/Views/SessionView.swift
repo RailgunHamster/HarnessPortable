@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 final class WebSessionStore: ObservableObject {
     @Published private(set) var navigationErrors: [UUID: String] = [:]
+    @Published private(set) var authRequired: [UUID: Bool] = [:]
     private var webViews: [UUID: WKWebView] = [:]
     private var loadedURLs: [UUID: String] = [:]
     private var navigationDelegates: [UUID: WebSessionNavigationDelegate] = [:]
@@ -59,7 +60,12 @@ final class WebSessionStore: ObservableObject {
             destination = tab.url.flatMap { HostResolver.resolveURL($0) ?? $0 }
         case .tunnel:
             guard state.status == .connected, state.localPort > 0 else { return }
-            destination = "http://127.0.0.1:\(state.localPort)"
+            // Prefer the token URL fetched by the tunnel (NSSM mode): it
+            // both logs in fresh sessions and revalidates silently when the
+            // cookie is still good (server answers a harmless 303).
+            destination = NssmAuthUrl.rewriteToLocal(
+                state.authUrl, localPort: state.localPort, expectedRemotePort: 0
+            ) ?? "http://127.0.0.1:\(state.localPort)"
         }
         guard let destination, let url = URL(string: destination) else { return }
 
@@ -103,12 +109,14 @@ final class WebSessionStore: ObservableObject {
         navigationDelegates.removeValue(forKey: tabID)
         navigationErrors.removeValue(forKey: tabID)
         loadedURLs.removeValue(forKey: tabID)
+        authRequired.removeValue(forKey: tabID)
     }
 
     private func beginLoad(for tabID: UUID) {
         retryWorkItems[tabID]?.cancel()
         retryWorkItems.removeValue(forKey: tabID)
         retryCounts[tabID] = 0
+        authRequired[tabID] = false
         loadGenerations[tabID] = (loadGenerations[tabID] ?? 0) + 1
     }
 
@@ -128,6 +136,50 @@ final class WebSessionStore: ObservableObject {
         retryWorkItems.removeValue(forKey: tabID)
         retryCounts.removeValue(forKey: tabID)
         navigationErrors.removeValue(forKey: tabID)
+        checkAuthRequired(tabID: tabID, webView: webView)
+    }
+
+    /// dsh-web style services print a one-time token URL on the server; the
+    /// bare host:port answers 401 until that URL has been opened once.
+    /// Inspect the loaded body and surface the manual paste sheet when the
+    /// rejection page is served (the tunnel usually fetches the URL
+    /// automatically in NSSM mode — this is the fallback).
+    private func checkAuthRequired(tabID: UUID, webView: WKWebView) {
+        guard let current = webView.url?.absoluteString, current.hasPrefix("http") else { return }
+        webView.evaluateJavaScript(
+            "(document.body ? (document.body.innerText || '') : '').slice(0, 4000)"
+        ) { [weak self] result, _ in
+            DispatchQueue.main.async {
+                guard let self,
+                      let text = result as? String,
+                      NssmAuthUrl.looksLikeAuthRequired(text) else { return }
+                self.authRequired[tabID] = true
+            }
+        }
+    }
+
+    /// Opens the pasted token URL (rewritten onto the current base). Returns
+    /// false when the input could not be interpreted, so the caller can show
+    /// a hint instead of dismissing the sheet.
+    @discardableResult
+    func openAuth(tabID: UUID, input: String) -> Bool {
+        guard let base = loadedURLs[tabID],
+              let target = NssmAuthUrl.buildAuthTarget(base: base, input: input),
+              let url = URL(string: target) else {
+            return false
+        }
+        authRequired[tabID] = false
+        beginLoad(for: tabID)
+        navigationErrors.removeValue(forKey: tabID)
+        let webView = webView(for: tabID)
+        activeNavigations[tabID] = webView.load(
+            URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
+        )
+        return true
+    }
+
+    func dismissAuth(tabID: UUID) {
+        authRequired[tabID] = false
     }
 
     private func navigationFailed(
@@ -136,9 +188,12 @@ final class WebSessionStore: ObservableObject {
         navigation: WKNavigation?,
         message: String
     ) {
-        guard webViews[tabID] === webView,
-              let navigation,
-              activeNavigations[tabID] === navigation else { return }
+        guard webViews[tabID] === webView else { return }
+        if let navigation,
+           let activeNavigation = activeNavigations[tabID],
+           activeNavigation !== navigation {
+            return
+        }
         activeNavigations.removeValue(forKey: tabID)
         navigationErrors[tabID] = message
 
@@ -224,6 +279,9 @@ struct SessionView: View {
     @ObservedObject var webSessions: WebSessionStore
     let onClose: () -> Void
 
+    @State private var authInput = ""
+    @State private var authHint: String?
+
     private var profile: TunnelProfile? {
         profiles.findTunnel(id: tab.profileID)
     }
@@ -236,6 +294,7 @@ struct SessionView: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             WebViewContainer(webView: webSessions.webView(for: tab.id))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(nsColor: .textBackgroundColor))
 
             HStack(spacing: 6) {
@@ -262,13 +321,89 @@ struct SessionView: View {
             if tab.kind == .tunnel && tunnelInfo.status != .connected {
                 tunnelOverlay
             }
+            if webSessions.authRequired[tab.id] == true {
+                authPromptOverlay
+            }
             if let error = webSessions.navigationErrors[tab.id] {
                 navigationErrorOverlay(error)
             }
         }
-        .onAppear { loadIfNeeded() }
-        .onChange(of: tunnelInfo.status) { _ in loadIfNeeded() }
-        .onChange(of: tunnelInfo.localPort) { _ in loadIfNeeded() }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            DispatchQueue.main.async {
+                loadIfNeeded()
+            }
+        }
+        .onChange(of: tunnelInfo.status) { _ in
+            DispatchQueue.main.async {
+                loadIfNeeded()
+            }
+        }
+        .onChange(of: tunnelInfo.localPort) { _ in
+            DispatchQueue.main.async {
+                loadIfNeeded()
+            }
+        }
+        .onChange(of: tunnelInfo.authUrl) { _ in
+            DispatchQueue.main.async {
+                loadIfNeeded()
+            }
+        }
+        .onChange(of: tunnelInfo.generation) { _ in
+            DispatchQueue.main.async {
+                loadIfNeeded()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var authPromptOverlay: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(.orange)
+            Text("网页要求重新认证")
+                .font(.headline)
+            Text(
+                "服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。"
+                    + "请复制服务器上 dsh web 打印的完整 URL 粘贴到下面，"
+                    + "将直接在内置浏览器中完成认证。"
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            TextField("完整 URL 或 ?token=…", text: $authInput)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 420)
+                .onSubmit(openPastedAuthUrl)
+            if let authHint {
+                Text(authHint)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Button("打开", action: openPastedAuthUrl)
+                    .keyboardShortcut(.defaultAction)
+                Button("取消") {
+                    authHint = nil
+                    webSessions.dismissAuth(tabID: tab.id)
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(28)
+        .frame(maxWidth: 500)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .shadow(radius: 12)
+    }
+
+    private func openPastedAuthUrl() {
+        if !webSessions.openAuth(tabID: tab.id, input: authInput) {
+            authHint = "无法识别输入。请粘贴 dsh web 打印的完整 URL（应包含 ?token=… 之类的参数）。"
+        } else {
+            authHint = nil
+            authInput = ""
+        }
     }
 
     @ViewBuilder

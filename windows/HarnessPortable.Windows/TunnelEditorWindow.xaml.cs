@@ -46,6 +46,7 @@ public partial class TunnelEditorWindow : Window
             RemoteHostBox.Text = initial.RemoteHost;
             RemotePortBox.Text = initial.RemotePort.ToString();
             LocalPortBox.Text = initial.LocalPort.ToString();
+            AuthModeBox.SelectedIndex = initial.AuthMode == TunnelProfile.AuthModeManual ? 1 : 0;
             PasswordCaption.Text = "密码（留空保持不变）";
         }
     }
@@ -213,6 +214,9 @@ public partial class TunnelEditorWindow : Window
             RemoteHost = remoteHost,
             RemotePort = remotePort,
             LocalPort = localPort,
+            AuthMode = (AuthModeBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string == TunnelProfile.AuthModeManual
+                ? TunnelProfile.AuthModeManual
+                : TunnelProfile.AuthModeNssm,
         };
     }
 

@@ -268,6 +268,7 @@ struct ProfileEditorView: View {
     @State private var remoteHost: String
     @State private var remotePort: String
     @State private var localPort: String
+    @State private var authMode: String
     @State private var sshConfigHosts: [SSHConfigHost] = []
     @State private var selectedSSHConfigAlias = ""
     @State private var password = ""
@@ -285,6 +286,10 @@ struct ProfileEditorView: View {
         _remoteHost = State(initialValue: profile.remoteHost)
         _remotePort = State(initialValue: String(profile.remotePort))
         _localPort = State(initialValue: String(profile.localPort))
+        _authMode = State(
+            initialValue: profile.authMode == TunnelProfile.authModeManual
+                ? TunnelProfile.authModeManual : TunnelProfile.authModeNssm
+        )
     }
 
     var body: some View {
@@ -333,6 +338,14 @@ struct ProfileEditorView: View {
                 TextField("远端主机", text: $remoteHost)
                 TextField("远端端口", text: $remotePort)
                 TextField("本地端口", text: $localPort)
+                Picker("Web 登录方式", selection: $authMode) {
+                    Text("NSSM 自动").tag(TunnelProfile.authModeNssm)
+                    Text("手动输入").tag(TunnelProfile.authModeManual)
+                }
+                .pickerStyle(.radioGroup)
+                Text("NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志并自动登录；手动方式：页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Section("SSH 认证") {
                     SecureField("密码（留空保持当前密码）", text: $password)
@@ -434,7 +447,9 @@ struct ProfileEditorView: View {
             user: user.trimmingCharacters(in: .whitespacesAndNewlines),
             remoteHost: remoteHost.trimmingCharacters(in: .whitespacesAndNewlines),
             remotePort: Int(remotePort) ?? 0,
-            localPort: Int(localPort) ?? 0
+            localPort: Int(localPort) ?? 0,
+            authMode: authMode == TunnelProfile.authModeManual
+                ? TunnelProfile.authModeManual : TunnelProfile.authModeNssm
         )
     }
 

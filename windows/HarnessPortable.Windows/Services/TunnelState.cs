@@ -15,7 +15,8 @@ public sealed record TunnelInfo(
     string? ProfileName = null,
     TunnelStatus Status = TunnelStatus.Idle,
     string? Message = null,
-    int LocalPort = 0)
+    int LocalPort = 0,
+    string? AuthUrl = null)
 {
     public static TunnelInfo Stopped(string? message = "隧道已停止") => new(Status: TunnelStatus.Stopped, Message: message);
 }

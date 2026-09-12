@@ -16,7 +16,9 @@ object TunnelState {
         val status: Status = Status.IDLE,
         val message: String? = null,
         /** Local loopback port actually bound for forwarding (0 = none). */
-        val localPort: Int = 0
+        val localPort: Int = 0,
+        /** Verified launch-token URL fetched from the server (NSSM mode), if any. */
+        val authUrl: String? = null
     )
 
     private val _flow = MutableStateFlow(Info())
