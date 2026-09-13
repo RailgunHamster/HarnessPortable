@@ -29,7 +29,7 @@ public sealed class ChangelogTests
     public void ReadEmbedded_ContainsCurrentVersion()
     {
         var text = Changelog.ReadEmbedded();
-        Assert.Contains("2.5.0", text);
+        Assert.Contains(AppVersion.Current, text);
         Assert.NotNull(Changelog.SectionFor(text, AppVersion.Current));
     }
 }

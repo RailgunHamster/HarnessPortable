@@ -147,7 +147,8 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         UpdateServerBox.Text = string.IsNullOrWhiteSpace(settings.UpdateServerUrl)
             ? UpdateSourceFactory.DefaultServerUrl
             : settings.UpdateServerUrl;
-        VersionText.Text = "当前版本 " + _services.Updates.CurrentVersion;
+        VersionText.Text = "当前版本 " + _services.Updates.CurrentVersion
+            + " · " + _services.Updates.DeploymentLabel;
         RefreshUpdatePanel();
         _suppressSettings = false;
     }

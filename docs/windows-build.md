@@ -79,7 +79,12 @@ HarnessPortable-<ver>-full.nupkg   # 更新包
 releases.win.json                  # 更新索引
 ```
 
-安装后程序在 `%LocalAppData%\HarnessPortable\current\`，设置仍在 `%APPDATA%\HarnessPortable\`。
+两种分发都支持自动更新：
+
+- **Setup**：装到 `%LocalAppData%\HarnessPortable\`，开始菜单/桌面快捷方式
+- **便携 zip**：解压到任意目录，运行根目录的 `Harness Portable.exe`（不要只拷 `current` 里的 exe）
+
+设置仍在 `%APPDATA%\HarnessPortable\`，更新不会冲掉。无法更新的只有 `dotnet run` 开发构建和旧版单文件 exe。
 
 ```powershell
 # 需要已安装：dotnet tool install -g vpk --version 1.2.0

@@ -18,6 +18,28 @@ public sealed class UpdateService
     public bool CanApply { get; private set; }
     public bool Busy { get; private set; }
     public int Progress { get; private set; }
+    public bool IsPackaged { get; }
+    public bool IsPortable { get; }
+
+    public string DeploymentLabel =>
+        !IsPackaged ? "开发构建 / 旧单文件"
+        : IsPortable ? "便携版"
+        : "安装版";
+
+    public UpdateService()
+    {
+        try
+        {
+            var manager = new UpdateManager(UpdateSourceFactory.Create(UpdateSourceFactory.DefaultServerUrl));
+            IsPackaged = manager.IsInstalled;
+            IsPortable = manager.IsPortable;
+        }
+        catch
+        {
+            IsPackaged = false;
+            IsPortable = false;
+        }
+    }
 
     public async Task CheckAsync(string? updateUrl, CancellationToken token = default)
     {
@@ -33,11 +55,12 @@ public sealed class UpdateService
                     url,
                     available: null,
                     canApply: false,
-                    status: $"当前版本 {CurrentVersion}（开发运行，未通过安装包启动，无法在线更新）",
+                    status: $"当前版本 {CurrentVersion}（{DeploymentLabel}，无法在线更新。请使用 Setup 安装包或便携 zip）",
                     notes: Changelog.ReadEmbedded());
                 return;
             }
 
+            var edition = manager.IsPortable ? "便携版" : "安装版";
             var info = await manager.CheckForUpdatesAsync().ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             if (info is null)
@@ -47,7 +70,7 @@ public sealed class UpdateService
                     url,
                     available: null,
                     canApply: false,
-                    status: $"当前版本 {manager.CurrentVersion}，已是最新",
+                    status: $"当前版本 {manager.CurrentVersion}（{edition}），已是最新",
                     notes: Changelog.ReadEmbedded());
                 return;
             }
@@ -63,7 +86,7 @@ public sealed class UpdateService
                 url,
                 available: info.TargetFullRelease.Version.ToString(),
                 canApply: true,
-                status: $"发现新版本 {info.TargetFullRelease.Version}（当前 {manager.CurrentVersion}）",
+                status: $"发现新版本 {info.TargetFullRelease.Version}（当前 {manager.CurrentVersion}，{edition}）",
                 notes: notes);
         }
         catch (NotInstalledException)
@@ -73,7 +96,7 @@ public sealed class UpdateService
                 url,
                 available: null,
                 canApply: false,
-                status: $"当前版本 {CurrentVersion}（未安装 Velopack 包，无法在线更新）",
+                status: $"当前版本 {CurrentVersion}（{DeploymentLabel}，无法在线更新。请使用 Setup 安装包或便携 zip）",
                 notes: Changelog.ReadEmbedded());
         }
         catch (OperationCanceledException)
