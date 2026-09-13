@@ -2,9 +2,27 @@
 
 ## 环境要求
 
-- JDK 17（AGP 8.7.3 / Gradle 8.11.1 需要）
+- JDK 17 或 21（AGP 8.7.3 / Gradle 8.11.1；实测 21 可用）
 - Android SDK（`compileSdk 36`、`minSdk 24`、`targetSdk 36`）
 - 首次构建会自动下载 Gradle 8.11.1
+
+> ⚠️ **JAVA_HOME 失效是最常见的构建失败原因。**
+> Gradle 与 `apksigner` 都读 `JAVA_HOME`，如果它指向一个已被卸载的 JDK，
+> 构建会直接失败并只报一句
+> `ERROR: JAVA_HOME is set to an invalid directory: ...`。
+> 报错信息不会告诉你去哪找可用的 JDK，所以先确认这个路径真实存在：
+>
+> ```powershell
+> Test-Path $env:JAVA_HOME
+> # 不存在的话，找一下实际装了哪个 JDK：
+> Get-ChildItem "C:\Program Files\Microsoft" -Directory |
+>   Where-Object { Test-Path (Join-Path $_.FullName "bin\java.exe") }
+> # 然后只为当前会话指定（不用改系统环境变量）：
+> $env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot"
+> ```
+>
+> 会话级赋值在本仓库内足够：`.\gradlew.bat` 与
+> `build-tools\<版本>\apksigner.bat` 都会继承它。
 
 SDK 路径二选一：
 
