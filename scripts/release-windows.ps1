@@ -126,3 +126,4 @@ Write-Host "Done. Version $version"
 Write-Host "  pack   $packDir"
 if (-not $SkipShare) { Write-Host "  share  $share" }
 Write-Host "  setup  $(Join-Path $packDir 'HarnessPortable-win-Setup.exe')"
+Write-Host "  portable $(Join-Path $packDir 'HarnessPortable-win-Portable.zip')"

@@ -101,8 +101,11 @@ dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
   -c Release -r win-x64 --self-contained true `
   -p:PublishSingleFile=false -o publish/win-x64
 
-# 发布（Velopack 安装包 + 更新源，并同步到局域网共享 / GitHub）
+# 发布 Windows（Velopack Setup + 便携 zip + 更新源）
 pwsh -File scripts/release-windows.ps1
+
+# 发布 Android APK（android.json 更新源，拷到同一 Releases 目录并挂到 GitHub Release）
+pwsh -File scripts/release-android.ps1
 ```
 
 详细说明见 [`docs/windows-build.md`](docs/windows-build.md)。

@@ -24,6 +24,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import android.app.Activity
+import android.os.Handler
+import android.os.Looper
+import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -46,6 +52,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +65,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,9 +83,74 @@ fun SettingsScreen(
     onDeleteDirect: (String) -> Unit
 ) {
     val ctx = LocalContext.current
+    val activity = ctx as? Activity
+    val scope = rememberCoroutineScope()
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
     var editorFor by remember { mutableStateOf<TunnelProfile?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var directInput by remember { mutableStateOf("") }
+    var updateServer by remember { mutableStateOf(ApkUpdate.storedServer(ctx)) }
+    var updateStatus by remember { mutableStateOf("尚未检查更新") }
+    var updateNotes by remember { mutableStateOf("") }
+    var updateBusy by remember { mutableStateOf(false) }
+    var updateProgress by remember { mutableStateOf(-1) }
+    var pendingFeed by remember { mutableStateOf<ApkFeed?>(null) }
+    val versionName = remember { ApkUpdate.currentVersionName(ctx) }
+    val versionCode = remember { ApkUpdate.currentVersionCode(ctx) }
+
+    fun checkUpdate() {
+        ApkUpdate.saveServer(ctx, updateServer)
+        updateBusy = true
+        updateProgress = -1
+        updateStatus = "正在检查更新…"
+        pendingFeed = null
+        scope.launch {
+            try {
+                val feed = withContext(Dispatchers.IO) { ApkUpdate.fetchFeed(updateServer) }
+                pendingFeed = feed
+                updateNotes = feed.notes
+                updateStatus = if (feed.versionCode > versionCode) {
+                    "发现新版本 ${feed.versionName}（当前 $versionName）"
+                } else {
+                    "当前版本 $versionName，已是最新"
+                }
+            } catch (e: Exception) {
+                updateStatus = "检查更新失败：${e.message}"
+            } finally {
+                updateBusy = false
+            }
+        }
+    }
+
+    fun installUpdate() {
+        val feed = pendingFeed ?: return
+        if (feed.versionCode <= versionCode) return
+        if (activity != null && !ApkUpdate.canInstallPackages(ctx)) {
+            updateStatus = "请允许本应用安装未知来源应用，然后再点立即安装"
+            ApkUpdate.requestInstallPermission(activity)
+            return
+        }
+        updateBusy = true
+        updateProgress = 0
+        updateStatus = "正在下载 ${feed.versionName}…"
+        scope.launch {
+            try {
+                val dest = ApkUpdate.updateFile(ctx)
+                withContext(Dispatchers.IO) {
+                    ApkUpdate.download(feed.apkUrl, dest) { p ->
+                        mainHandler.post { updateProgress = p }
+                    }
+                }
+                updateStatus = "正在打开系统安装界面…"
+                ApkUpdate.install(ctx, dest)
+            } catch (e: Exception) {
+                updateStatus = "下载/安装失败：${e.message}"
+            } finally {
+                updateBusy = false
+                updateProgress = -1
+            }
+        }
+    }
 
     fun addDirect() {
         val norm = normalizeUrl(directInput) ?: return
@@ -174,6 +247,72 @@ fun SettingsScreen(
                     url = url,
                     onConnect = { onConnectDirect(url) },
                     onDelete = { onDeleteDirect(url) }
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+                Text("自动更新", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(
+                    "当前版本 $versionName ($versionCode)",
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                )
+                OutlinedTextField(
+                    value = updateServer,
+                    onValueChange = { updateServer = it },
+                    label = { Text("更新服务器（GitHub 仓库或 android.json 地址）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            ApkUpdate.saveServer(ctx, updateServer)
+                            updateStatus = "已保存更新服务器"
+                        },
+                        enabled = !updateBusy
+                    ) { Text("保存") }
+                    Button(onClick = { checkUpdate() }, enabled = !updateBusy) {
+                        Text("检查更新")
+                    }
+                    Button(
+                        onClick = { installUpdate() },
+                        enabled = !updateBusy && (pendingFeed?.versionCode ?: 0) > versionCode
+                    ) { Text("立即安装") }
+                }
+                if (updateProgress >= 0) {
+                    LinearProgressIndicator(
+                        progress = { updateProgress / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    )
+                }
+                Text(
+                    updateStatus,
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                if (updateNotes.isNotBlank()) {
+                    Text(
+                        updateNotes,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                Text(
+                    "安装包发布在 GitHub Release 与局域网 HarnessPortable-Releases。手机默认走 GitHub；若有 http 目录，把地址填到上面。",
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
         }

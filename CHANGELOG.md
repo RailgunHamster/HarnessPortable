@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.6.0
+
+- Android 支持应用内更新：设置页底部「检查更新 / 立即安装」。默认检查 GitHub Release 的 `android.json`，安装包同时放在局域网 `HarnessPortable-Releases`。
+- Windows 管理页右上角增加「检查更新」按钮。
+
 ## 2.5.2
 
 - Android 内置浏览器支持选择本地文件作为附件（网页 `<input type="file">` / dsh 附件按钮）。

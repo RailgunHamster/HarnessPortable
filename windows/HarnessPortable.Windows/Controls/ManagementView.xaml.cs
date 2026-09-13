@@ -175,6 +175,22 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         ApplyUpdateButton.Content = updates.CanApply && updates.AvailableVersion is { } version
             ? $"下载 {version} 并重启"
             : "下载并重启";
+        HeaderUpdateButton.IsEnabled = !updates.Busy;
+        HeaderUpdateButton.Content = updates.CanApply && updates.AvailableVersion is { } ver
+            ? $"更新 {ver}"
+            : "检查更新";
+    }
+
+    private async void HeaderUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (_services.Updates.CanApply)
+        {
+            ApplyUpdate_Click(sender, e);
+        }
+        else
+        {
+            await _services.Updates.CheckAsync(CurrentUpdateServerUrl());
+        }
     }
 
     private string CurrentUpdateServerUrl()

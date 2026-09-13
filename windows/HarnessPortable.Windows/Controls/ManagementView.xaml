@@ -10,6 +10,9 @@
                 <Button x:Name="AddTunnelButton" DockPanel.Dock="Right" Content="+ 添加隧道"
                         Style="{StaticResource ModernPrimaryButton}" Padding="14,7"
                         Click="AddTunnel_Click"/>
+                <Button x:Name="HeaderUpdateButton" DockPanel.Dock="Right" Content="检查更新"
+                        Style="{StaticResource ModernButton}" Padding="14,7" Margin="0,0,8,0"
+                        Click="HeaderUpdate_Click"/>
                 <StackPanel>
                     <TextBlock Text="Harness Portable" FontSize="18" FontWeight="SemiBold" Foreground="#111827"/>
                     <TextBlock Text="SSH 本地端口转发 + 内嵌浏览器" Style="{StaticResource ModernMutedText}"/>
