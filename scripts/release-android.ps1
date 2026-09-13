@@ -123,7 +123,7 @@ if (-not $SkipGitHub) {
             $rel = Invoke-RestMethod -Method POST -Headers $headers -ContentType "application/json" -Body $body `
                 -Uri "https://api.github.com/repos/RailgunHamster/HarnessPortable/releases"
         }
-        $uploadBase = ($rel.upload_url -replace '\{.*}', '')
+        $uploadBase = ([string]$rel.upload_url).Split('{')[0].Trim()
         foreach ($file in @(
             @{ Path = $apkDest; Name = $apkName; Type = "application/vnd.android.package-archive" },
             @{ Path = (Join-Path $artifacts "android.json"); Name = "android.json"; Type = "application/json" }
@@ -139,9 +139,10 @@ if (-not $SkipGitHub) {
                 "User-Agent"  = "HarnessPortable"
                 Accept        = "application/vnd.github+json"
             }
+            $uploadUri = $uploadBase + '?name=' + [Uri]::EscapeDataString($file.Name)
             Invoke-WebRequest -Method POST -Headers $uploadHeaders `
                 -ContentType $file.Type -InFile $file.Path `
-                -Uri "$uploadBase?name=$($file.Name)" | Out-Null
+                -Uri $uploadUri -UseBasicParsing | Out-Null
         }
     }
 }
