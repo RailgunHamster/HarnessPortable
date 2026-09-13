@@ -125,6 +125,7 @@ final class HarnessPortableTests: XCTestCase {
         XCTAssertEqual(hosts[0].hostName, "124.220.21.113")
         XCTAssertEqual(hosts[0].user, "root")
         XCTAssertEqual(hosts[0].port, 22)
+        XCTAssertNil(hosts[0].identityFile)
         XCTAssertEqual(hosts[1].connectionLabel, "wangyuxin@nuc11atkc4.tail603dd.ts.net:4322")
     }
 
@@ -162,6 +163,33 @@ final class HarnessPortableTests: XCTestCase {
         )
         let decoded = try JSONDecoder().decode(TunnelProfile.self, from: JSONEncoder().encode(manual))
         XCTAssertEqual(decoded.authMode, TunnelProfile.authModeManual)
+        XCTAssertEqual(decoded.identityFile, "")
+
+        let withKey = TunnelProfile(
+            id: "p3", name: "n", sshHost: "h", user: "u",
+            identityFile: "~/.ssh/id_ed25519"
+        )
+        let decodedKey = try JSONDecoder().decode(TunnelProfile.self, from: JSONEncoder().encode(withKey))
+        XCTAssertEqual(decodedKey.identityFile, "~/.ssh/id_ed25519")
+    }
+
+    func testSSHConfigParserReadsIdentityFile() {
+        let hosts = SSHConfigReader.parse("""
+        Host tcloud
+          HostName 124.220.21.113
+          User root
+          IdentityFile ~/.ssh/id_ed25519
+        """)
+        XCTAssertEqual(hosts.first?.identityFile, "~/.ssh/id_ed25519")
+    }
+
+    func testSSHIdentityExpandPathAndAuthFailure() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        XCTAssertEqual(SSHIdentity.expandPath("~"), home)
+        XCTAssertTrue(SSHIdentity.expandPath("~/.ssh/id_ed25519").hasSuffix("/.ssh/id_ed25519"))
+        XCTAssertTrue(SSHIdentity.looksLikeAuthenticationFailure("Permission denied (publickey)."))
+        XCTAssertTrue(SSHIdentity.looksLikeAuthenticationFailure("Too many authentication failures"))
+        XCTAssertFalse(SSHIdentity.looksLikeAuthenticationFailure("Connection refused"))
     }
 
     func testNssmAuthUrlRewriteAndExtraction() {

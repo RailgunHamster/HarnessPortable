@@ -10,7 +10,7 @@
 
 - .NET 10（WPF）
 - WebView2（系统浏览器内核）
-- SSH.NET（SSH 本地端口转发）
+- SSH.NET（SSH 本地端口转发；公钥优先，密码可选，认证失败不重试）
 - Windows DPAPI（密码加密）
 - JSON 文件配置（`%APPDATA%\HarnessPortable\`）
 - 支持**同时连接多个 SSH 隧道**，每个隧道独立重连/停止

@@ -126,14 +126,9 @@ final class SSHProcessTunnel {
         while isCurrent(generation) {
             var child: Process?
             do {
-                guard let password = keychain.password(for: profile.id) else {
-                    emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .failed, message: TunnelProcessError.missingPassword.localizedDescription))
-                    return
-                }
-                if passwordFile == nil {
+                if passwordFile == nil, let password = keychain.password(for: profile.id) {
                     passwordFile = try preparePasswordFile(for: profile.id, password: password)
                 }
-                guard let passwordFile else { throw TunnelProcessError.missingPassword }
 
                 emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .connecting, message: "正在连接…"))
                 let resolution = HostResolver.resolve(profile.sshHost)
@@ -207,7 +202,8 @@ final class SSHProcessTunnel {
                         port: profile.sshPort,
                         knownHostsFile: knownHostsFile,
                         passwordFile: passwordFile,
-                        askpass: (try? prepareAskpass()) ?? AppPaths.askpassScript
+                        askpass: (try? prepareAskpass()) ?? AppPaths.askpassScript,
+                        identityFile: profile.identityFile
                     )
                     if let authUrl, let remote = NssmAuthUrl.port(of: authUrl),
                        remote != profile.remotePort {
@@ -249,7 +245,7 @@ final class SSHProcessTunnel {
                 }
 
                 let errorMessage = processErrorMessage(from: child)
-                if isAuthenticationFailure(errorMessage) {
+                if SSHIdentity.looksLikeAuthenticationFailure(errorMessage) {
                     emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .failed, message: "认证失败：\(errorMessage)"))
                     return
                 }
@@ -263,12 +259,12 @@ final class SSHProcessTunnel {
                 if !isCurrent(generation) { return }
                 let message = error.localizedDescription
                 if error is TunnelProcessError {
-                    if message.contains("主机密钥") || message == "未保存密码" || message.contains("认证") {
+                    if message.contains("主机密钥") || message == "未保存密码" || message.contains("认证") || message.contains("私钥") {
                         emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .failed, message: message))
                         return
                     }
                 }
-                if isAuthenticationFailure(message) {
+                if SSHIdentity.looksLikeAuthenticationFailure(message) {
                     emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .failed, message: "认证失败：\(message)"))
                     return
                 }
@@ -328,9 +324,9 @@ final class SSHProcessTunnel {
         resolvedHost: String,
         localPort: Int,
         knownHostsFile: URL,
-        passwordFile: URL
+        passwordFile: URL?
     ) throws -> Process {
-        let askpass = try prepareAskpass()
+        let askpass = passwordFile == nil ? nil : try prepareAskpass()
         let command = Process()
         command.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
         let remote = profile.remoteHost.contains(":") ? "[\(profile.remoteHost)]" : profile.remoteHost
@@ -347,20 +343,17 @@ final class SSHProcessTunnel {
             "-o", knownHostsOption,
             "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=4",
-            "-o", "ConnectTimeout=20",
-            "-o", "PreferredAuthentications=keyboard-interactive,password",
-            "-o", "PubkeyAuthentication=no",
-            "-o", "NumberOfPasswordPrompts=1",
+            "-o", "ConnectTimeout=20"
+        ] + SSHIdentity.sshArguments(
+            identityFile: profile.identityFile,
+            hasPassword: passwordFile != nil
+        ) + [
             "\(profile.user)@\(resolvedHost)"
         ]
-        appendDiagnostic("launch target=\(profile.user)@\(resolvedHost) localPort=\(localPort) knownHosts=\(knownHostsFile.path)")
+        appendDiagnostic("launch target=\(profile.user)@\(resolvedHost) localPort=\(localPort) knownHosts=\(knownHostsFile.path) identity=\(profile.identityFile) password=\(passwordFile != nil)")
 
-        var environment = ProcessInfo.processInfo.environment
-        environment["SSH_ASKPASS"] = askpass.path
-        environment["SSH_ASKPASS_REQUIRE"] = "force"
-        environment["DISPLAY"] = "1"
+        var environment = SSHIdentity.sshEnvironment(askpass: askpass, passwordFile: passwordFile)
         environment["HARNESS_PROFILE_ID"] = profile.id
-        environment["HARNESS_PASSWORD_FILE"] = passwordFile.path
         command.environment = environment
         command.standardInput = FileHandle.nullDevice
         command.standardOutput = FileHandle.nullDevice
@@ -420,14 +413,6 @@ final class SSHProcessTunnel {
             lower.contains("ed25519 key") ||
             lower.contains("hostkey") ||
             lower.contains("主机密钥")
-    }
-
-    private func isAuthenticationFailure(_ message: String) -> Bool {
-        let lower = message.lowercased()
-        return lower.contains("permission denied") ||
-            lower.contains("authentication") ||
-            lower.contains("password") ||
-            lower.contains("keyboard-interactive")
     }
 
     func isCurrent(_ expected: Int) -> Bool {

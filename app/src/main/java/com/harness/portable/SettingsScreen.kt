@@ -1,5 +1,8 @@
 package com.harness.portable
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -429,6 +432,20 @@ private fun TunnelEditorDialog(
     var user by remember { mutableStateOf(initial?.user ?: "") }
     var pass by remember { mutableStateOf("") }
     var passVisible by remember { mutableStateOf(false) }
+    var identityFile by remember { mutableStateOf(initial?.identityFile ?: "") }
+    var pendingIdentityUri by remember { mutableStateOf<Uri?>(null) }
+    val ctx = LocalContext.current
+    val pickKey = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            pendingIdentityUri = uri
+            identityFile = uri.lastPathSegment
+                ?.substringAfterLast(':')
+                ?.substringAfterLast('/')
+                ?: "已选择私钥"
+        }
+    }
     var authInput by remember { mutableStateOf(initialAuthInput ?: "") }
     var remoteHost by remember { mutableStateOf(initial?.remoteHost ?: "127.0.0.1") }
     var remotePort by remember { mutableStateOf((initial?.remotePort ?: 3080).toString()) }
@@ -471,7 +488,10 @@ private fun TunnelEditorDialog(
                 OutlinedTextField(
                     pass, { pass = it },
                     label = {
-                        Text(if (initial == null) "密码（可稍后输入）" else "密码（留空保持不变）")
+                        Text(
+                            if (initial == null) "密码（可稍后输入；密钥登录可留空）"
+                            else "密码（留空保持不变；密钥登录可留空）"
+                        )
                     },
                     singleLine = true,
                     visualTransformation =
@@ -482,6 +502,27 @@ private fun TunnelEditorDialog(
                         }
                     }
                 )
+                OutlinedTextField(
+                    identityFile,
+                    {
+                        identityFile = it
+                        if (it.isBlank()) pendingIdentityUri = null
+                    },
+                    label = { Text("私钥文件（可选）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { pickKey.launch(arrayOf("*/*")) }) {
+                        Text("选择私钥")
+                    }
+                    if (identityFile.isNotBlank()) {
+                        TextButton(onClick = {
+                            identityFile = ""
+                            pendingIdentityUri = null
+                        }) { Text("清除") }
+                    }
+                }
                 OutlinedTextField(
                     remoteHost, { remoteHost = it },
                     label = { Text("远程地址（服务器侧）") }, singleLine = true
@@ -526,6 +567,7 @@ private fun TunnelEditorDialog(
                     "等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器\n" +
                             "服务器可填 IP / 域名 / NetBIOS 名（如 winserver）：局域网自动发现；" +
                             "装有 Tailscale 并开启 MagicDNS 时自动解析到 Tailscale IP。\n" +
+                            "未填密码时可导入 OpenSSH 私钥登录。密码错误只尝试一次，不会反复重连。\n" +
                             "密码与认证 URL/token 用 Android Keystore 加密存储，不写入 tunnels 配置。\n" +
                             "NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志并自动登录；" +
                             "手动方式：连接时用上面保存的认证 URL/token，留空则页面提示需要认证时粘贴 URL，" +
@@ -539,9 +581,23 @@ private fun TunnelEditorDialog(
             TextButton(
                 enabled = valid,
                 onClick = {
+                    val id = initial?.id ?: java.util.UUID.randomUUID().toString()
+                    val storedIdentity = try {
+                        when {
+                            pendingIdentityUri != null ->
+                                SshIdentityFiles.import(ctx, id, pendingIdentityUri!!)
+                            identityFile.isBlank() -> {
+                                SshIdentityFiles.deleteManaged(ctx, id)
+                                ""
+                            }
+                            else -> identityFile.trim()
+                        }
+                    } catch (_: Exception) {
+                        initial?.identityFile ?: ""
+                    }
                     onSave(
                         TunnelProfile(
-                            id = initial?.id ?: java.util.UUID.randomUUID().toString(),
+                            id = id,
                             name = name.trim().ifBlank { host.trim() },
                             sshHost = host.trim(),
                             sshPort = portOr(port, 22),
@@ -549,7 +605,8 @@ private fun TunnelEditorDialog(
                             remoteHost = remoteHost.trim(),
                             remotePort = portOr(remotePort, 3080),
                             localPort = portOr(localPort, 3080),
-                            authMode = authMode
+                            authMode = authMode,
+                            identityFile = storedIdentity
                         ),
                         pass.takeIf { it.isNotEmpty() },
                         authInput.trim().takeIf { it.isNotEmpty() }

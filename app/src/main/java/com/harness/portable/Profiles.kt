@@ -19,7 +19,9 @@ data class TunnelProfile(
     val remotePort: Int = 3080,
     val localPort: Int = 3080,
     /** How the web login token is obtained; see [AUTH_MODE_NSSM]/[AUTH_MODE_MANUAL]. */
-    val authMode: String = AUTH_MODE_NSSM
+    val authMode: String = AUTH_MODE_NSSM,
+    /** Optional OpenSSH private key path. Empty = password-only unless a key is imported. */
+    val identityFile: String = ""
 ) {
     companion object {
         /** On connect, locate the dsh web launch-token URL via NSSM on the server (default). */
@@ -60,7 +62,9 @@ object ProfileStore {
                     remotePort = o.optInt("remote_port", 3080),
                     localPort = o.optInt("local_port", 3080),
                     authMode = o.optString("auth_mode", TunnelProfile.AUTH_MODE_NSSM)
-                        .ifBlank { TunnelProfile.AUTH_MODE_NSSM }
+                        .ifBlank { TunnelProfile.AUTH_MODE_NSSM },
+                    identityFile = o.optString("identity_file")
+                        .ifBlank { o.optString("identityFile") }
                 )
             }.toMutableList()
         } catch (e: Exception) {
@@ -82,6 +86,7 @@ object ProfileStore {
                     .put("remote_port", p.remotePort)
                     .put("local_port", p.localPort)
                     .put("auth_mode", p.authMode)
+                    .put("identity_file", p.identityFile)
             )
         }
         prefs(ctx).edit().putString(KEY_TUNNELS, arr.toString()).apply()

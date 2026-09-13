@@ -3,18 +3,18 @@
 一个跨平台的 **SSH 本地端口转发 + 内嵌浏览器** 工具。
 
 在手机上、Windows 上打开局域网/远程 Web 控制台时，不用每次手敲
-`ssh -N -L ...`：保存好服务器、端口和密码，一键建立隧道并在内置浏览器中打开
+`ssh -N -L ...`：保存好服务器、端口，以及密码或 SSH 私钥，一键建立隧道并在内置浏览器中打开
 `127.0.0.1:port`。
 
 ---
 
 ## 核心功能
 
-- **SSH 本地端口转发**：等价于 `ssh -N -L local:remoteHost:remotePort user@host`
+- **SSH 本地端口转发**：等价于 `ssh -N -L local:remoteHost:remotePort user@host`；支持私钥登录（可不填密码），密码错误不会反复重试
 - **多隧道并发**：同一进程可同时连接多个服务器，每个隧道独立重连/停止
 - **TOFU 主机密钥**：首次连接记住服务器公钥；密钥变化直接拒绝，防中间人
 - **智能主机名解析**：IP / 域名 / Tailscale MagicDNS / NetBIOS 名
-- **SSH 配置选择**：Windows/macOS 添加隧道时可从 `~/.ssh/config` 选择别名，自动填充 HostName / User / Port
+- **SSH 配置选择**：Windows/macOS 添加隧道时可从 `~/.ssh/config` 选择别名，自动填充 HostName / User / Port / IdentityFile
 - **密码安全存储**：
   - Android：Android Keystore
   - Windows：DPAPI
@@ -128,7 +128,7 @@ Windows 配置目录（所有配置均写入系统用户目录，不会在 exe �
 
 三个平台共享同一套字段语义，便于未来导入/导出：
 
-- 隧道 profile 字段：`id / name / sshHost / sshPort / user / remoteHost / remotePort / localPort`
+- 隧道 profile 字段：`id / name / sshHost / sshPort / user / remoteHost / remotePort / localPort / identityFile`
 - 直连 URL 列表
 - 主机密钥 TOFU 规则
 - 密码凭据与 profile id 关联

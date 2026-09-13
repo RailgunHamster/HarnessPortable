@@ -4,7 +4,8 @@ using System.Text.RegularExpressions;
 
 namespace HarnessPortable.Windows.Services;
 
-public sealed record SshConfigHost(string Alias, string HostName, string? User, int Port)
+public sealed record SshConfigHost(
+    string Alias, string HostName, string? User, int Port, string? IdentityFile = null)
 {
     public string ConnectionLabel =>
         $"{(string.IsNullOrWhiteSpace(User) ? "未设置用户" : User)}@{HostName}:{Port}";
@@ -14,11 +15,11 @@ public sealed record SshConfigLoadResult(string? Path, IReadOnlyList<SshConfigHo
 
 /// <summary>
 /// Reads the small, display-safe subset of OpenSSH config needed by the
-/// tunnel editor. Authentication options such as IdentityFile are ignored.
+/// tunnel editor: HostName, User, Port, and the first IdentityFile.
 /// </summary>
 public static class SshConfigReader
 {
-    private static readonly string[] SupportedOptions = ["hostname", "user", "port"];
+    private static readonly string[] SupportedOptions = ["hostname", "user", "port", "identityfile"];
 
     /// <summary>
     /// The Windows equivalent of ~/.ssh/config for the current process user.
@@ -228,7 +229,10 @@ public static class SshConfigReader
             }
 
             var port = string.IsNullOrWhiteSpace(portValue) ? 22 : int.Parse(portValue);
-            result.Add(new SshConfigHost(alias, hostName, user, port));
+            var identity = GetOption(options, "identityfile");
+            result.Add(new SshConfigHost(
+                alias, hostName, user, port,
+                string.IsNullOrWhiteSpace(identity) ? null : identity));
         }
 
         return result;

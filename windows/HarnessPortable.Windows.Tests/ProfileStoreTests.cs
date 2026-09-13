@@ -27,6 +27,7 @@ public sealed class ProfileStoreTests : IDisposable
             RemoteHost = "127.0.0.1",
             RemotePort = 3080,
             LocalPort = 3080,
+            IdentityFile = @"C:\Users\me\.ssh\id_ed25519",
         };
 
         _store.SaveTunnels([profile]);
@@ -36,6 +37,7 @@ public sealed class ProfileStoreTests : IDisposable
         Assert.Equal("测试机", loaded[0].Name);
         Assert.Equal("winserver", loaded[0].SshHost);
         Assert.Equal(3080, loaded[0].RemotePort);
+        Assert.Equal(@"C:\Users\me\.ssh\id_ed25519", loaded[0].IdentityFile);
     }
 
     [Fact]

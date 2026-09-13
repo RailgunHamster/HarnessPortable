@@ -27,7 +27,8 @@ Windows / macOS / Android 各自实现存储与 UI，但**配置字段语义保�
       "remoteHost": "127.0.0.1",
       "remotePort": 3080,
       "localPort": 3080,
-      "authMode": "nssm"
+      "authMode": "nssm",
+      "identityFile": ""
     }
   ],
   "directs": [
@@ -51,6 +52,7 @@ Windows / macOS / Android 各自实现存储与 UI，但**配置字段语义保�
 | `tunnels[].remotePort` | int | 否 | 3080 | 1–65535 |
 | `tunnels[].localPort` | int | 否 | 3080 | 本地监听端口；被占用时依次 +1 到 +9 |
 | `tunnels[].authMode` | string | 否 | `nssm` | Web 登录方式：`nssm`（连接后自动经 SSH 在服务器上定位 NSSM 托管的 dsh web 日志，提取带 token 的 URL 并在内置浏览器自动登录）/ `manual`（连接时使用凭据库中保存的认证输入；没有保存时，页面被拒后手动粘贴 URL，登录后凭 cookie 保持约 30 天）。Android 端键名为 `auth_mode` |
+| `tunnels[].identityFile` | string | 否 | 空 | SSH 私钥路径。为空时桌面端尝试 `~/.ssh/id_ed25519`、`id_ecdsa`、`id_rsa`（macOS 还会用 ssh-agent）。Android 端键名为 `identity_file`，通常是应用私有目录里导入的副本。密钥登录可不填密码。 |
 | `directs` | array<string> | 否 | `[]` | 直连 URL，保持添加顺序，去重 |
 
 ## 多隧道运行约定（桌面端）
@@ -82,11 +84,15 @@ Windows 与 macOS 桌面版允许**同一进程内同时运行多个隧道**：
 
 ## 密码凭据
 
+密码是可选的：有可用私钥（`identityFile` 或桌面默认身份文件）时不必保存密码。
+
 - Windows：DPAPI（CurrentUser）加密后存 `secrets.json`，键为 `tunnel.id`。
 - macOS：Keychain，service 建议 `com.harness.portable`，account 为 `tunnel.id`。
 - Android：Android Keystore 加密后存 SharedPreferences，键为 `tunnel.id`。
 
 凭据不随 `profiles.json` 导入导出，跨设备迁移时由用户重新输入。
+
+SSH 认证顺序：公钥优先，其次才是已保存的密码。每个连接最多提交一次密码；认证失败（含错误密码、Permission denied、Too many authentication failures）直接进入失败状态，**不得**进入断线重连循环，以免远程 sshd 因反复失败拒绝访问。断线重连只适用于曾经连接成功之后的网络中断。
 
 ## Web 认证输入（可选）
 

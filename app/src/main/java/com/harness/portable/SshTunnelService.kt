@@ -190,7 +190,11 @@ class SshTunnelService : Service() {
                     return@Thread
                 }
                 val st = TunnelState.flow.value.status
-                if (g == generation && st != TunnelState.Status.CONNECTED) {
+                if (g == generation &&
+                    st != TunnelState.Status.CONNECTED &&
+                    st != TunnelState.Status.FAILED &&
+                    st != TunnelState.Status.STOPPED
+                ) {
                     watchdogFired = true
                     Log.w(TAG, "watchdog: stalled in $st, restarting worker")
                     try { session?.disconnect() } catch (_: Exception) {}
@@ -227,20 +231,54 @@ class SshTunnelService : Service() {
             var s: Session? = null
             try {
                 Log.d(TAG, "connecting ${p.user}@${p.sshHost}:${p.sshPort} -> ${p.remoteHost}:${p.remotePort} (local ${p.localPort})")
-                stage("reading password")
+                stage("reading credentials")
                 val password = SecureStore.getPassword(this, p.id)
-                    ?: throw JSchException(NO_PW_MSG)
+                val identity = p.identityFile.trim()
+                if (password.isNullOrEmpty() && identity.isEmpty()) {
+                    throw JSchException(NO_PW_MSG)
+                }
                 stage("building session")
 
                 val jsch = JSch()
                 jsch.setHostKeyRepository(TofuHostKeyRepository(this))
+                if (identity.isNotEmpty()) {
+                    val added = try {
+                        jsch.addIdentity(identity)
+                        true
+                    } catch (_: Exception) {
+                        if (!password.isNullOrEmpty()) {
+                            try {
+                                jsch.addIdentity(identity, password)
+                                true
+                            } catch (_: Exception) {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    if (!added) {
+                        throw JSchException(SshIdentity.missingCredentialsMessage(identity))
+                    }
+                }
                 val sess = jsch.getSession(p.user, p.sshHost, p.sshPort)
-                sess.setPassword(password)
+                if (!password.isNullOrEmpty()) {
+                    sess.setPassword(password)
+                }
+                val methods = buildList {
+                    if (identity.isNotEmpty()) add("publickey")
+                    if (!password.isNullOrEmpty()) {
+                        add("password")
+                        add("keyboard-interactive")
+                    }
+                    if (isEmpty()) add("publickey")
+                }.joinToString(",")
                 sess.setConfig(Properties().apply {
                     // The TOFU repository decides: new key -> remember + OK,
                     // matching key -> OK, changed key -> CHANGED -> rejected.
                     put("StrictHostKeyChecking", "yes")
-                    put("PreferredAuthentications", "password,keyboard-interactive")
+                    put("PreferredAuthentications", methods)
+                    put("NumberOfPasswordPrompts", "1")
                 })
                 // Bare host names: resolve ourselves (NetBIOS broadcast on the
                 // LAN, system DNS for Tailscale MagicDNS) instead of relying
@@ -331,10 +369,7 @@ class SshTunnelService : Service() {
                 val msg = e.message ?: e.javaClass.simpleName
                 Log.w(TAG, "connect failed: ${e.javaClass.simpleName}: $msg", e)
                 val resolveFail = msg.contains("无法解析")
-                val authFail = !resolveFail && (
-                        msg.contains("auth", ignoreCase = true) ||
-                                msg.contains(NO_PW_MSG)
-                        )
+                val authFail = !resolveFail && SshIdentity.looksLikeAuthenticationFailure(msg)
                 val hostKeyChanged = e is JSchChangedHostKeyException ||
                         msg.contains("hostkey", ignoreCase = true) ||
                         msg.contains("host key", ignoreCase = true)

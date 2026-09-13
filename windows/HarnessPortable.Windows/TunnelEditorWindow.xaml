@@ -52,8 +52,22 @@
                 <TextBlock Text="用户名" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
                 <TextBox x:Name="UserBox" Style="{StaticResource ModernTextBox}"/>
 
-                <TextBlock x:Name="PasswordCaption" Text="密码（可稍后输入）" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
+                <TextBlock x:Name="PasswordCaption" Text="密码（可稍后输入；密钥登录可留空）" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
                 <PasswordBox x:Name="PasswordInput" Style="{StaticResource ModernPasswordBox}"/>
+
+                <TextBlock Text="私钥文件（可选）" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="清除" Padding="8,6" Margin="8,0,0,0"
+                            Style="{StaticResource ModernToolbarButton}"
+                            ToolTip="清除私钥路径，改用 ~/.ssh 默认身份文件"
+                            Click="ClearIdentityFile_Click"/>
+                    <Button DockPanel.Dock="Right" Content="..." Padding="8,6" Margin="8,0,0,0"
+                            Style="{StaticResource ModernToolbarButton}"
+                            ToolTip="选择 SSH 私钥"
+                            Click="ChooseIdentityFile_Click"/>
+                    <TextBox x:Name="IdentityFileBox" Style="{StaticResource ModernTextBox}"
+                             ToolTip="留空则尝试 ~/.ssh/id_ed25519、id_ecdsa、id_rsa"/>
+                </DockPanel>
 
                 <TextBlock Text="远程地址（服务器侧）" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
                 <TextBox x:Name="RemoteHostBox" Style="{StaticResource ModernTextBox}" Text="127.0.0.1"/>
@@ -80,7 +94,7 @@
                 </StackPanel>
 
                 <TextBlock Margin="0,12,0,0" Foreground="#6B7280" FontSize="12" TextWrapping="Wrap"
-                           Text="等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器&#10;打开服务器地址下拉可选择 ~/.ssh/config 中的 SSH 别名；选择后会填入 HostName、User 和 Port，也可以继续手动修改。~ 会按当前运行用户解析；若程序以其他用户运行，可用右侧 ... 直接选择 config 文件。&#10;密码与认证 URL/token 使用 Windows DPAPI 加密存储，不写入 profiles.json。&#10;NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志，提取带 token 的 URL 并在内置浏览器中自动登录；手动方式：连接时用上面保存的认证 URL/token，留空则页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。"/>
+                           Text="等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器&#10;打开服务器地址下拉可选择 ~/.ssh/config 中的 SSH 别名；选择后会填入 HostName、User、Port 和 IdentityFile，也可以继续手动修改。~ 会按当前运行用户解析；若程序以其他用户运行，可用右侧 ... 直接选择 config 文件。&#10;未填密码时使用指定私钥或 ~/.ssh 默认身份文件登录。密码错误只尝试一次，不会反复重连以免锁死账号。&#10;密码与认证 URL/token 使用 Windows DPAPI 加密存储，不写入 profiles.json。&#10;NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志，提取带 token 的 URL 并在内置浏览器中自动登录；手动方式：连接时用上面保存的认证 URL/token，留空则页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。"/>
             </StackPanel>
         </ScrollViewer>
 

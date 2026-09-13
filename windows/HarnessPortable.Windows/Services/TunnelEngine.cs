@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+using System.IO;
 using HarnessPortable.Windows.Models;
 using Renci.SshNet;
 using Renci.SshNet.Common;
@@ -164,12 +164,23 @@ public sealed partial class TunnelEngine
                 ForwardedPortLocal? forward = null;
                 string? hostKeyProblem = null;
 
+                List<PrivateKeyFile> keyFiles = [];
                 try
                 {
                     var password = _secrets.GetPassword(profile.Id);
-                    if (string.IsNullOrEmpty(password))
+                    foreach (var path in SshIdentity.CandidateFiles(profile.IdentityFile))
                     {
-                        Publish(generation, new TunnelInfo(profile.Id, profile.DisplayName, TunnelStatus.Failed, "未保存密码"));
+                        if (TryLoadPrivateKey(path, password) is { } key)
+                        {
+                            keyFiles.Add(key);
+                        }
+                    }
+
+                    if (keyFiles.Count == 0 && string.IsNullOrEmpty(password))
+                    {
+                        Publish(generation, new TunnelInfo(
+                            profile.Id, profile.DisplayName, TunnelStatus.Failed,
+                            SshIdentity.MissingCredentialsMessage(profile.IdentityFile)));
                         MarkTerminated(generation);
                         return;
                     }
@@ -193,21 +204,39 @@ public sealed partial class TunnelEngine
                         _ => $" · {resolution.Ip}",
                     };
 
-                    var keyboardInteractive = new KeyboardInteractiveAuthenticationMethod(profile.User);
-                    keyboardInteractive.AuthenticationPrompt += (_, e) =>
+                    var methods = new List<AuthenticationMethod>();
+                    if (keyFiles.Count > 0)
                     {
-                        foreach (var prompt in e.Prompts)
+                        methods.Add(new PrivateKeyAuthenticationMethod(profile.User, [.. keyFiles]));
+                    }
+
+                    if (!string.IsNullOrEmpty(password))
+                    {
+                        var passwordSent = 0;
+                        var keyboardInteractive = new KeyboardInteractiveAuthenticationMethod(profile.User);
+                        keyboardInteractive.AuthenticationPrompt += (_, e) =>
                         {
-                            prompt.Response = password;
-                        }
-                    };
+                            // One shot: never feed the same wrong password to
+                            // another keyboard-interactive round.
+                            if (Interlocked.Exchange(ref passwordSent, 1) != 0)
+                            {
+                                return;
+                            }
+
+                            foreach (var prompt in e.Prompts)
+                            {
+                                prompt.Response = password;
+                            }
+                        };
+                        methods.Add(keyboardInteractive);
+                        methods.Add(new PasswordAuthenticationMethod(profile.User, password));
+                    }
 
                     var connectionInfo = new ConnectionInfo(
                         resolution.Ip,
                         profile.SshPort,
                         profile.User,
-                        new PasswordAuthenticationMethod(profile.User, password),
-                        keyboardInteractive);
+                        [.. methods]);
 
                     connectionInfo.Timeout = TimeSpan.FromSeconds(20);
 
@@ -358,7 +387,8 @@ public sealed partial class TunnelEngine
                         return;
                     }
 
-                    if (LooksLikeAuthenticationFailure(message))
+                    if (ex is SshAuthenticationException ||
+                        SshIdentity.LooksLikeAuthenticationFailure(message))
                     {
                         Publish(generation, new TunnelInfo(
                             profile.Id, profile.DisplayName, TunnelStatus.Failed, $"认证失败：{message}"));
@@ -420,6 +450,18 @@ public sealed partial class TunnelEngine
                         if (ReferenceEquals(_client, client))
                         {
                             _client = null;
+                        }
+                    }
+
+                    foreach (var key in keyFiles)
+                    {
+                        try
+                        {
+                            key.Dispose();
+                        }
+                        catch
+                        {
+                            // Ignore.
                         }
                     }
                 }
@@ -493,21 +535,43 @@ public sealed partial class TunnelEngine
         var current = State.Current;
         if (generation == Volatile.Read(ref _generation) &&
             current.ProfileId == profile.Id &&
-            current.Status != TunnelStatus.Connected &&
+            current.Status is TunnelStatus.Connecting or TunnelStatus.Retrying &&
             !token.IsCancellationRequested)
         {
             // A connect attempt stalled (vendor power management, wedged
             // network stack): tear the worker down and start over.
+            // Never restart Failed — a wrong password must not be retried.
             DetachCurrentForTeardown();
             Start(profile.Id);
         }
     }
 
-    private static bool LooksLikeAuthenticationFailure(string message)
+    private static PrivateKeyFile? TryLoadPrivateKey(string path, string? passphrase)
     {
-        return Regex.IsMatch(message, "auth", RegexOptions.IgnoreCase) ||
-               message.Contains("password", StringComparison.OrdinalIgnoreCase) ||
-               message.Contains("用户名", StringComparison.OrdinalIgnoreCase) ||
-               message.Contains("密码", StringComparison.OrdinalIgnoreCase);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return new PrivateKeyFile(path);
+        }
+        catch
+        {
+            if (string.IsNullOrEmpty(passphrase))
+            {
+                return null;
+            }
+
+            try
+            {
+                return new PrivateKeyFile(path, passphrase);
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 }

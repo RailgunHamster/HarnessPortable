@@ -26,6 +26,12 @@ public sealed record TunnelProfile
     public int LocalPort { get; init; } = 3080;
     public string AuthMode { get; init; } = AuthModeNssm;
 
+    /// <summary>
+    /// Optional OpenSSH private key path. Empty: try ~/.ssh/id_ed25519,
+    /// id_ecdsa, id_rsa. Key login does not require a saved password.
+    /// </summary>
+    public string IdentityFile { get; init; } = "";
+
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? SshHost : Name;
 
     public string Summary => $"{User}@{SshHost}:{SshPort} → {RemoteHost}:{RemotePort}";

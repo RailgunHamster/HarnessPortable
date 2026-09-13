@@ -197,7 +197,7 @@ fun AppRoot() {
     }
 
     fun connectTunnel(p: TunnelProfile) {
-        if (!SecureStore.hasPassword(ctx, p.id)) {
+        if (!SecureStore.hasPassword(ctx, p.id) && p.identityFile.isBlank()) {
             passwordFor = p
             return
         }
@@ -326,6 +326,7 @@ fun AppRoot() {
                 ProfileStore.saveTunnels(ctx, tunnels)
                 SecureStore.clearPassword(ctx, p.id)
                 SecureStore.clearAuthInput(ctx, p.id)
+                SshIdentityFiles.deleteManaged(ctx, p.id, p.identityFile)
                 if (tunnelInfo.profileId == p.id) SshTunnelService.stop(ctx)
             },
             onConnectDirect = { target = ActiveTarget.Direct(it) },

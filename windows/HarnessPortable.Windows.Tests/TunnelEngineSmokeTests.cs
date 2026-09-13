@@ -56,6 +56,41 @@ public sealed class TunnelEngineSmokeTests : IDisposable
         Assert.Equal(TunnelStatus.Stopped, _engine.State.Current.Status);
     }
 
+    [Fact]
+    public void Start_MissingPasswordAndMissingKey_FailsWithoutRetry()
+    {
+        var profile = new TunnelProfile
+        {
+            Id = "p1",
+            Name = "无凭据",
+            SshHost = "127.0.0.1",
+            SshPort = 1,
+            User = "nobody",
+            RemoteHost = "127.0.0.1",
+            RemotePort = 3080,
+            LocalPort = 3080,
+            IdentityFile = Path.Combine(_dir, "no-such-key"),
+        };
+        _profiles.SaveTunnels([profile]);
+
+        _engine.Start(profile.Id);
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var status = _engine.State.Current.Status;
+        while (DateTime.UtcNow < deadline &&
+               status is TunnelStatus.Idle or TunnelStatus.Connecting)
+        {
+            Thread.Sleep(50);
+            status = _engine.State.Current.Status;
+        }
+
+        Assert.Equal(TunnelStatus.Failed, status);
+        Assert.Contains("私钥", _engine.State.Current.Message);
+
+        Thread.Sleep(400);
+        Assert.Equal(TunnelStatus.Failed, _engine.State.Current.Status);
+    }
+
     public void Dispose()
     {
         _engine.Stop(announce: false);

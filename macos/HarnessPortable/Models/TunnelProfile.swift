@@ -16,6 +16,8 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
     var remotePort: Int
     var localPort: Int
     var authMode: String
+    /// Optional OpenSSH private key path. Empty: default ~/.ssh identities and ssh-agent.
+    var identityFile: String
 
     init(
         id: String = UUID().uuidString,
@@ -26,7 +28,8 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
         remoteHost: String = "127.0.0.1",
         remotePort: Int = 3080,
         localPort: Int = 3080,
-        authMode: String = TunnelProfile.authModeNssm
+        authMode: String = TunnelProfile.authModeNssm,
+        identityFile: String = ""
     ) {
         self.id = id
         self.name = name
@@ -37,10 +40,11 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
         self.remotePort = remotePort
         self.localPort = localPort
         self.authMode = authMode
+        self.identityFile = identityFile
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, sshHost, sshPort, user, remoteHost, remotePort, localPort, authMode
+        case id, name, sshHost, sshPort, user, remoteHost, remotePort, localPort, authMode, identityFile
     }
 
     init(from decoder: Decoder) throws {
@@ -54,6 +58,7 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
         remotePort = try container.decodeIfPresent(Int.self, forKey: .remotePort) ?? 3080
         localPort = try container.decodeIfPresent(Int.self, forKey: .localPort) ?? 3080
         authMode = try container.decodeIfPresent(String.self, forKey: .authMode) ?? TunnelProfile.authModeNssm
+        identityFile = try container.decodeIfPresent(String.self, forKey: .identityFile) ?? ""
     }
 
     var displayName: String {

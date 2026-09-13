@@ -12,6 +12,7 @@ public sealed class SshConfigReaderTests
               HostName 124.220.21.113
               User root
               Port 22
+              IdentityFile ~/.ssh/id_ed25519
             Host nuc
               HostName nuc11atkc4.tail603dd.ts.net
               User wangyuxin
@@ -35,6 +36,7 @@ public sealed class SshConfigReaderTests
                 Assert.Equal("124.220.21.113", tcloud.HostName);
                 Assert.Equal("root", tcloud.User);
                 Assert.Equal(22, tcloud.Port);
+                Assert.Equal("~/.ssh/id_ed25519", tcloud.IdentityFile);
             },
             nuc =>
             {
@@ -42,6 +44,7 @@ public sealed class SshConfigReaderTests
                 Assert.Equal("nuc11atkc4.tail603dd.ts.net", nuc.HostName);
                 Assert.Equal("wangyuxin", nuc.User);
                 Assert.Equal(4322, nuc.Port);
+                Assert.Null(nuc.IdentityFile);
             },
             tc =>
             {

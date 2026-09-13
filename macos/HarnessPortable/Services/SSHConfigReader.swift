@@ -5,6 +5,7 @@ struct SSHConfigHost: Identifiable, Hashable {
     let hostName: String
     let user: String?
     let port: Int
+    let identityFile: String?
 
     var id: String { alias.lowercased() }
 
@@ -14,7 +15,7 @@ struct SSHConfigHost: Identifiable, Hashable {
 }
 
 enum SSHConfigReader {
-    private static let supportedOptions = ["hostname", "user", "port"]
+    private static let supportedOptions = ["hostname", "user", "port", "identityfile"]
 
     static var defaultURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -93,7 +94,13 @@ enum SSHConfigReader {
                 port = parsedPort
             }
 
-            return SSHConfigHost(alias: alias, hostName: hostName, user: user, port: port)
+            return SSHConfigHost(
+                alias: alias,
+                hostName: hostName,
+                user: user,
+                port: port,
+                identityFile: nonEmpty(options["identityfile"])
+            )
         }
     }
 

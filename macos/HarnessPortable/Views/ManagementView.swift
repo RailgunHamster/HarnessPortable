@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 @MainActor
 struct ManagementView: View {
@@ -272,6 +273,7 @@ struct ProfileEditorView: View {
     @State private var authInput: String
     @State private var sshConfigHosts: [SSHConfigHost] = []
     @State private var selectedSSHConfigAlias = ""
+    @State private var identityFile: String
     @State private var password = ""
     @State private var removeStoredPassword = false
     @State private var keychainError: String?
@@ -292,6 +294,7 @@ struct ProfileEditorView: View {
                 ? TunnelProfile.authModeManual : TunnelProfile.authModeNssm
         )
         _authInput = State(initialValue: keychain.authInput(for: profile.id) ?? "")
+        _identityFile = State(initialValue: profile.identityFile)
     }
 
     var body: some View {
@@ -332,7 +335,7 @@ struct ProfileEditorView: View {
                     .buttonStyle(.borderless)
                     .help("重新读取 ~/.ssh/config")
                 }
-                Text("选择配置后会填入 HostName、User 和 Port；这些字段仍可手动修改。")
+                Text("选择配置后会填入 HostName、User、Port 和 IdentityFile；这些字段仍可手动修改。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 TextField("SSH 端口", text: $sshPort)
@@ -357,7 +360,17 @@ struct ProfileEditorView: View {
                 }
 
                 Section("SSH 认证") {
-                    SecureField("密码（留空保持当前密码）", text: $password)
+                    HStack {
+                        TextField("私钥文件（可选）", text: $identityFile)
+                        Button("选择…") { pickIdentityFile() }
+                        if !identityFile.isEmpty {
+                            Button("清除") { identityFile = "" }
+                        }
+                    }
+                    Text("留空则使用 ~/.ssh 默认私钥和 ssh-agent。密钥登录可不填密码。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    SecureField("密码（留空保持当前密码；密钥登录可留空）", text: $password)
                         .onChange(of: password) { newValue in
                             if !newValue.isEmpty { removeStoredPassword = false }
                         }
@@ -390,7 +403,7 @@ struct ProfileEditorView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text("密码只保存到 macOS Keychain，不写入配置文件。")
+                    Text("密码只保存到 macOS Keychain，不写入配置文件。密码错误只尝试一次，不会反复重连。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -440,6 +453,22 @@ struct ProfileEditorView: View {
         sshHost = configHost.hostName
         sshPort = String(configHost.port)
         user = configHost.user ?? ""
+        identityFile = configHost.identityFile ?? ""
+    }
+
+    private func pickIdentityFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = "选择 SSH 私钥"
+        let sshDir = SSHIdentity.sshDirectory
+        if FileManager.default.fileExists(atPath: sshDir.path) {
+            panel.directoryURL = sshDir
+        }
+        if panel.runModal() == .OK, let url = panel.url {
+            identityFile = url.path
+        }
     }
 
     private var canSave: Bool {
@@ -458,7 +487,8 @@ struct ProfileEditorView: View {
             remotePort: Int(remotePort) ?? 0,
             localPort: Int(localPort) ?? 0,
             authMode: authMode == TunnelProfile.authModeManual
-                ? TunnelProfile.authModeManual : TunnelProfile.authModeNssm
+                ? TunnelProfile.authModeManual : TunnelProfile.authModeNssm,
+            identityFile: identityFile.trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
 

@@ -31,11 +31,11 @@ xcodebuild -project HarnessPortable.xcodeproj \
 - 每个标签独立 `WKWebView`，使用持久化 WebKit 数据；
 - `profiles.json`、`layouts.json`、`settings.json` 与 Windows 字段兼容；
 - `http://127.0.0.1` 和局域网 HTTP 由应用 Info.plist 的网络策略允许；正式上架前应把 ATS 例外收窄并重新验证；
-- SSH 密码可在 profile 编辑器中保存/清除，实际存储在 macOS Keychain；
+- SSH 密码可在 profile 编辑器中保存/清除，实际存储在 macOS Keychain；未填密码时使用指定私钥、`~/.ssh` 默认身份文件或 ssh-agent；
 - TOFU 主机密钥保存到 `known_hosts.json`，连接前用 `ssh-keyscan` 校验；
 - 每个 profile 一个系统 SSH 转发进程，支持端口递增和断线重连。
 
-系统 SSH 方案不把密码写入命令行。应用通过 Security API 从 Keychain 读取密码，并在当前进程内缓存刚保存的密码，写入仅当前用户可读的临时文件，再由 `/usr/bin/ssh` 的 askpass 脚本读取；隧道停止或进程退出时删除临时文件。
+系统 SSH 方案不把密码写入命令行。有密码时，应用通过 Security API 从 Keychain 读取，并在当前进程内缓存刚保存的密码，写入仅当前用户可读的临时文件，再由 `/usr/bin/ssh` 的 askpass 脚本读取；隧道停止或进程退出时删除临时文件。无密码时以 `BatchMode` 走公钥（指定 `IdentityFile`、默认身份文件或 ssh-agent）。认证失败不会进入断线重连。
 
 配置目录：
 

@@ -621,7 +621,8 @@ public partial class MainWindow : Window
 
     private bool EnsurePassword(TunnelProfile profile)
     {
-        if (_services.Secrets.HasPassword(profile.Id))
+        if (_services.Secrets.HasPassword(profile.Id) ||
+            SshIdentity.HasUsableKey(profile.IdentityFile))
         {
             return true;
         }

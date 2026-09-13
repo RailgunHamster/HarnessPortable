@@ -135,8 +135,9 @@ exit 3
         host: String,
         port: Int,
         knownHostsFile: URL,
-        passwordFile: URL,
-        askpass: URL
+        passwordFile: URL?,
+        askpass: URL,
+        identityFile: String
     ) -> String? {
         guard let encoded = script.data(using: .utf16LittleEndian)?.base64EncodedString() else {
             return nil
@@ -150,21 +151,20 @@ exit 3
             "-4",
             "-o", "StrictHostKeyChecking=yes",
             "-o", knownHostsOption,
-            "-o", "PreferredAuthentications=keyboard-interactive,password",
-            "-o", "PubkeyAuthentication=no",
-            "-o", "NumberOfPasswordPrompts=1",
             "-o", "ConnectTimeout=20",
-            "-p", String(port),
+            "-p", String(port)
+        ] + SSHIdentity.sshArguments(
+            identityFile: identityFile,
+            hasPassword: passwordFile != nil
+        ) + [
             "\(user)@\(host)",
             "powershell -NoProfile -EncodedCommand \(encoded)"
         ]
 
-        var environment = ProcessInfo.processInfo.environment
-        environment["SSH_ASKPASS"] = askpass.path
-        environment["SSH_ASKPASS_REQUIRE"] = "force"
-        environment["DISPLAY"] = "1"
-        environment["HARNESS_PASSWORD_FILE"] = passwordFile.path
-        command.environment = environment
+        command.environment = SSHIdentity.sshEnvironment(
+            askpass: passwordFile == nil ? nil : askpass,
+            passwordFile: passwordFile
+        )
         command.standardInput = FileHandle.nullDevice
         command.standardError = FileHandle.nullDevice
         let output = Pipe()

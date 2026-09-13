@@ -49,7 +49,8 @@ public partial class TunnelEditorWindow : Window
             RemotePortBox.Text = initial.RemotePort.ToString();
             LocalPortBox.Text = initial.LocalPort.ToString();
             AuthModeBox.SelectedIndex = initial.AuthMode == TunnelProfile.AuthModeManual ? 1 : 0;
-            PasswordCaption.Text = "密码（留空保持不变）";
+            PasswordCaption.Text = "密码（留空保持不变；密钥登录可留空）";
+            IdentityFileBox.Text = initial.IdentityFile;
         }
 
         UpdateAuthInputVisibility();
@@ -182,6 +183,7 @@ public partial class TunnelEditorWindow : Window
             hostValue = config.HostName;
             SshPortBox.Text = config.Port.ToString();
             UserBox.Text = config.User ?? "";
+            IdentityFileBox.Text = config.IdentityFile ?? "";
         }
 
         // Keep the selected item while WPF finishes the ComboBox selection
@@ -242,7 +244,46 @@ public partial class TunnelEditorWindow : Window
             AuthMode = (AuthModeBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string == TunnelProfile.AuthModeManual
                 ? TunnelProfile.AuthModeManual
                 : TunnelProfile.AuthModeNssm,
+            IdentityFile = IdentityFileBox.Text.Trim(),
         };
+    }
+
+    private void ChooseIdentityFile_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new WpfOpenFileDialog
+        {
+            Title = "选择 SSH 私钥",
+            Filter = "所有文件|*.*",
+            CheckFileExists = true,
+            Multiselect = false,
+        };
+
+        var sshDir = SshIdentity.SshDirectory;
+        if (Directory.Exists(sshDir))
+        {
+            dialog.InitialDirectory = sshDir;
+        }
+
+        var current = IdentityFileBox.Text.Trim();
+        if (current.Length > 0)
+        {
+            var expanded = SshIdentity.ExpandPath(current);
+            if (File.Exists(expanded))
+            {
+                dialog.InitialDirectory = Path.GetDirectoryName(expanded);
+                dialog.FileName = Path.GetFileName(expanded);
+            }
+        }
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            IdentityFileBox.Text = dialog.FileName;
+        }
+    }
+
+    private void ClearIdentityFile_Click(object sender, RoutedEventArgs e)
+    {
+        IdentityFileBox.Text = "";
     }
 
     private static bool TryPort(string text, int fallback, out int port)

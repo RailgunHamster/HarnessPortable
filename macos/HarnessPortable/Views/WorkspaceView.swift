@@ -221,7 +221,7 @@ struct WorkspaceView: View {
     private func startTunnelsInWorkspace() {
         for item in workspace.allTabs() where item.tab.kind == .tunnel {
             guard let profile = services.profiles.findTunnel(id: item.tab.profileID),
-                  services.keychain.hasPassword(for: profile.id) else { continue }
+                  canStartWithoutPrompt(profile) else { continue }
             services.tunnels.start(profile)
         }
     }
@@ -231,8 +231,13 @@ struct WorkspaceView: View {
         passwordProfile = profile
     }
 
+    private func canStartWithoutPrompt(_ profile: TunnelProfile) -> Bool {
+        services.keychain.hasPassword(for: profile.id) ||
+            SSHIdentity.hasUsableKey(identityFile: profile.identityFile)
+    }
+
     private func connect(_ profile: TunnelProfile) {
-        if services.keychain.hasPassword(for: profile.id) {
+        if canStartWithoutPrompt(profile) {
             let workspace = workspace
             let tunnels = services.tunnels
             DispatchQueue.main.async {
@@ -245,7 +250,7 @@ struct WorkspaceView: View {
     }
 
     private func openTunnel(_ profile: TunnelProfile) {
-        if services.keychain.hasPassword(for: profile.id) {
+        if canStartWithoutPrompt(profile) {
             let workspace = workspace
             let tunnels = services.tunnels
             DispatchQueue.main.async {
@@ -285,7 +290,7 @@ struct WorkspaceView: View {
 
     private func switchTab(_ tabID: UUID, target: WorkspaceTab) {
         if target.kind == .tunnel, let profile = services.profiles.findTunnel(id: target.profileID) {
-            if services.keychain.hasPassword(for: profile.id) {
+            if canStartWithoutPrompt(profile) {
                 workspace.replaceTab(tabID, with: target)
                 webSessions.remove(tabID: tabID)
                 services.tunnels.start(profile)
