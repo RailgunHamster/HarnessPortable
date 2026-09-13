@@ -270,6 +270,7 @@ struct WorkspaceView: View {
     private func deleteProfile(_ profile: TunnelProfile) {
         stop(profile.id)
         services.keychain.deletePassword(for: profile.id)
+        services.keychain.deleteAuthInput(for: profile.id)
         services.profiles.deleteTunnel(id: profile.id)
     }
 

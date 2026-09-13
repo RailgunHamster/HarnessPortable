@@ -50,7 +50,7 @@ Windows / macOS / Android 各自实现存储与 UI，但**配置字段语义保�
 | `tunnels[].remoteHost` | string | 否 | 127.0.0.1 | 服务器侧目标 |
 | `tunnels[].remotePort` | int | 否 | 3080 | 1–65535 |
 | `tunnels[].localPort` | int | 否 | 3080 | 本地监听端口；被占用时依次 +1 到 +9 |
-| `tunnels[].authMode` | string | 否 | `nssm` | Web 登录方式：`nssm`（连接后自动经 SSH 在服务器上定位 NSSM 托管的 dsh web 日志，提取带 token 的 URL 并在内置浏览器自动登录）/ `manual`（页面被拒时手动粘贴 URL，登录后凭 cookie 保持约 30 天）。Android 端键名为 `auth_mode` |
+| `tunnels[].authMode` | string | 否 | `nssm` | Web 登录方式：`nssm`（连接后自动经 SSH 在服务器上定位 NSSM 托管的 dsh web 日志，提取带 token 的 URL 并在内置浏览器自动登录）/ `manual`（连接时使用凭据库中保存的认证输入；没有保存时，页面被拒后手动粘贴 URL，登录后凭 cookie 保持约 30 天）。Android 端键名为 `auth_mode` |
 | `directs` | array<string> | 否 | `[]` | 直连 URL，保持添加顺序，去重 |
 
 ## 多隧道运行约定（桌面端）
@@ -87,3 +87,23 @@ Windows 与 macOS 桌面版允许**同一进程内同时运行多个隧道**：
 - Android：Android Keystore 加密后存 SharedPreferences，键为 `tunnel.id`。
 
 凭据不随 `profiles.json` 导入导出，跨设备迁移时由用户重新输入。
+
+## Web 认证输入（可选）
+
+每个隧道可以额外保存一条可选的 Web 登录信息，用于 dsh web 的
+`?token=…` 握手。它在编辑界面（选择“手动输入”时）填写，**不是 `profiles.json` 字段**，
+也不随配置导入导出。
+
+- 接受的形式：服务器上 `dsh web` 打印的完整 URL（`http://host:port/?token=…`）、
+  裸查询（`?token=…`）、`key=value`（`token=…`），或 token 本身
+  （dsh 的启动 token 是 base64url，如 `x1Yz…_-`）。
+- 存储位置（键由 `tunnel.id` 派生）：
+  - Windows：DPAPI 加密后存 `secrets.json`，键 `<tunnel.id>#webauth`；
+  - macOS：Keychain，service `com.harness.portable`，account `<tunnel.id>#webauth`；
+  - Android：Android Keystore 加密后存 SharedPreferences，键 `web_<tunnel.id>`。
+- 使用时机：`authMode=manual` 时每次连接都用它；`authMode=nssm` 时仅在服务器侧
+  抓取失败后回退到它，两者都没有时打开裸地址，由页面的 401 触发粘贴框。
+- 归一化：非 URL 的裸 token 拼成 `http://<remoteHost>:<remotePort>/?token=<token>`，
+  随后按实际本地转发端口重写（token 不带本地端口信息）。
+  token 已失效而 cookie 仍有效时服务端回 303 到干净的 `/`，因此保存旧 token 无害。
+- 删除隧道时一并删除该条凭据；编辑界面清空字段即删除。

@@ -269,6 +269,7 @@ struct ProfileEditorView: View {
     @State private var remotePort: String
     @State private var localPort: String
     @State private var authMode: String
+    @State private var authInput: String
     @State private var sshConfigHosts: [SSHConfigHost] = []
     @State private var selectedSSHConfigAlias = ""
     @State private var password = ""
@@ -290,6 +291,7 @@ struct ProfileEditorView: View {
             initialValue: profile.authMode == TunnelProfile.authModeManual
                 ? TunnelProfile.authModeManual : TunnelProfile.authModeNssm
         )
+        _authInput = State(initialValue: keychain.authInput(for: profile.id) ?? "")
     }
 
     var body: some View {
@@ -343,9 +345,16 @@ struct ProfileEditorView: View {
                     Text("手动输入").tag(TunnelProfile.authModeManual)
                 }
                 .pickerStyle(.radioGroup)
-                Text("NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志并自动登录；手动方式：页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。")
+                Text("NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志并自动登录；手动方式：连接时用上面保存的认证 URL/token，留空则页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。密码与认证 URL/token 只存 Keychain，不写入配置文件。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if authMode == TunnelProfile.authModeManual {
+                    TextField("Web 认证 URL 或 token（可选）", text: $authInput)
+                    Text("粘贴服务器上 dsh web 打印的带 token 的 URL，或直接粘贴 token 本身。留空则连接后在页面上粘贴。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 Section("SSH 认证") {
                     SecureField("密码（留空保持当前密码）", text: $password)
@@ -398,7 +407,7 @@ struct ProfileEditorView: View {
         .padding(24)
         .frame(width: 460)
         .onAppear { reloadSSHConfig() }
-        .alert("无法保存密码", isPresented: keychainErrorPresented) {
+        .alert("无法写入 Keychain", isPresented: keychainErrorPresented) {
             Button("确定", role: .cancel) { keychainError = nil }
         } message: {
             Text(keychainError ?? "未知 Keychain 错误")
@@ -460,6 +469,14 @@ struct ProfileEditorView: View {
                 keychain.deletePassword(for: original.id)
             } else if !password.isEmpty {
                 try keychain.setPassword(password, for: original.id)
+            }
+            // The field content is authoritative: a non-empty value is
+            // stored, an empty one clears any previously stored input.
+            let trimmedAuthInput = authInput.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedAuthInput.isEmpty {
+                keychain.deleteAuthInput(for: original.id)
+            } else {
+                try keychain.setAuthInput(trimmedAuthInput, for: original.id)
             }
             onSave(makeProfile())
             dismiss()

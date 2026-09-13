@@ -11,11 +11,12 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Password vault backed by the Android Keystore.
+ * Credential vault backed by the Android Keystore.
  *
  * A non-exportable AES-256-GCM key lives inside AndroidKeyStore; the ciphertext
  * (iv || ciphertext) is persisted in app-private preferences. The plaintext
- * password never touches disk and never leaves the process except into JSch.
+ * password / web login token never touches disk and never leaves the process
+ * except into JSch or the WebView.
  */
 object SecureStore {
 
@@ -24,6 +25,8 @@ object SecureStore {
     private const val IV_LEN = 12
 
     private fun prefKey(profileId: String) = "pw_$profileId"
+
+    private fun authPrefKey(profileId: String) = "web_$profileId"
 
     private fun prefs(ctx: Context) =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -48,21 +51,52 @@ object SecureStore {
     }
 
     fun setPassword(ctx: Context, profileId: String, password: String) {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, obtainKey())
-        val blob = Base64.encodeToString(
-            cipher.iv + cipher.doFinal(password.toByteArray(Charsets.UTF_8)),
-            Base64.NO_WRAP
-        )
-        prefs(ctx).edit().putString(prefKey(profileId), blob).apply()
+        writeEncrypted(ctx, prefKey(profileId), password)
     }
 
     fun hasPassword(ctx: Context, profileId: String): Boolean =
         prefs(ctx).contains(prefKey(profileId))
 
     /** Returns null when nothing is stored or when the master key was invalidated. */
-    fun getPassword(ctx: Context, profileId: String): String? {
-        val blob = prefs(ctx).getString(prefKey(profileId), null) ?: return null
+    fun getPassword(ctx: Context, profileId: String): String? =
+        readEncrypted(ctx, prefKey(profileId))
+
+    fun clearPassword(ctx: Context, profileId: String) {
+        prefs(ctx).edit().remove(prefKey(profileId)).apply()
+    }
+
+    /**
+     * Optional per-profile web login input (token URL, query, key=value pair or
+     * the bare token); consumed only to build the first URL the WebView opens.
+     */
+    fun setAuthInput(ctx: Context, profileId: String, value: String) {
+        writeEncrypted(ctx, authPrefKey(profileId), value)
+    }
+
+    fun hasAuthInput(ctx: Context, profileId: String): Boolean =
+        prefs(ctx).contains(authPrefKey(profileId))
+
+    /** Returns null when nothing is stored or when the master key was invalidated. */
+    fun getAuthInput(ctx: Context, profileId: String): String? =
+        readEncrypted(ctx, authPrefKey(profileId))
+
+    fun clearAuthInput(ctx: Context, profileId: String) {
+        prefs(ctx).edit().remove(authPrefKey(profileId)).apply()
+    }
+
+    private fun writeEncrypted(ctx: Context, key: String, value: String) {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, obtainKey())
+        val blob = Base64.encodeToString(
+            cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8)),
+            Base64.NO_WRAP
+        )
+        prefs(ctx).edit().putString(key, blob).apply()
+    }
+
+    /** Returns null when nothing is stored or when the master key was invalidated. */
+    private fun readEncrypted(ctx: Context, key: String): String? {
+        val blob = prefs(ctx).getString(key, null) ?: return null
         return try {
             val raw = Base64.decode(blob, Base64.NO_WRAP)
             if (raw.size <= IV_LEN) return null
@@ -74,9 +108,5 @@ object SecureStore {
         } catch (e: Exception) {
             null
         }
-    }
-
-    fun clearPassword(ctx: Context, profileId: String) {
-        prefs(ctx).edit().remove(prefKey(profileId)).apply()
     }
 }

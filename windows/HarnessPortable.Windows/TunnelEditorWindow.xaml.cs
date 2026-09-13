@@ -12,7 +12,8 @@ public partial class TunnelEditorWindow : Window
     public sealed record EditorResult(
         TunnelProfile Profile,
         string? Password,
-        string? SshConfigPath);
+        string? SshConfigPath,
+        string? AuthInput);
 
     private sealed record HostSuggestion(
         string Title,
@@ -27,11 +28,12 @@ public partial class TunnelEditorWindow : Window
 
     public EditorResult? Result { get; private set; }
 
-    public TunnelEditorWindow(TunnelProfile? initial, string? sshConfigPath = null)
+    public TunnelEditorWindow(TunnelProfile? initial, string? sshConfigPath = null, string? storedAuthInput = null)
     {
         _initial = initial;
         _sshConfigPath = string.IsNullOrWhiteSpace(sshConfigPath) ? null : sshConfigPath;
         InitializeComponent();
+        AuthInputBox.Text = storedAuthInput?.Trim() ?? "";
         HostBox.ItemsSource = _hostSuggestions;
         UpdateSshConfigPathText(SshConfigReader.ResolvePath(_sshConfigPath));
         Closed += (_, _) => _configLoadCts?.Cancel();
@@ -49,6 +51,29 @@ public partial class TunnelEditorWindow : Window
             AuthModeBox.SelectedIndex = initial.AuthMode == TunnelProfile.AuthModeManual ? 1 : 0;
             PasswordCaption.Text = "密码（留空保持不变）";
         }
+
+        UpdateAuthInputVisibility();
+    }
+
+    private void AuthModeBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) =>
+        UpdateAuthInputVisibility();
+
+    /// <summary>
+    /// The stored web-login value only ever applies to the manual mode, so the
+    /// field appears with that choice. SelectionChanged also fires while
+    /// InitializeComponent is still building the tree (SelectedIndex="0" in
+    /// XAML), hence the null guard.
+    /// </summary>
+    private void UpdateAuthInputVisibility()
+    {
+        if (AuthInputPanel is null)
+        {
+            return;
+        }
+
+        var manual = (AuthModeBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string
+            == TunnelProfile.AuthModeManual;
+        AuthInputPanel.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void HostBox_DropDownOpened(object sender, EventArgs e)
@@ -181,7 +206,7 @@ public partial class TunnelEditorWindow : Window
         }
 
         var password = string.IsNullOrEmpty(PasswordInput.Password) ? null : PasswordInput.Password;
-        Result = new EditorResult(profile, password, _sshConfigPath);
+        Result = new EditorResult(profile, password, _sshConfigPath, AuthInputBox.Text.Trim());
         DialogResult = true;
     }
 

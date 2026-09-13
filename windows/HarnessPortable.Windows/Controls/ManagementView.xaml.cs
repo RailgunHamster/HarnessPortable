@@ -176,8 +176,26 @@ public partial class ManagementView : System.Windows.Controls.UserControl
                 _services.Secrets.SetPassword(result.Profile.Id, result.Password);
             }
 
+            SaveAuthInput(result);
+
             RefreshLists();
         }
+    }
+
+    /// <summary>
+    /// The editor's web-login field is authoritative: a blank value clears the
+    /// stored one. It lives in the credential store, never in profiles.json.
+    /// </summary>
+    private void SaveAuthInput(TunnelEditorWindow.EditorResult result)
+    {
+        var value = result.AuthInput?.Trim() ?? "";
+        if (value.Length == 0)
+        {
+            _services.Secrets.ClearAuthInput(result.Profile.Id);
+            return;
+        }
+
+        _services.Secrets.SetAuthInput(result.Profile.Id, value);
     }
 
     private void SaveSshConfigPath(string? path)
@@ -224,7 +242,11 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         }
 
         var sshConfigPath = _services.Settings.Load().SshConfigPath;
-        var editor = new TunnelEditorWindow(item.Profile, sshConfigPath) { Owner = Window.GetWindow(this) };
+        var editor = new TunnelEditorWindow(
+            item.Profile, sshConfigPath, _services.Secrets.GetAuthInput(item.Profile.Id))
+        {
+            Owner = Window.GetWindow(this),
+        };
         if (editor.ShowDialog() == true && editor.Result is { } result)
         {
             SaveSshConfigPath(result.SshConfigPath);
@@ -241,6 +263,8 @@ public partial class ManagementView : System.Windows.Controls.UserControl
             {
                 _services.Secrets.SetPassword(result.Profile.Id, result.Password);
             }
+
+            SaveAuthInput(result);
 
             RefreshLists();
         }
@@ -271,6 +295,7 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         profiles.RemoveAll(p => p.Id == item.Profile.Id);
         _services.Profiles.SaveTunnels(profiles);
         _services.Secrets.ClearPassword(item.Profile.Id);
+        _services.Secrets.ClearAuthInput(item.Profile.Id);
 
         RefreshLists();
     }

@@ -9,7 +9,11 @@ public sealed record TunnelProfile
     /// <summary>On connect, locate the dsh web launch-token URL via NSSM on the server (default).</summary>
     public const string AuthModeNssm = "nssm";
 
-    /// <summary>Let the user paste the token URL when the page rejects (fallback: 401 overlay).</summary>
+    /// <summary>
+    /// Use the web login input stored in the credential store (token URL or
+    /// the token itself); when it is empty, paste the token URL into the 401
+    /// overlay instead.
+    /// </summary>
     public const string AuthModeManual = "manual";
 
     public string Id { get; init; } = Guid.NewGuid().ToString();

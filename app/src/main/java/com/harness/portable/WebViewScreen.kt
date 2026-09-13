@@ -136,10 +136,13 @@ internal fun WebViewScreen(
             input.startsWith("?") -> base + input
             input.contains('=') && !input.contains('/') && !input.contains(' ') ->
                 "$base/?$input"
+            // Bare token (dsh tokens are base64url: [A-Za-z0-9_-]).
+            input.isNotEmpty() && !input.contains('/') && input.none { it.isWhitespace() } ->
+                "$base/?token=${encodeQueryValue(input)}"
             else -> null
         }
         if (target == null) {
-            authHint = "无法识别输入。请粘贴 dsh web 打印的完整 URL（应包含 ?token=… 之类的参数）。"
+            authHint = "无法识别输入。请粘贴 dsh web 打印的完整 URL，或直接粘贴 token 本身。"
         } else {
             showAuthPrompt = false
             authHint = null
@@ -257,8 +260,8 @@ internal fun WebViewScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             "服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。" +
-                                    "请复制服务器上 dsh web 打印的完整 URL 粘贴到下面，" +
-                                    "将直接在内置浏览器中完成认证。",
+                                    "请复制服务器上 dsh web 打印的完整 URL —— 或只复制 token 本身 —— " +
+                                    "粘贴到下面，将直接在内置浏览器中完成认证。",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.outline
                         )
@@ -268,7 +271,7 @@ internal fun WebViewScreen(
                                 authInput = it
                                 authHint = null
                             },
-                            label = { Text("完整 URL 或 ?token=…") },
+                            label = { Text("完整 URL、?token=… 或 token") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )

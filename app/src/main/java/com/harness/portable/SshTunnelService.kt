@@ -289,13 +289,21 @@ class SshTunnelService : Service() {
 
                 // dsh-web style services gate the browser behind a launch
                 // token printed on the server. In NSSM mode grab it on every
-                // connect (cheap) so the first navigation carries it;
-                // failure falls back to the bare URL, whose 401 page opens
-                // the manual paste dialog.
+                // connect (cheap) so the first navigation carries it; a saved
+                // per-profile URL/token is the only source in manual mode and
+                // the fallback in NSSM mode. Otherwise the bare URL is opened,
+                // whose 401 page opens the manual paste dialog.
                 var authUrl: String? = null
                 if (p.authMode == TunnelProfile.AUTH_MODE_NSSM) {
                     stage("auth-url fetch")
                     authUrl = NssmAuthUrl.fetch(sess, p.remotePort)
+                    stage("auth-url " + (authUrl?.let { "ok" } ?: "miss"))
+                }
+                if (authUrl == null) {
+                    stage("auth-url manual")
+                    authUrl = WebAuthInput.normalize(
+                        SecureStore.getAuthInput(this, p.id), p.remoteHost, p.remotePort
+                    )
                     stage("auth-url " + (authUrl?.let { "ok" } ?: "miss"))
                 }
 

@@ -301,9 +301,10 @@ public sealed partial class TunnelEngine
 
                     // dsh-web style services gate the browser behind a
                     // launch token printed on the server. In NSSM mode grab
-                    // it on every connect (cheap) so the first navigation
-                    // carries it; failure falls back to the bare URL, whose
-                    // 401 page opens the manual paste overlay.
+                    // it on every connect (cheap); in manual mode — or when
+                    // the fetch misses — use the value stored from the
+                    // profile editor. With neither, the session opens the
+                    // bare URL, whose 401 page opens the paste overlay.
                     string? authUrl = null;
                     if (profile.AuthMode == TunnelProfile.AuthModeNssm)
                     {
@@ -311,6 +312,9 @@ public sealed partial class TunnelEngine
                             .TryFetchAsync(client, profile.RemotePort, token)
                             .ConfigureAwait(false);
                     }
+
+                    authUrl ??= WebAuthInput.Normalize(
+                        _secrets.GetAuthInput(profile.Id), profile.RemoteHost, profile.RemotePort);
 
                     Publish(generation, new TunnelInfo(
                         profile.Id,

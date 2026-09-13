@@ -117,7 +117,7 @@ dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
 ## 配置文件
 
 - `%APPDATA%\HarnessPortable\profiles.json` —— 隧道与直连列表
-- `%APPDATA%\HarnessPortable\secrets.json` —— DPAPI 加密的 SSH 密码
+- `%APPDATA%\HarnessPortable\secrets.json` —— DPAPI 加密的 SSH 密码与可选 Web 认证输入
 - `%APPDATA%\HarnessPortable\known_hosts.json` —— TOFU 主机密钥
 - `%APPDATA%\HarnessPortable\layouts.json` —— 布局预设
 - `%APPDATA%\HarnessPortable\settings.json` —— 应用设置（关闭行为等）

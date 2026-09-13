@@ -193,9 +193,12 @@ final class SSHProcessTunnel {
 
                 // dsh-web style services gate the browser behind a launch
                 // token printed on the server. In NSSM mode grab it on every
-                // connect (cheap) so the first navigation carries it;
-                // failure falls back to the bare URL, whose 401 page opens
-                // the manual paste sheet.
+                // connect (cheap) so the first navigation carries it; when
+                // that misses, fall back to the manually stored input. In
+                // manual mode the stored input is used directly. With
+                // neither, the bare URL is opened and its 401 page raises
+                // the manual paste sheet. The Keychain is only read here,
+                // when a tunnel actually connects.
                 var authUrl: String? = nil
                 if profile.authMode == TunnelProfile.authModeNssm {
                     authUrl = NssmAuthUrl.fetch(
@@ -211,6 +214,20 @@ final class SSHProcessTunnel {
                         appendDiagnostic("authUrl port mismatch (\(remote) != \(profile.remotePort)), ignoring")
                         authUrl = nil
                     }
+                    if authUrl == nil {
+                        authUrl = WebAuthInput.normalize(
+                            keychain.authInput(for: profile.id),
+                            host: profile.remoteHost,
+                            port: profile.remotePort
+                        )
+                    }
+                    appendDiagnostic("authUrl " + (authUrl != nil ? "ok" : "miss"))
+                } else if profile.authMode == TunnelProfile.authModeManual {
+                    authUrl = WebAuthInput.normalize(
+                        keychain.authInput(for: profile.id),
+                        host: profile.remoteHost,
+                        port: profile.remotePort
+                    )
                     appendDiagnostic("authUrl " + (authUrl != nil ? "ok" : "miss"))
                 }
 

@@ -46,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -63,13 +64,14 @@ fun SettingsScreen(
     directs: List<String>,
     runningTunnelId: String?,
     onConnectTunnel: (TunnelProfile) -> Unit,
-    onAddTunnel: (TunnelProfile, String?) -> Unit,
-    onUpdateTunnel: (TunnelProfile, String?) -> Unit,
+    onAddTunnel: (TunnelProfile, String?, String?) -> Unit,
+    onUpdateTunnel: (TunnelProfile, String?, String?) -> Unit,
     onDeleteTunnel: (TunnelProfile) -> Unit,
     onConnectDirect: (String) -> Unit,
     onAddDirect: (String) -> Unit,
     onDeleteDirect: (String) -> Unit
 ) {
+    val ctx = LocalContext.current
     var editorFor by remember { mutableStateOf<TunnelProfile?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var directInput by remember { mutableStateOf("") }
@@ -175,12 +177,18 @@ fun SettingsScreen(
     }
 
     if (showEditor) {
+        // Stored value is read once per opened editor: editing a profile must
+        // not re-run keystore decryption on every recomposition.
+        val initialAuthInput = remember(editorFor) {
+            editorFor?.let { SecureStore.getAuthInput(ctx, it.id) }
+        }
         TunnelEditorDialog(
             initial = editorFor,
+            initialAuthInput = initialAuthInput,
             onDismiss = { showEditor = false },
-            onSave = { profile, password ->
-                if (editorFor == null) onAddTunnel(profile, password)
-                else onUpdateTunnel(profile, password)
+            onSave = { profile, password, authInput ->
+                if (editorFor == null) onAddTunnel(profile, password, authInput)
+                else onUpdateTunnel(profile, password, authInput)
                 showEditor = false
             }
         )
@@ -411,8 +419,9 @@ private fun ServerRow(
 @Composable
 private fun TunnelEditorDialog(
     initial: TunnelProfile?,
+    initialAuthInput: String?,
     onDismiss: () -> Unit,
-    onSave: (TunnelProfile, String?) -> Unit
+    onSave: (TunnelProfile, String?, String?) -> Unit
 ) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var host by remember { mutableStateOf(initial?.sshHost ?: "") }
@@ -420,6 +429,7 @@ private fun TunnelEditorDialog(
     var user by remember { mutableStateOf(initial?.user ?: "") }
     var pass by remember { mutableStateOf("") }
     var passVisible by remember { mutableStateOf(false) }
+    var authInput by remember { mutableStateOf(initialAuthInput ?: "") }
     var remoteHost by remember { mutableStateOf(initial?.remoteHost ?: "127.0.0.1") }
     var remotePort by remember { mutableStateOf((initial?.remotePort ?: 3080).toString()) }
     var localPort by remember { mutableStateOf((initial?.localPort ?: 3080).toString()) }
@@ -497,13 +507,29 @@ private fun TunnelEditorDialog(
                         label = { Text("手动输入") }
                     )
                 }
+                if (authMode == TunnelProfile.AUTH_MODE_MANUAL) {
+                    OutlinedTextField(
+                        value = authInput,
+                        onValueChange = { authInput = it },
+                        label = { Text("Web 认证 URL 或 token") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "粘贴服务器上 dsh web 打印的带 token 的 URL，或直接粘贴 token 本身。" +
+                                "留空则连接后在页面上粘贴。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
                 Text(
                     "等价于 ssh -N -L 本地端口:远程地址:远程端口 用户名@服务器\n" +
                             "服务器可填 IP / 域名 / NetBIOS 名（如 winserver）：局域网自动发现；" +
                             "装有 Tailscale 并开启 MagicDNS 时自动解析到 Tailscale IP。\n" +
-                            "密码用 Android Keystore 加密存储。\n" +
+                            "密码与认证 URL/token 用 Android Keystore 加密存储，不写入 tunnels 配置。\n" +
                             "NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志并自动登录；" +
-                            "手动方式：页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。",
+                            "手动方式：连接时用上面保存的认证 URL/token，留空则页面提示需要认证时粘贴 URL，" +
+                            "登录后凭 cookie 自动保持约 30 天。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -525,7 +551,8 @@ private fun TunnelEditorDialog(
                             localPort = portOr(localPort, 3080),
                             authMode = authMode
                         ),
-                        pass.takeIf { it.isNotEmpty() }
+                        pass.takeIf { it.isNotEmpty() },
+                        authInput.trim().takeIf { it.isNotEmpty() }
                     )
                 }
             ) { Text("保存") }

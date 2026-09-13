@@ -89,8 +89,9 @@ exit 3
 
     /// Builds the URL to open from a user-pasted input against the base URL
     /// currently loaded in the web view. Accepted inputs: a full URL (its
-    /// path + query replace the base's), a bare query ("?token=..."), or a
-    /// key=value pair. Returns nil when nothing usable was pasted.
+    /// path + query replace the base's), a bare query ("?token=..."), a
+    /// key=value pair, or a bare token. Returns nil when nothing usable was
+    /// pasted.
     static func buildAuthTarget(base: String, input: String) -> String? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -115,6 +116,11 @@ exit 3
 
         if trimmed.contains("="), !trimmed.contains("/"), !trimmed.contains(" ") {
             return strippedBase + "/?" + trimmed
+        }
+
+        // A bare token: no path separator, no whitespace.
+        if !trimmed.contains("/"), trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil {
+            return strippedBase + "/?token=" + WebAuthInput.percentEncodeTokenValue(trimmed)
         }
 
         return nil

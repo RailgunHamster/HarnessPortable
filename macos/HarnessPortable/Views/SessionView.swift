@@ -367,12 +367,12 @@ struct SessionView: View {
             Text(
                 "服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。"
                     + "请复制服务器上 dsh web 打印的完整 URL 粘贴到下面，"
-                    + "将直接在内置浏览器中完成认证。"
+                    + "也可直接粘贴 token 本身，将直接在内置浏览器中完成认证。"
             )
             .font(.callout)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
-            TextField("完整 URL 或 ?token=…", text: $authInput)
+            TextField("完整 URL、?token=… 或 token", text: $authInput)
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 420)
                 .onSubmit(openPastedAuthUrl)
@@ -399,7 +399,7 @@ struct SessionView: View {
 
     private func openPastedAuthUrl() {
         if !webSessions.openAuth(tabID: tab.id, input: authInput) {
-            authHint = "无法识别输入。请粘贴 dsh web 打印的完整 URL（应包含 ?token=… 之类的参数）。"
+            authHint = "无法识别输入。请粘贴 dsh web 打印的完整 URL、?token=… 查询串或 token 本身。"
         } else {
             authHint = nil
             authInput = ""

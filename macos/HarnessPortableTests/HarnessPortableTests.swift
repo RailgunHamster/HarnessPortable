@@ -198,7 +198,76 @@ final class HarnessPortableTests: XCTestCase {
             NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "token=abc"),
             "http://127.0.0.1:4080/?token=abc"
         )
-        XCTAssertNil(NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "garbage"))
+        // A bare token is now accepted as the token value.
+        XCTAssertEqual(
+            NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "abc-123_XYZ"),
+            "http://127.0.0.1:4080/?token=abc-123_XYZ"
+        )
+        XCTAssertEqual(
+            NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "a+b&c"),
+            "http://127.0.0.1:4080/?token=a%2Bb%26c"
+        )
+        // Whitespace or a path separator means it is not a token.
+        XCTAssertNil(NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "garbage token"))
+        XCTAssertNil(NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "abc/def"))
         XCTAssertNil(NssmAuthUrl.buildAuthTarget(base: "http://127.0.0.1:4080", input: "http://127.0.0.1:3080/"))
+    }
+
+    func testWebAuthInputNormalization() {
+        // A bare base64url token becomes the token query.
+        XCTAssertEqual(
+            WebAuthInput.normalize("abc-123_XYZ", host: "127.0.0.1", port: 3080),
+            "http://127.0.0.1:3080/?token=abc-123_XYZ"
+        )
+        // Characters outside base64url are escaped in the query value.
+        XCTAssertEqual(
+            WebAuthInput.normalize("a+b&c", host: "127.0.0.1", port: 3080),
+            "http://127.0.0.1:3080/?token=a%2Bb%26c"
+        )
+        // A bare query is appended as-is.
+        XCTAssertEqual(
+            WebAuthInput.normalize("?token=abc", host: "127.0.0.1", port: 3080),
+            "http://127.0.0.1:3080?token=abc"
+        )
+        // A key=value pair becomes the query.
+        XCTAssertEqual(
+            WebAuthInput.normalize("token=abc", host: "127.0.0.1", port: 3080),
+            "http://127.0.0.1:3080/?token=abc"
+        )
+        // A full URL is kept verbatim, whatever host it names.
+        XCTAssertEqual(
+            WebAuthInput.normalize("http://127.0.0.1:3080/?token=abc", host: "10.0.0.5", port: 4096),
+            "http://127.0.0.1:3080/?token=abc"
+        )
+        // An empty host falls back to loopback.
+        XCTAssertEqual(
+            WebAuthInput.normalize("?token=abc", host: "", port: 4096),
+            "http://127.0.0.1:4096?token=abc"
+        )
+        // Nothing typed, or an unusable input.
+        XCTAssertNil(WebAuthInput.normalize("", host: "127.0.0.1", port: 3080))
+        XCTAssertNil(WebAuthInput.normalize("   ", host: "127.0.0.1", port: 3080))
+        XCTAssertNil(WebAuthInput.normalize(nil, host: "127.0.0.1", port: 3080))
+        XCTAssertNil(WebAuthInput.normalize("http://127.0.0.1:3080/", host: "127.0.0.1", port: 3080))
+        XCTAssertNil(WebAuthInput.normalize("abc/def", host: "127.0.0.1", port: 3080))
+        XCTAssertNil(WebAuthInput.normalize("not a token", host: "127.0.0.1", port: 3080))
+    }
+
+    func testKeychainAuthInputRoundTrip() throws {
+        let store = KeychainStore()
+        let profileID = "test-\(UUID().uuidString)"
+        defer { store.deleteAuthInput(for: profileID) }
+
+        XCTAssertFalse(store.hasAuthInput(for: profileID))
+        try store.setAuthInput("http://127.0.0.1:3080/?token=abc", for: profileID)
+        XCTAssertTrue(store.hasAuthInput(for: profileID))
+
+        let reader = KeychainStore()
+        XCTAssertEqual(reader.authInput(for: profileID), "http://127.0.0.1:3080/?token=abc")
+        // The web-auth account never collides with the SSH password account.
+        XCTAssertFalse(reader.hasPassword(for: profileID))
+
+        store.deleteAuthInput(for: profileID)
+        XCTAssertFalse(store.hasAuthInput(for: profileID))
     }
 }

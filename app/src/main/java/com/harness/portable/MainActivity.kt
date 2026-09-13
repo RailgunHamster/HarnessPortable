@@ -210,6 +210,13 @@ fun AppRoot() {
         SshTunnelService.start(ctx, p.id)
     }
 
+    // The editor's field wins on save: a value is stored, an emptied field
+    // clears the stored one (the tunnel then falls back to the page dialog).
+    fun applyAuthInput(profileId: String, authInput: String?) {
+        if (authInput.isNullOrEmpty()) SecureStore.clearAuthInput(ctx, profileId)
+        else SecureStore.setAuthInput(ctx, profileId, authInput)
+    }
+
     val current = target
     when {
         current is ActiveTarget.Tunnel -> {
@@ -300,22 +307,25 @@ fun AppRoot() {
             runningTunnelId =
                 tunnelInfo.profileId.takeIf { tunnelInfo.status == TunnelState.Status.CONNECTED },
             onConnectTunnel = { connectTunnel(it) },
-            onAddTunnel = { profile, password ->
+            onAddTunnel = { profile, password, authInput ->
                 tunnels.removeAll { it.id == profile.id }
                 tunnels.add(0, profile)
                 ProfileStore.saveTunnels(ctx, tunnels)
                 password?.let { SecureStore.setPassword(ctx, profile.id, it) }
+                applyAuthInput(profile.id, authInput)
             },
-            onUpdateTunnel = { profile, password ->
+            onUpdateTunnel = { profile, password, authInput ->
                 val idx = tunnels.indexOfFirst { it.id == profile.id }
                 if (idx >= 0) tunnels[idx] = profile
                 ProfileStore.saveTunnels(ctx, tunnels)
                 password?.let { SecureStore.setPassword(ctx, profile.id, it) }
+                applyAuthInput(profile.id, authInput)
             },
             onDeleteTunnel = { p ->
                 tunnels.removeAll { it.id == p.id }
                 ProfileStore.saveTunnels(ctx, tunnels)
                 SecureStore.clearPassword(ctx, p.id)
+                SecureStore.clearAuthInput(ctx, p.id)
                 if (tunnelInfo.profileId == p.id) SshTunnelService.stop(ctx)
             },
             onConnectDirect = { target = ActiveTarget.Direct(it) },

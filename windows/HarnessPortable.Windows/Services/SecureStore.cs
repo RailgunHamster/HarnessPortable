@@ -6,14 +6,20 @@ using System.Text.Json;
 namespace HarnessPortable.Windows.Services;
 
 /// <summary>
-/// Password vault backed by Windows DPAPI (CurrentUser scope).
+/// Credential vault backed by Windows DPAPI (CurrentUser scope).
 ///
-/// Each password is encrypted with DPAPI using per-profile entropy; the
-/// resulting blob is stored in <c>%APPDATA%\HarnessPortable\secrets.json</c>.
-/// Only the Windows account that wrote the blob can read it back.
+/// Each secret is encrypted with DPAPI using per-key entropy; the resulting
+/// blob is stored in <c>%APPDATA%\HarnessPortable\secrets.json</c>. Only the
+/// Windows account that wrote the blob can read it back. Besides the SSH
+/// password, a profile may carry an optional web login input (the dsh web
+/// token URL or the token itself), keyed with a suffix so it never collides
+/// with the password and never reaches <c>profiles.json</c>.
 /// </summary>
 public sealed class SecureStore
 {
+    /// <summary>Key suffix of the optional web login input of a profile.</summary>
+    private const string AuthInputSuffix = "#webauth";
+
     private readonly string _path;
     private readonly object _lock = new();
 
@@ -62,22 +68,43 @@ public sealed class SecureStore
 
     public bool HasPassword(string profileId) => LoadDict().ContainsKey(profileId);
 
-    public void SetPassword(string profileId, string password)
+    public void SetPassword(string profileId, string password) => SetSecret(profileId, password);
+
+    public string? GetPassword(string profileId) => GetSecret(profileId);
+
+    public void ClearPassword(string profileId) => ClearSecret(profileId);
+
+    /// <summary>
+    /// Optional web login input of a profile: the dsh web token URL, a bare
+    /// query, a key=value pair, or the token itself. Used when the profile's
+    /// auth mode is "manual" and as the fallback when the NSSM fetch misses.
+    /// </summary>
+    public string? GetAuthInput(string profileId) => GetSecret(AuthInputKey(profileId));
+
+    public bool HasAuthInput(string profileId) => LoadDict().ContainsKey(AuthInputKey(profileId));
+
+    public void SetAuthInput(string profileId, string value) => SetSecret(AuthInputKey(profileId), value);
+
+    public void ClearAuthInput(string profileId) => ClearSecret(AuthInputKey(profileId));
+
+    private static string AuthInputKey(string profileId) => profileId + AuthInputSuffix;
+
+    private void SetSecret(string key, string value)
     {
-        var entropy = EntropyFor(profileId);
+        var entropy = EntropyFor(key);
         var protectedBytes = ProtectedData.Protect(
-            Encoding.UTF8.GetBytes(password),
+            Encoding.UTF8.GetBytes(value),
             entropy,
             DataProtectionScope.CurrentUser);
         var dict = LoadDict();
-        dict[profileId] = Convert.ToBase64String(protectedBytes);
+        dict[key] = Convert.ToBase64String(protectedBytes);
         SaveDict(dict);
     }
 
-    public string? GetPassword(string profileId)
+    private string? GetSecret(string key)
     {
         var dict = LoadDict();
-        if (!dict.TryGetValue(profileId, out var blob))
+        if (!dict.TryGetValue(key, out var blob))
         {
             return null;
         }
@@ -85,7 +112,7 @@ public sealed class SecureStore
         try
         {
             var raw = Convert.FromBase64String(blob);
-            var entropy = EntropyFor(profileId);
+            var entropy = EntropyFor(key);
             var plain = ProtectedData.Unprotect(raw, entropy, DataProtectionScope.CurrentUser);
             return Encoding.UTF8.GetString(plain);
         }
@@ -95,15 +122,15 @@ public sealed class SecureStore
         }
     }
 
-    public void ClearPassword(string profileId)
+    private void ClearSecret(string key)
     {
         var dict = LoadDict();
-        if (dict.Remove(profileId))
+        if (dict.Remove(key))
         {
             SaveDict(dict);
         }
     }
 
-    private static byte[] EntropyFor(string profileId) =>
-        Encoding.UTF8.GetBytes($"harness-portable:{profileId}");
+    private static byte[] EntropyFor(string key) =>
+        Encoding.UTF8.GetBytes($"harness-portable:{key}");
 }

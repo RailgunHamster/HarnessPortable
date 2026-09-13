@@ -34,7 +34,7 @@
                                Text="网页要求重新认证" HorizontalAlignment="Center"/>
                     <TextBlock FontSize="12" Foreground="#6B7280" TextWrapping="Wrap"
                                Margin="0,8,0,0" HorizontalAlignment="Center"
-                               Text="服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。请在服务器上复制 dsh web 打印的完整 URL，粘贴到下面，将直接在内置浏览器中完成认证，无需再用外部浏览器打开。"/>
+                               Text="服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。请在服务器上复制 dsh web 打印的完整 URL —— 或只复制 token 本身 —— 粘贴到下面，将直接在内置浏览器中完成认证，无需再用外部浏览器打开。"/>
                     <TextBox x:Name="AuthUrlBox" FontSize="13" Margin="0,12,0,0"
                                  Style="{StaticResource ModernTextBox}"
                                  KeyDown="AuthUrlBox_KeyDown" TextChanged="AuthUrlBox_TextChanged"/>
@@ -69,6 +69,8 @@
             <StackPanel x:Name="ActionsPanel" Visibility="Collapsed" Width="76" IsHitTestVisible="True">
                 <Button Content="刷新" Height="36" Margin="0,0,0,6"
                         Style="{StaticResource ModernButton}" Click="Refresh_Click"/>
+                <Button Content="认证" Height="36" Margin="0,0,0,6"
+                        Style="{StaticResource ModernButton}" Click="AuthAction_Click"/>
                 <Button x:Name="ReconnectAction" Content="重连" Height="36" Margin="0,0,0,6"
                         Style="{StaticResource ModernButton}" Click="Reconnect_Click"/>
                 <Button x:Name="DisconnectAction" Content="断开" Height="36"

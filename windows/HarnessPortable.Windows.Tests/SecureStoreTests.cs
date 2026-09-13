@@ -42,6 +42,28 @@ public sealed class SecureStoreTests : IDisposable
         Assert.Null(_store.GetPassword("missing"));
     }
 
+    [Fact]
+    public void AuthInput_RoundTripsIndependentlyOfPassword()
+    {
+        const string profileId = "p1";
+        const string authInput = "http://127.0.0.1:3080/?token=abc";
+
+        Assert.False(_store.HasAuthInput(profileId));
+        _store.SetAuthInput(profileId, authInput);
+        _store.SetPassword(profileId, "secret");
+
+        Assert.True(_store.HasAuthInput(profileId));
+        Assert.Equal(authInput, _store.GetAuthInput(profileId));
+        Assert.Equal("secret", _store.GetPassword(profileId));
+
+        _store.ClearAuthInput(profileId);
+
+        Assert.False(_store.HasAuthInput(profileId));
+        Assert.Null(_store.GetAuthInput(profileId));
+        // Clearing the web login must leave the SSH password alone.
+        Assert.Equal("secret", _store.GetPassword(profileId));
+    }
+
     public void Dispose()
     {
         try

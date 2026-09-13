@@ -322,7 +322,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             core.NavigationCompleted += async (_, e) =>
             {
                 FlickerLog.Log("webview-nav", "complete navId=" + e.NavigationId + " ok=" + e.IsSuccess + " (" + LogTag + ")");
-                await CheckAuthRequiredAsync(e.NavigationId, e.IsSuccess);
+                await CheckAuthRequiredAsync(e.NavigationId);
             };
 
             WebView.PreviewKeyDown += OnWebViewPreviewKeyDown;
@@ -423,10 +423,16 @@ public partial class SessionView : System.Windows.Controls.UserControl
     /// plain page is rejected. Detect that response and let the user paste
     /// the printed URL so the auth handshake (and its cookie) happens inside
     /// this WebView2 profile — no external browser needed.
+    ///
+    /// WebView2 reports IsSuccess = false for *every* 4xx response
+    /// (https://learn.microsoft.com/dotnet/api/microsoft.web.webview2.core.
+    /// corewebview2navigationcompletedeventargs.issuccess), i.e. exactly the
+    /// 401 rejection this check exists for. The flag therefore only feeds the
+    /// log line above; the decision rests on the served body text.
     /// </summary>
-    private async Task CheckAuthRequiredAsync(ulong navigationId, bool isSuccess)
+    private async Task CheckAuthRequiredAsync(ulong navigationId)
     {
-        if (!isSuccess || _shutdown || AuthOverlay.Visibility == Visibility.Visible)
+        if (_shutdown || AuthOverlay.Visibility == Visibility.Visible)
         {
             return;
         }
@@ -481,7 +487,8 @@ public partial class SessionView : System.Windows.Controls.UserControl
     /// Tunnel sessions rewrite the authority to the local forwarded port and
     /// keep the token query; direct sessions keep the pasted URL as-is.
     /// Accepted inputs: full URL ("http://host:port/?token=..."), a bare
-    /// query ("?token=..."), or a key=value pair ("token=...").
+    /// query ("?token=..."), a key=value pair ("token=..."), or the launch
+    /// token itself (base64url, so "just the key" also works).
     /// </summary>
     private string? BuildAuthTargetUrl(string input)
     {
@@ -507,6 +514,10 @@ public partial class SessionView : System.Windows.Controls.UserControl
         {
             pathAndQuery = "/?" + input;
         }
+        else if (!input.Contains('?') && !input.Contains('/') && !input.Contains(' '))
+        {
+            pathAndQuery = "/?token=" + Uri.EscapeDataString(input);
+        }
         else
         {
             return null;
@@ -524,7 +535,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         if (target is null || !target.Contains('?'))
         {
-            AuthHint.Text = "无法识别输入。请粘贴 dsh web 打印的完整 URL（应包含 ?token=… 之类的参数）。";
+            AuthHint.Text = "无法识别输入。请粘贴 dsh web 打印的完整 URL，或直接粘贴 token 本身。";
             AuthHint.Visibility = Visibility.Visible;
             return;
         }
@@ -588,6 +599,12 @@ public partial class SessionView : System.Windows.Controls.UserControl
             WebView.CoreWebView2.Reload();
         }
     }
+
+    /// <summary>
+    /// Opens the paste overlay on demand, so the manual web login stays
+    /// reachable even when the rejection page is never detected.
+    /// </summary>
+    private void AuthAction_Click(object sender, RoutedEventArgs e) => ShowAuthOverlay();
 
     private void Reconnect_Click(object sender, RoutedEventArgs e)
     {
@@ -693,7 +710,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private void PositionActions(double ballX, double ballY)
     {
-        var buttonCount = _isTunnel ? 3 : 2;
+        // Refresh and the auth entry are always visible; reconnect/disconnect
+        // only exist for tunnel sessions.
+        var buttonCount = _isTunnel ? 4 : 2;
         var panelHeight = buttonCount * ActionHeight;
         var down = ballY + BallSize + panelHeight <= OverlayCanvas.ActualHeight;
         Canvas.SetLeft(ActionsPanel, ballX);
