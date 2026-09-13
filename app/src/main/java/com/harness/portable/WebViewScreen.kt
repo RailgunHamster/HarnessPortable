@@ -2,12 +2,17 @@ package com.harness.portable
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.Uri
 import android.view.ViewGroup
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,6 +54,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,6 +92,24 @@ internal fun WebViewScreen(
 
     var webRef by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
+    val fileChooser = remember { FileChooserHost() }
+    val pickOneFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> fileChooser.complete(uri?.let { arrayOf(it) }) }
+    val pickManyFiles = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris -> fileChooser.complete(if (uris.isEmpty()) null else uris.toTypedArray()) }
+    fileChooser.open = { mimeTypes, multiple ->
+        val types = mimeTypes
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .ifEmpty { listOf("*/*") }
+            .toTypedArray()
+        if (multiple) pickManyFiles.launch(types) else pickOneFile.launch(types)
+    }
+    DisposableEffect(Unit) {
+        onDispose { fileChooser.complete(null) }
+    }
     var controlsExpanded by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
 
@@ -165,6 +189,18 @@ internal fun WebViewScreen(
                     settings.cacheMode = WebSettings.LOAD_DEFAULT
                     settings.useWideViewPort = true
                     settings.loadWithOverviewMode = true
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onShowFileChooser(
+                            webView: WebView?,
+                            filePathCallback: ValueCallback<Array<Uri>>?,
+                            fileChooserParams: FileChooserParams?
+                        ): Boolean {
+                            val types = fileChooserParams?.acceptTypes ?: emptyArray()
+                            val multiple = fileChooserParams?.mode ==
+                                FileChooserParams.MODE_OPEN_MULTIPLE
+                            return fileChooser.show(filePathCallback, types, multiple)
+                        }
+                    }
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(
                             view: WebView,
@@ -437,6 +473,40 @@ internal fun WebViewScreen(
 
     BackHandler(enabled = canGoBack) {
         webRef?.goBack()
+    }
+}
+
+private class FileChooserHost {
+    var callback: ValueCallback<Array<Uri>>? = null
+    var open: ((Array<String>, Boolean) -> Unit)? = null
+
+    fun show(
+        next: ValueCallback<Array<Uri>>?,
+        mimeTypes: Array<String>,
+        multiple: Boolean
+    ): Boolean {
+        callback?.onReceiveValue(null)
+        callback = next
+        val opener = open
+        if (next == null || opener == null) {
+            callback = null
+            next?.onReceiveValue(null)
+            return false
+        }
+        return try {
+            opener(mimeTypes, multiple)
+            true
+        } catch (_: Exception) {
+            callback = null
+            next.onReceiveValue(null)
+            false
+        }
+    }
+
+    fun complete(uris: Array<Uri>?) {
+        val cb = callback
+        callback = null
+        cb?.onReceiveValue(uris)
     }
 }
 

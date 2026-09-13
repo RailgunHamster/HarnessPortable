@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.5.2
+
+- Android 内置浏览器支持选择本地文件作为附件（网页 `<input type="file">` / dsh 附件按钮）。
+
 ## 2.5.1
 
 - 便携 zip 与 Setup 安装包一样支持自动更新（解压后运行根目录的 `Harness Portable.exe`）。无法更新的只有开发运行和旧版单文件 exe。
