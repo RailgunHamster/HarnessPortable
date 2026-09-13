@@ -33,8 +33,9 @@ $ProgressPreference = "SilentlyContinue"
 foreach ($c in (Get-CimInstance Win32_Service | Where-Object { $_.State -eq "Running" -and $_.PathName -match "nssm\.exe" })) {
   $exe = [regex]::Match($c.PathName, "^""?(.+?nssm\.exe)").Groups[1].Value
   if (-not $exe) { continue }
+  $app = & $exe get $c.Name Application 2>$null
   $params = & $exe get $c.Name AppParameters 2>$null
-  if ("$params" -notmatch "dsh") { continue }
+  if ("$app $params" -notmatch "dsh") { continue }
   $log = & $exe get $c.Name AppStdout 2>$null
   if (-not $log) { continue }
   $m = Select-String -Path "$log" -Pattern "dsh web: (http\S+)" | Select-Object -Last 1

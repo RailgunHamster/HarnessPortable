@@ -10,6 +10,7 @@ public class NssmAuthUrlFetcherTests
         var script = NssmAuthUrlFetcher.BuildScript();
 
         Assert.Contains("nssm\\.exe", script);
+        Assert.Contains("get $c.Name Application", script);
         Assert.Contains("get $c.Name AppParameters", script);
         Assert.Contains("get $c.Name AppStdout", script);
         Assert.Contains("dsh web: (http\\S+)", script);
