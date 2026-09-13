@@ -11,6 +11,7 @@
 ## 核心功能
 
 - **SSH 本地端口转发**：等价于 `ssh -N -L local:remoteHost:remotePort user@host`；支持私钥登录（可不填密码），密码错误不会反复重试
+- **Windows 自动更新**：Velopack；设置里可改更新服务器并查看更新日志
 - **多隧道并发**：同一进程可同时连接多个服务器，每个隧道独立重连/停止
 - **TOFU 主机密钥**：首次连接记住服务器公钥；密钥变化直接拒绝，防中间人
 - **智能主机名解析**：IP / 域名 / Tailscale MagicDNS / NetBIOS 名
@@ -95,17 +96,13 @@ dotnet build windows/HarnessPortable.Windows.slnx -c Release
 # 测试
 dotnet test windows/HarnessPortable.Windows.slnx -c Release
 
-# 免安装目录版
+# 开发构建
 dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
   -c Release -r win-x64 --self-contained true `
   -p:PublishSingleFile=false -o publish/win-x64
 
-# 单文件版（推荐分发）
-dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
-  -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true `
-  -o publish/win-x64-single
+# 发布（Velopack 安装包 + 更新源，并同步到局域网共享 / GitHub）
+pwsh -File scripts/release-windows.ps1
 ```
 
 详细说明见 [`docs/windows-build.md`](docs/windows-build.md)。

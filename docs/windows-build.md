@@ -11,6 +11,7 @@
 - .NET 10（WPF）
 - WebView2（系统浏览器内核）
 - SSH.NET（SSH 本地端口转发；公钥优先，密码可选，认证失败不重试）
+- Velopack（安装包与自动更新）
 - Windows DPAPI（密码加密）
 - JSON 文件配置（`%APPDATA%\HarnessPortable\`）
 - 支持**同时连接多个 SSH 隧道**，每个隧道独立重连/停止
@@ -60,59 +61,48 @@ dotnet run --project windows/HarnessPortable.Windows/HarnessPortable.Windows.csp
 windows/HarnessPortable.Windows/bin/Debug/net10.0-windows/HarnessPortable.exe
 ```
 
-## 发布免安装绿色版
+## 版本与更新日志
 
-```powershell
-dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
-  -c Release `
-  -r win-x64 `
-  --self-contained true `
-  -p:PublishSingleFile=false `
-  -o publish/win-x64
-```
+仓库根目录：
 
-把 `publish/win-x64` 整个目录打成 zip 即绿色版，用户解压双击
-`HarnessPortable.exe`，无需安装 .NET。
+- `VERSION` —— 当前版本（如 `2.5.0`），Windows 程序集版本与 Android `versionName` 都读它
+- `CHANGELOG.md` —— 按 `## x.y.z` 分段；打包时把当前版本那一段写入 Velopack 包
 
-## 发布单文件 exe（推荐分发）
+## 发布（Velopack，推荐分发）
 
-只产出一个 `HarnessPortable.exe`，发给别人或复制到别的电脑时**只拷这一个文件**
-（同目录的 `.pdb` / `.xml` 不需要拷）：
-
-```powershell
-dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
-  -c Release `
-  -r win-x64 `
-  --self-contained true `
-  -p:PublishSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true `
-  -o publish/win-x64-single
-```
-
-产物：
+不再使用单文件 exe。`vpk pack` 把 self-contained 目录打成安装包和更新源：
 
 ```text
-publish/win-x64-single/HarnessPortable.exe   # 约 170–180 MB，双击即用
+HarnessPortable-win-Setup.exe      # 给用户的安装程序
+HarnessPortable-win-Portable.zip   # 便携包
+HarnessPortable-<ver>-full.nupkg   # 更新包
+releases.win.json                  # 更新索引
 ```
 
-说明：
-
-- 目标电脑需要 Windows 10/11 x64；
-- 不需要安装 .NET；
-- 需要 WebView2 Runtime（Win11 预装；Win10 一般随新版 Edge 存在），
-  没有的话安装微软官方 “WebView2 Runtime Evergreen”；
-- 首次启动会解压，比目录版稍慢；
-- 更换平台目标：`-r win-x64` 可改成 `win-arm64`（需要另测）。
-
-## 发布安装包
+安装后程序在 `%LocalAppData%\HarnessPortable\current\`，设置仍在 `%APPDATA%\HarnessPortable\`。
 
 ```powershell
-dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
-  -c Release -r win-x64 --self-contained true -o publish/win-x64
+# 需要已安装：dotnet tool install -g vpk --version 1.2.0
+pwsh -File scripts/release-windows.ps1
 ```
 
-之后可用第三方工具（如 Inno Setup）或 `MSIX Packaging Tool` 把
-`publish/win-x64` 包装成安装程序。
+脚本会：
+
+1. `dotnet publish`（self-contained，非单文件）
+2. `vpk pack`（带当前版本的更新日志，并安装 WebView2 引导）
+3. 把更新源同步到 `\\server-home\public\Software\HarnessPortable-Releases`
+4. 若有 `GITHUB_TOKEN` / `GH_TOKEN` / git credential，则发布 GitHub Release `v<version>`
+
+跳过某一步：
+
+```powershell
+pwsh -File scripts/release-windows.ps1 -SkipGitHub
+pwsh -File scripts/release-windows.ps1 -SkipShare
+```
+
+应用设置里可改更新服务器（UNC、http 目录或 GitHub 仓库 URL），并查看更新日志。
+
+开发时直接 `dotnet run` 不会走更新（Velopack 未安装）。
 
 ## 配置文件
 
@@ -120,7 +110,7 @@ dotnet publish windows/HarnessPortable.Windows/HarnessPortable.Windows.csproj `
 - `%APPDATA%\HarnessPortable\secrets.json` —— DPAPI 加密的 SSH 密码与可选 Web 认证输入
 - `%APPDATA%\HarnessPortable\known_hosts.json` —— TOFU 主机密钥
 - `%APPDATA%\HarnessPortable\layouts.json` —— 布局预设
-- `%APPDATA%\HarnessPortable\settings.json` —— 应用设置（关闭行为等）
+- `%APPDATA%\HarnessPortable\settings.json` —— 应用设置（关闭行为、更新服务器等）
 - `%APPDATA%\HarnessPortable\WebView2\` —— 浏览器用户数据
 
 > 所有配置都写系统用户目录（`%APPDATA%`），不会在 exe 旁边生成任何文件。

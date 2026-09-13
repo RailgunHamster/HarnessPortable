@@ -93,6 +93,10 @@ public partial class MainWindow : Window
         RefreshStatusBar();
         RefreshPresetBox(null);
         RestoreLastLayoutIfEnabled();
+        Loaded += (_, _) =>
+        {
+            _ = _services.Updates.CheckAsync(_services.Settings.Load().UpdateServerUrl);
+        };
     }
 
     private void InitializeDockLayout()

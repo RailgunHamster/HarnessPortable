@@ -10,17 +10,21 @@
     <RootNamespace>HarnessPortable.Windows</RootNamespace>
     <AssemblyName>HarnessPortable</AssemblyName>
     <ApplicationIcon>Assets\HarnessPortable.ico</ApplicationIcon>
+    <StartupObject>HarnessPortable.Windows.Program</StartupObject>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="Assets\HarnessPortable.ico" />
     <Resource Include="Assets\HarnessPortable.png" />
+    <EmbeddedResource Include="..\..\CHANGELOG.md" LogicalName="CHANGELOG.md" Link="CHANGELOG.md" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Dirkster.AvalonDock" Version="5.0.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" />
     <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
 </Project>

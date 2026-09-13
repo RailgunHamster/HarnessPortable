@@ -15,4 +15,10 @@ public sealed class AppSettings
 
     /// <summary>Optional SSH config path override; empty means the current user's ~/.ssh/config.</summary>
     public string SshConfigPath { get; set; } = "";
+
+    /// <summary>
+    /// Velopack update feed: UNC path, http(s) directory, or GitHub repo URL.
+    /// Empty uses the built-in LAN share default.
+    /// </summary>
+    public string UpdateServerUrl { get; set; } = "";
 }

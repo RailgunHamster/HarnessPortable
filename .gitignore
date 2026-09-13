@@ -43,6 +43,8 @@ windows/**/bin/
 windows/**/obj/
 windows/.vs/
 publish/
+artifacts/
+Releases/
 
 # macOS/Xcode generated output
 macos/build/

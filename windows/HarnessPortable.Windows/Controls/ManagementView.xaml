@@ -128,6 +128,30 @@
                                   Content="启动时自动恢复上次布局（不显示主界面）"
                                   Checked="RestoreLayoutBox_Changed"
                                   Unchecked="RestoreLayoutBox_Changed"/>
+
+                        <TextBlock Margin="0,16,0,0" FontSize="13" Foreground="#111827" Text="自动更新"/>
+                        <TextBlock x:Name="VersionText" Margin="0,4,0,0" Style="{StaticResource ModernMutedText}"/>
+                        <TextBlock Margin="0,8,0,4" Style="{StaticResource ModernMutedText}" Text="更新服务器（UNC 路径、http 目录或 GitHub 仓库）"/>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="保存" Padding="12,6" Margin="8,0,0,0"
+                                    Style="{StaticResource ModernButton}" Click="SaveUpdateServer_Click"/>
+                            <TextBox x:Name="UpdateServerBox" Style="{StaticResource ModernTextBox}"/>
+                        </DockPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button x:Name="CheckUpdateButton" Content="检查更新" Padding="12,6"
+                                    Style="{StaticResource ModernButton}" Click="CheckUpdate_Click"/>
+                            <Button x:Name="ApplyUpdateButton" Content="下载并重启" Padding="12,6" Margin="8,0,0,0"
+                                    Style="{StaticResource ModernPrimaryButton}" Click="ApplyUpdate_Click"/>
+                        </StackPanel>
+                        <TextBlock x:Name="UpdateStatusText" Margin="0,8,0,0" Style="{StaticResource ModernMutedText}"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Margin="0,12,0,4" Style="{StaticResource ModernMutedText}" Text="更新日志"/>
+                        <TextBox x:Name="ChangelogBox" MinHeight="140" MaxHeight="240"
+                                 IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas, Microsoft YaHei UI" FontSize="12"
+                                 Style="{StaticResource ModernTextBox}"/>
+
                         <TextBlock Margin="0,10,0,0" Style="{StaticResource ModernMutedText}"
                                    Text="所有配置保存在 %APPDATA%\HarnessPortable（系统用户目录），不会写入 exe 所在文件夹。"/>
                     </StackPanel>

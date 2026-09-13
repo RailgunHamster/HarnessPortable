@@ -55,8 +55,14 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         DirectInput.ItemsSource = _lanMachines;
 
         _services.Tunnels.StateChanged += OnTunnelStateChanged;
-        Unloaded += (_, _) => _discoveryCts?.Cancel();
+        _services.Updates.StateChanged += OnUpdateStateChanged;
+        Unloaded += (_, _) =>
+        {
+            _discoveryCts?.Cancel();
+            _services.Updates.StateChanged -= OnUpdateStateChanged;
+        };
         InitializeCloseBehaviorSettings();
+        InitializeUpdateSettings();
         RefreshLists();
     }
 
@@ -132,6 +138,68 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         RestoreLayoutBox.IsChecked = _services.Settings.Load().RestoreLastLayoutOnStartup;
 
         _suppressSettings = false;
+    }
+
+    private void InitializeUpdateSettings()
+    {
+        _suppressSettings = true;
+        var settings = _services.Settings.Load();
+        UpdateServerBox.Text = string.IsNullOrWhiteSpace(settings.UpdateServerUrl)
+            ? UpdateSourceFactory.DefaultServerUrl
+            : settings.UpdateServerUrl;
+        VersionText.Text = "当前版本 " + _services.Updates.CurrentVersion;
+        RefreshUpdatePanel();
+        _suppressSettings = false;
+    }
+
+    private void OnUpdateStateChanged()
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            RefreshUpdatePanel();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(RefreshUpdatePanel);
+        }
+    }
+
+    private void RefreshUpdatePanel()
+    {
+        var updates = _services.Updates;
+        UpdateStatusText.Text = updates.Status;
+        ChangelogBox.Text = updates.ChangelogText;
+        CheckUpdateButton.IsEnabled = !updates.Busy;
+        ApplyUpdateButton.IsEnabled = !updates.Busy && updates.CanApply;
+        ApplyUpdateButton.Content = updates.CanApply && updates.AvailableVersion is { } version
+            ? $"下载 {version} 并重启"
+            : "下载并重启";
+    }
+
+    private string CurrentUpdateServerUrl()
+    {
+        var typed = UpdateServerBox.Text.Trim();
+        return typed.Length == 0 ? UpdateSourceFactory.DefaultServerUrl : typed;
+    }
+
+    private void SaveUpdateServer_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = _services.Settings.Load();
+        settings.UpdateServerUrl = CurrentUpdateServerUrl();
+        _services.Settings.Save(settings);
+        UpdateServerBox.Text = settings.UpdateServerUrl;
+    }
+
+    private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        SaveUpdateServer_Click(sender, e);
+        await _services.Updates.CheckAsync(CurrentUpdateServerUrl());
+    }
+
+    private async void ApplyUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        SaveUpdateServer_Click(sender, e);
+        await _services.Updates.ApplyAsync(CurrentUpdateServerUrl());
     }
 
     private void CloseBehaviorBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

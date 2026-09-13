@@ -7,6 +7,7 @@ public sealed class AppServices
     public KnownHostsStore KnownHosts { get; } = new();
     public AppSettingsStore Settings { get; } = new();
     public TunnelManager Tunnels { get; }
+    public UpdateService Updates { get; } = new();
 
     public AppServices()
     {
