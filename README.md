@@ -140,22 +140,31 @@ Windows 配置目录（所有配置均写入系统用户目录，不会在 exe �
 
 ## 品牌图标
 
-统一图标：**DeepSeek 风格双色“H + SSH 隧道 + 钥匙孔”**。
+统一图标：**深蓝底 + 白色「终端窗口 + 命令提示符」**。
 
-- 深蓝 `#4D6BFE` 纯色底 + 纯白符号，无渐变；
-- 两条白色竖条：H / 本机与远端；
-- 中间白色横管：SSH 隧道；
-- 中心钥匙孔：密码与主机密钥保护。
+- 底：DeepSeek 蓝 `#4D6BFE`，圆角方形 / 圆形 / 透明（Android 自适应前景）；
+- 图形：纯白，一个圆角方框 + `>` 与 `_`；
+- 方框 = 打开的那个控制台窗口（也正是内嵌浏览器的那个窗口）；
+  提示符 = 敲进去的 `ssh -L` 命令。
 
-源文件与生成方式见 [`branding/README.md`](branding/README.md)：
+一个符号同时说清「SSH 命令行工具」和「窗口里跑」两件事，也避开了
+字母图标（没有含义）和钥匙孔（剪影像人形、且与系统钥匙串图标撞车）。
+
+几何只有一处真源 `branding/geometry.js`，源 SVG 由它生成：
 
 ```powershell
 cd branding
 npm install
-npm run generate
+npm run write-sources   # geometry.js -> source/*.svg
+npm run generate        # source/*.svg -> Android mipmap / Windows .ico / macOS icns+appiconset
+npm run check           # 校验 source/*.svg 是否与 geometry.js 一致
 ```
 
-生成产物覆盖 Android mipmap、Windows `.ico`、macOS `.icns` 以及母版 PNG。
+`generate` 会先校验源文件与几何定义一致、并自检圆形与 Android 安全圈约束，
+所以不会出现「产物和定义脱节」。生成产物覆盖 Android mipmap、Windows `.ico`、
+macOS `.icns` 与 `AppIcon.appiconset`，以及母版 PNG。
+
+设计定稿记录与各尺寸实测见 [`branding/README.md`](branding/README.md)。
 
 ---
 

@@ -1,13 +1,10 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="512" cy="512" r="492" fill="#4D6BFE"/>
+  <circle cx="512" cy="512" r="484" fill="#4D6BFE"/>
 
-  <g fill="#FFFFFF">
-    <rect x="246" y="278" width="132" height="468" rx="66"/>
-    <rect x="646" y="278" width="132" height="468" rx="66"/>
-    <rect x="312" y="446" width="400" height="132" rx="66"/>
+  <g fill="#FFFFFF" stroke="#FFFFFF">
+    <path fill-rule="evenodd" d="M150.5 349.3a155.5 155.5 0 0 1 155.5 -155.4h412.2a155.5 155.5 0 0 1 155.5 155.5v325.4a155.5 155.5 0 0 1 -155.4 155.5h-412.2a155.5 155.5 0 0 1 -155.4 -155.4Z M222.8 349.3a83.1 83.1 0 0 1 83.1 -83.1h412.2a83.1 83.1 0 0 1 83.1 83.1v325.4a83.1 83.1 0 0 1 -83.1 83.1h-412.2a83.1 83.1 0 0 1 -83.1 -83.1Z"/>
+    <path fill="none" stroke-width="77.7" stroke-linecap="round" stroke-linejoin="round"
+          d="M354.7 401.7 L466.8 512 L354.7 622.3"/>
+    <rect x="526.5" y="569.8" width="180.8" height="77.7" rx="38.9"/>
   </g>
-
-  <circle cx="512" cy="512" r="104" fill="#4D6BFE"/>
-  <circle cx="512" cy="482" r="26" fill="#FFFFFF"/>
-  <path d="M496 500 L496 532 Q496 552 512 552 Q528 552 528 532 L528 500 Z" fill="#FFFFFF"/>
 </svg>

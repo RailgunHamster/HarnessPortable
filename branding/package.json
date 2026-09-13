@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "description": "Unified Harness Portable icon generator for Android, Windows and macOS",
   "scripts": {
-    "generate": "node generate-icons.js"
+    "generate": "node generate-icons.js",
+    "write-sources": "node write-sources.js",
+    "check": "node write-sources.js --check"
   },
   "dependencies": {
     "png-to-ico": "3.0.2",
