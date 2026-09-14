@@ -78,7 +78,7 @@ npm run check           # 校验 source/*.svg 是否与 geometry.js 一致
 
 实测左右留白：圆角方形 112px，圆形 101px。
 
-### 两个坑（改代码时注意）
+### 三个坑（改代码时注意）
 
 1. **缩放必须以画布中心为原点**。`geometry.js` 里用 `sc(v, k) = 512 + (v-512)*k`。
    如果图省事写成 `v * k`，那是按画布左上角缩放：`k < 1` 时整个图形会往左上角跑，
@@ -88,5 +88,28 @@ npm run check           # 校验 source/*.svg 是否与 geometry.js 一致
    只有 66dp 圆是「任何厂商遮罩下都必然可见」的，半径约 `512 × 66/108 = 312.9`。
    外接角必须落在这个圆内，否则圆形遮罩会切掉方框的四角。
    代价是自适应版里的符号比 legacy 版小（0.584 vs 1.000），这是约束的必然结果。
+3. **自适应前景的颜色必须和底色相反**。Android 把 adaptive 的 `background`
+   和 `foreground` 直接叠在一起：底色是 DeepSeek 蓝（见
+   `app/src/main/res/drawable/ic_launcher_background.xml`），所以前景**必须白色**。
+   前景若也做成蓝色，合成结果就是一整块纯蓝、mark 完全不可见。
+
+### 校验自适应图标（不要只看 legacy）
+
+`--foreground` 是**透明底**的，单独看它「有蓝色 content」会觉得正常，
+但那是两套渲染路径：
+
+| 路径 | 期望 |
+|---|---|
+| legacy `ic_launcher.png` | 蓝底 + 白 mark |
+| adaptive `ic_launcher.xml` 合成后 | 蓝底 + 白 mark（与 legacy 观感一致） |
+
+改完图标务必合成验证一次，别只看单张：
+
+```powershell
+# 把 xxxhdpi 前景叠到蓝底上，再看白/蓝像素占比
+node -e "..."   # 或参考 git 历史里 temp/verify-apk-icon.js 的做法
+```
+
+判据：前景里**白 > 5% 且蓝 < 1%**。前景蓝色占比高 = 和底色撞色，图标会是纯色块。
 
 `.ico` 的帧是 BMP/DIB 编码（不是 PNG），这是 `png-to-ico` 的正常输出。

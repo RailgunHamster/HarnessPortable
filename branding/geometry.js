@@ -165,10 +165,17 @@ ${markSvg(SCALE.round, "    ")}
 `;
 }
 
-/** icon-foreground.svg —— 透明底 + 蓝色窗口符号（Android 自适应前景） */
+/**
+ * icon-foreground.svg —— 透明底 + 白色窗口符号（Android 自适应前景）
+ *
+ * 必须是白色：Android 会把 adaptive 的 background（这里是 DeepSeek 蓝）
+ * 和 foreground 直接叠在一起。前景若也做成蓝色，合成结果就是一整块纯蓝、
+ * 什么都看不见 —— 注意这与 legacy 的 ic_launcher.png（蓝底白符号）是两套
+ * 渲染路径，改颜色时必须两边一起想。
+ */
 function foregroundSvg() {
   return `<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-  <g fill="${BLUE}" stroke="${BLUE}">
+  <g fill="${WHITE}" stroke="${WHITE}">
 ${markSvg(SCALE.foreground, "    ")}
   </g>
 </svg>
