@@ -271,14 +271,32 @@ internal fun WebViewScreen(
                                 OutlinedButton(onClick = onReconnect) { Text("重连") }
                             }
 
-                            else -> {
+                            TunnelState.Status.RETRYING,
+                            TunnelState.Status.CONNECTING,
+                            TunnelState.Status.IDLE -> {
                                 CircularProgressIndicator(modifier = Modifier.size(28.dp))
                                 Text(
                                     if (tunnelInfo?.status == TunnelState.Status.RETRYING)
                                         "隧道中断，正在重连…"
-                                    else "隧道未连接",
+                                    else "正在连接隧道…",
                                     fontSize = 14.sp
                                 )
+                            }
+
+                            else -> {
+                                Text(
+                                    "隧道未连接",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
+                                tunnelInfo?.message?.let {
+                                    Text(
+                                        it, fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                OutlinedButton(onClick = onReconnect) { Text("重连") }
                             }
                         }
                         Button(onClick = onChangeServer) { Text("返回") }

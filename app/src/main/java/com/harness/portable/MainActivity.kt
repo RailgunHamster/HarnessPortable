@@ -78,6 +78,9 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AppVisibility.setVisible(true)
+        // Process death / OEM kills drop the in-memory SSH session but leave
+        // PREF_ACTIVE set. Bring the tunnel back as soon as the user returns.
+        SshTunnelService.resumeIfNeeded(this)
     }
 
     override fun onStop() {
@@ -156,20 +159,33 @@ fun AppRoot() {
         mutableStateOf(OrientationMode.fromStorage(prefs.getString(KEY_ORIENTATION, null)))
     }
     val tunnelInfo by TunnelState.flow.collectAsState()
-    // A foreground tunnel outlives the Activity. If Android reclaims and later
-    // recreates the UI while the app is switched away, reopen that tunnel
-    // instead of making the user select it again.
+    // A foreground tunnel outlives the Activity. Restore the WebView only
+    // when the session is already up; otherwise park on the connecting
+    // screen and let [SshTunnelService.resumeIfNeeded] rebuild it.
+    val restoredProfile = remember {
+        SshTunnelService.activeProfileId(ctx)?.let { activeId ->
+            tunnels.firstOrNull { it.id == activeId }
+        }
+    }
+    val restoredConnected = restoredProfile != null &&
+        tunnelInfo.profileId == restoredProfile.id &&
+        tunnelInfo.status == TunnelState.Status.CONNECTED
     var target by remember {
         mutableStateOf<ActiveTarget?>(
-            SshTunnelService.activeProfileId(ctx)?.let { activeId ->
-                tunnels.firstOrNull { it.id == activeId }?.let {
-                    ActiveTarget.Tunnel(it.id, it.name)
-                }
-            }
+            restoredProfile
+                ?.takeIf { restoredConnected }
+                ?.let { ActiveTarget.Tunnel(it.id, it.name) }
         )
     }
-    var pending by remember { mutableStateOf<TunnelProfile?>(null) }
+    var pending by remember {
+        mutableStateOf(restoredProfile?.takeIf { !restoredConnected })
+    }
     var passwordFor by remember { mutableStateOf<TunnelProfile?>(null) }
+    var batteryPrompt by remember {
+        mutableStateOf(
+            restoredProfile != null && BatteryExemption.shouldPrompt(ctx)
+        )
+    }
 
     // The tunnel runs in a foreground service; ask for the notification
     // permission once so its status is visible.
@@ -196,18 +212,22 @@ fun AppRoot() {
         }
     }
 
-    fun connectTunnel(p: TunnelProfile) {
+    fun connectTunnel(p: TunnelProfile, forceRestart: Boolean = false) {
         if (!SecureStore.hasPassword(ctx, p.id) && p.identityFile.isBlank()) {
             passwordFor = p
             return
         }
-        if (tunnelInfo.profileId == p.id && tunnelInfo.status == TunnelState.Status.CONNECTED) {
+        if (!forceRestart &&
+            tunnelInfo.profileId == p.id &&
+            tunnelInfo.status == TunnelState.Status.CONNECTED
+        ) {
             pending = null
             target = ActiveTarget.Tunnel(p.id, p.name)
             return
         }
         pending = p
-        SshTunnelService.start(ctx, p.id)
+        if (BatteryExemption.shouldPrompt(ctx)) batteryPrompt = true
+        SshTunnelService.start(ctx, p.id, restart = forceRestart)
     }
 
     // The editor's field wins on save: a value is stored, an emptied field
@@ -243,7 +263,8 @@ fun AppRoot() {
                     target = null
                 },
                 onReconnect = {
-                    tunnels.firstOrNull { it.id == current.profileId }?.let { connectTunnel(it) }
+                    tunnels.firstOrNull { it.id == current.profileId }
+                        ?.let { connectTunnel(it, forceRestart = true) }
                 }
             )
         }
@@ -338,6 +359,35 @@ fun AppRoot() {
             onDeleteDirect = { url ->
                 directs.remove(url)
                 ProfileStore.saveDirect(ctx, directs)
+            }
+        )
+    }
+
+    if (batteryPrompt) {
+        AlertDialog(
+            onDismissRequest = {
+                BatteryExemption.markPrompted(ctx)
+                batteryPrompt = false
+            },
+            title = { Text("保持 SSH 隧道在后台运行") },
+            text = {
+                Text(
+                    "系统省电策略会在切到后台后冻结或杀掉隧道，所以每次重新打开都会显示「隧道未连接」。" +
+                        "请允许本应用忽略电池优化，通知栏里的隧道服务才能真正保活。",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    batteryPrompt = false
+                    BatteryExemption.request(ctx)
+                }) { Text("去允许") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    BatteryExemption.markPrompted(ctx)
+                    batteryPrompt = false
+                }) { Text("稍后") }
             }
         )
     }

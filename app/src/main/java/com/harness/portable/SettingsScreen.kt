@@ -254,6 +254,28 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 HorizontalDivider()
                 Spacer(Modifier.height(8.dp))
+                Text("后台保活", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(
+                    if (BatteryExemption.isExempt(ctx))
+                        "已忽略电池优化，SSH 隧道可以在切到后台后继续运行。"
+                    else
+                        "未忽略电池优化。系统可能在切到后台后几分钟内杀掉隧道，" +
+                            "下次打开就会看到「隧道未连接」。",
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                )
+                if (!BatteryExemption.isExempt(ctx)) {
+                    Button(onClick = { BatteryExemption.request(ctx) }) {
+                        Text("允许后台运行")
+                    }
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
                 Text("自动更新", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                 Text(
                     "当前版本 $versionName ($versionCode)",

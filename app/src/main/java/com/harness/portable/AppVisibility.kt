@@ -4,8 +4,8 @@ import java.util.concurrent.CopyOnWriteArraySet
 
 /**
  * Process-local visibility signal shared by the activity and the tunnel
- * service. The service uses it to apply a short, user-requested background
- * grace period without keeping the device awake indefinitely.
+ * service. Used to refresh keepalive / wake-lock policy when the UI is
+ * shown or sent to the background.
  */
 internal object AppVisibility {
 

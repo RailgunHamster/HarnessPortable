@@ -8,10 +8,10 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.os.SystemClock
 import android.util.Log
 import com.jcraft.jsch.HostKey
 import com.jcraft.jsch.HostKeyRepository
@@ -35,6 +35,7 @@ class SshTunnelService : Service() {
         const val ACTION_START = "com.harness.portable.START"
         const val ACTION_STOP = "com.harness.portable.STOP"
         const val EXTRA_PROFILE_ID = "profile_id"
+        const val EXTRA_RESTART = "restart"
 
         private const val CHANNEL_ID = "tunnel"
         private const val NOTIFICATION_ID = 1001
@@ -43,20 +44,40 @@ class SshTunnelService : Service() {
         private const val NO_PW_MSG = "未保存密码"
         private const val TAG = "HarnessTunnel"
 
-        // Keep sending inexpensive SSH keepalives, but tolerate a full ten
-        // minutes of unanswered probes while the UI is in the background.
-        // The extra four probes are scheduling margin around the ten-minute
-        // wake-lock window.
+        // SSH-level keepalives. 15s × 4 unanswered probes ≈ 1 minute to
+        // detect a dead link, then the worker reconnects. A wake lock is
+        // held for the whole tunnel lifetime so these probes actually fire
+        // while the UI is in the background.
         private const val SERVER_ALIVE_INTERVAL_MS = 15_000
-        private const val FOREGROUND_SERVER_ALIVE_COUNT_MAX = 4
-        private const val BACKGROUND_SERVER_ALIVE_COUNT_MAX = 44
-        private const val BACKGROUND_GRACE_MS = 10 * 60 * 1_000L
+        private const val SERVER_ALIVE_COUNT_MAX = 4
+        private const val WAKE_LOCK_CHUNK_MS = 60 * 60 * 1_000L
 
-        fun start(ctx: Context, profileId: String) {
+        fun start(ctx: Context, profileId: String, restart: Boolean = false) {
             val intent = Intent(ctx, SshTunnelService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_PROFILE_ID, profileId)
+                .putExtra(EXTRA_RESTART, restart)
             ctx.startForegroundService(intent)
+        }
+
+        /**
+         * If the last tunnel was supposed to stay up (PREF_ACTIVE) but the
+         * in-memory session is gone — process death, OEM kill, swipe-away —
+         * start the service again. No-op while that profile is already
+         * connecting / connected / retrying.
+         */
+        fun resumeIfNeeded(ctx: Context) {
+            val id = activeProfileId(ctx) ?: return
+            val st = TunnelState.flow.value
+            if (st.profileId == id &&
+                (st.status == TunnelState.Status.CONNECTED ||
+                    st.status == TunnelState.Status.CONNECTING ||
+                    st.status == TunnelState.Status.RETRYING)
+            ) {
+                return
+            }
+            Log.d(TAG, "resumeIfNeeded: restarting $id (was ${st.status})")
+            start(ctx, id, restart = false)
         }
 
         fun stop(ctx: Context) {
@@ -81,13 +102,11 @@ class SshTunnelService : Service() {
 
     private val sessionPolicyLock = Any()
 
-    private var backgroundWakeLock: PowerManager.WakeLock? = null
-
-    @Volatile
-    private var backgroundSinceElapsed = 0L
+    private var tunnelWakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     private val visibilityListener: (Boolean) -> Unit = { visible ->
-        applyVisibilityPolicy(visible)
+        applyKeepalivePolicy(visible)
     }
 
     @Volatile
@@ -97,11 +116,21 @@ class SshTunnelService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        backgroundWakeLock =
+        tunnelWakeLock =
             (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
-                "$packageName:ssh-background-grace"
+                "$packageName:ssh-tunnel"
             ).apply { setReferenceCounted(false) }
+        try {
+            @Suppress("DEPRECATION")
+            wifiLock = (applicationContext.getSystemService(WIFI_SERVICE) as WifiManager)
+                .createWifiLock(
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                    "$packageName:ssh-wifi"
+                ).apply { setReferenceCounted(false) }
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "wifi lock unavailable: ${e.message}")
+        }
         AppVisibility.addListener(visibilityListener)
         if (Build.VERSION.SDK_INT >= 26) {
             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -123,10 +152,19 @@ class SshTunnelService : Service() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
+                val restart = intent.getBooleanExtra(EXTRA_RESTART, false)
+                if (!restart && isWorkingOn(p)) {
+                    Log.d(TAG, "ACTION_START ignored — already working on ${p.id}")
+                    enterForeground(notificationTextFor(p))
+                    holdRuntimeLocks()
+                    applyKeepalivePolicy(AppVisibility.isVisible)
+                    return START_STICKY
+                }
                 profile = p
                 svcPrefs().edit().putString(PREF_ACTIVE, p.id).apply()
                 enterForeground("正在连接 ${p.name}…")
-                applyVisibilityPolicy(AppVisibility.isVisible)
+                holdRuntimeLocks()
+                applyKeepalivePolicy(AppVisibility.isVisible)
                 startWorker(p)
             }
 
@@ -146,11 +184,22 @@ class SshTunnelService : Service() {
                 }
                 profile = p
                 enterForeground("正在恢复 ${p.name}…")
-                applyVisibilityPolicy(AppVisibility.isVisible)
+                holdRuntimeLocks()
+                applyKeepalivePolicy(AppVisibility.isVisible)
                 startWorker(p)
             }
         }
         return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Swiping the task away must not tear the tunnel down. The
+        // foreground service + wake lock keep SSH keepalives running.
+        Log.d(TAG, "onTaskRemoved — keeping foreground tunnel")
+        if (profile != null) {
+            holdRuntimeLocks()
+            updateNotification("${profile?.name ?: "隧道"} 后台保活中")
+        }
     }
 
     override fun onDestroy() {
@@ -159,7 +208,7 @@ class SshTunnelService : Service() {
         generation++
         try { session?.disconnect() } catch (_: Exception) {}
         session = null
-        releaseBackgroundWakeLock()
+        releaseRuntimeLocks()
         super.onDestroy()
     }
 
@@ -217,17 +266,37 @@ class SshTunnelService : Service() {
         try { session?.disconnect() } catch (_: Exception) {}
         session = null
         profile = null
-        backgroundSinceElapsed = 0L
-        releaseBackgroundWakeLock()
+        releaseRuntimeLocks()
         if (announce) {
             TunnelState.set(TunnelState.Info(status = TunnelState.Status.STOPPED))
         }
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
+    private fun isWorkingOn(p: TunnelProfile): Boolean {
+        if (profile?.id != p.id) return false
+        val st = TunnelState.flow.value
+        if (st.profileId != p.id) return false
+        return st.status == TunnelState.Status.CONNECTED ||
+            st.status == TunnelState.Status.CONNECTING ||
+            st.status == TunnelState.Status.RETRYING
+    }
+
+    private fun notificationTextFor(p: TunnelProfile): String {
+        val st = TunnelState.flow.value
+        return when (st.status) {
+            TunnelState.Status.CONNECTED ->
+                st.message ?: "${p.name} 已连接"
+            TunnelState.Status.RETRYING ->
+                "${p.name} 连接中断，正在重连…"
+            else -> "正在连接 ${p.name}…"
+        }
+    }
+
     private fun runLoop(g: Int, p: TunnelProfile) {
         var backoff = 3_000L
         while (g == generation) {
+            holdRuntimeLocks()
             var s: Session? = null
             try {
                 Log.d(TAG, "connecting ${p.user}@${p.sshHost}:${p.sshPort} -> ${p.remoteHost}:${p.remotePort} (local ${p.localPort})")
@@ -280,28 +349,23 @@ class SshTunnelService : Service() {
                     put("PreferredAuthentications", methods)
                     put("NumberOfPasswordPrompts", "1")
                 })
-                // Bare host names: resolve ourselves (NetBIOS broadcast on the
-                // LAN, system DNS for Tailscale MagicDNS) instead of relying
-                // on the OS resolver, which ignores NetBIOS names.
+                // Always own the TCP socket so we can enable SO_KEEPALIVE.
+                // Bare host names are resolved ourselves (NetBIOS / MagicDNS)
+                // instead of relying on the OS resolver.
                 var viaLabel = ""
-                if (!HostResolver.isIpLiteral(p.sshHost) && !p.sshHost.contains('.')) {
-                    sess.setSocketFactory(ResolvingSocketFactory { r ->
-                        viaLabel = when (r.source) {
-                            "tailscale" -> " · Tailscale ${r.ip}"
-                            "netbios" -> " · NetBIOS ${r.ip}"
-                            "dns" -> " · DNS ${r.ip}"
-                            else -> " · ${r.ip}"
-                        }
-                    })
-                }
-                // In the foreground, detect a dead link within about a minute.
-                // In the background, allow the requested ten-minute grace
-                // window before JSch tears down an otherwise healthy session.
+                sess.setSocketFactory(ResolvingSocketFactory { r ->
+                    viaLabel = when (r.source) {
+                        "tailscale" -> " · Tailscale ${r.ip}"
+                        "netbios" -> " · NetBIOS ${r.ip}"
+                        "dns" -> " · DNS ${r.ip}"
+                        else -> ""
+                    }
+                })
                 s = sess
                 synchronized(sessionPolicyLock) {
                     session = sess
                     sess.setServerAliveInterval(SERVER_ALIVE_INTERVAL_MS)
-                    sess.setServerAliveCountMax(serverAliveCountMax())
+                    sess.setServerAliveCountMax(SERVER_ALIVE_COUNT_MAX)
                 }
                 stage("ssh connect")
                 sess.connect(20_000)
@@ -355,7 +419,10 @@ class SshTunnelService : Service() {
                 updateNotification("${p.name} 已连接 · 127.0.0.1:$bound → ${p.remoteHost}:${p.remotePort}$viaLabel")
 
                 // Monitor: leave the connected state as soon as the session dies.
+                // Refresh the timed wake lock so a background tunnel can outlive
+                // a single hour-long acquire.
                 while (g == generation && sess.isConnected) {
+                    holdRuntimeLocks()
                     Thread.sleep(2_000)
                 }
                 if (g != generation) return
@@ -435,67 +502,93 @@ class SshTunnelService : Service() {
 
     // ----- foreground plumbing -----
 
-    private fun serverAliveCountMax(): Int =
-        if (AppVisibility.isVisible) {
-            FOREGROUND_SERVER_ALIVE_COUNT_MAX
-        } else {
-            BACKGROUND_SERVER_ALIVE_COUNT_MAX
-        }
-
-    private fun applyVisibilityPolicy(visible: Boolean) {
+    private fun applyKeepalivePolicy(visible: Boolean) {
+        // Visibility no longer changes the keepalive budget — a background
+        // tunnel must detect death just as quickly as a foreground one so
+        // it can reconnect instead of sitting on a half-open TCP socket.
         synchronized(sessionPolicyLock) {
-            session?.setServerAliveCountMax(
-                if (visible) {
-                    FOREGROUND_SERVER_ALIVE_COUNT_MAX
-                } else {
-                    BACKGROUND_SERVER_ALIVE_COUNT_MAX
-                }
-            )
+            session?.setServerAliveCountMax(SERVER_ALIVE_COUNT_MAX)
         }
+        if (!visible && profile != null) {
+            holdRuntimeLocks()
+        }
+    }
 
-        if (visible || profile == null) {
-            backgroundSinceElapsed = 0L
-            releaseBackgroundWakeLock()
-            return
-        }
-
-        val now = SystemClock.elapsedRealtime()
-        val since = backgroundSinceElapsed.takeIf { it != 0L } ?: now.also {
-            backgroundSinceElapsed = it
-        }
-        val remaining = BACKGROUND_GRACE_MS - (now - since)
-        val lock = backgroundWakeLock ?: return
-        if (remaining > 0L && !lock.isHeld) {
+    private fun holdRuntimeLocks() {
+        val wake = tunnelWakeLock
+        if (wake != null) {
             try {
-                lock.acquire(remaining)
-                Log.d(TAG, "background grace: wake lock held for ${remaining}ms")
+                if (!wake.isHeld) {
+                    wake.acquire(WAKE_LOCK_CHUNK_MS)
+                    Log.d(TAG, "wake lock acquired for ${WAKE_LOCK_CHUNK_MS}ms")
+                }
             } catch (e: RuntimeException) {
-                Log.w(TAG, "background grace: unable to acquire wake lock", e)
+                Log.w(TAG, "wake lock: unable to acquire", e)
+            }
+        }
+        val wifi = wifiLock
+        if (wifi != null) {
+            try {
+                if (!wifi.isHeld) {
+                    wifi.acquire()
+                    Log.d(TAG, "wifi lock acquired")
+                }
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "wifi lock: unable to acquire", e)
             }
         }
     }
 
-    private fun releaseBackgroundWakeLock() {
-        val lock = backgroundWakeLock ?: return
-        if (lock.isHeld) {
+    private fun releaseRuntimeLocks() {
+        val wake = tunnelWakeLock
+        if (wake != null && wake.isHeld) {
             try {
-                lock.release()
+                wake.release()
             } catch (_: RuntimeException) {
                 // A timed wake lock may have expired between isHeld and release.
+            }
+        }
+        val wifi = wifiLock
+        if (wifi != null && wifi.isHeld) {
+            try {
+                wifi.release()
+            } catch (_: RuntimeException) {
             }
         }
     }
 
     private fun enterForeground(text: String) {
         val n = buildNotification(text)
-        if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(
-                NOTIFICATION_ID,
-                n,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, n)
+        try {
+            when {
+                Build.VERSION.SDK_INT >= 34 -> startForeground(
+                    NOTIFICATION_ID,
+                    n,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+                Build.VERSION.SDK_INT >= 29 -> startForeground(
+                    NOTIFICATION_ID,
+                    n,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+                else -> startForeground(NOTIFICATION_ID, n)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground typed failed: ${e.message}; falling back")
+            try {
+                if (Build.VERSION.SDK_INT >= 29) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        n,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, n)
+                }
+            } catch (e2: Exception) {
+                Log.w(TAG, "startForeground fallback failed: ${e2.message}")
+                startForeground(NOTIFICATION_ID, n)
+            }
         }
     }
 

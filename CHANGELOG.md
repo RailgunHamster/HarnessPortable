@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.2
+
+- Android：修复每次打开 APK 都显示「隧道未连接」——进程被杀后会自动重连上次隧道，不再只恢复一个空的网页层。
+- Android：SSH 后台保活改为在隧道存活期间持有 WakeLock / Wi‑Fi Lock，并使用 `specialUse` 前台服务；切到后台后不再只有 10 分钟宽限。
+- Android：首次连接时提示忽略电池优化，设置页也可手动「允许后台运行」。
+
 ## 2.6.0
 
 - Android 支持应用内更新：设置页底部「检查更新 / 立即安装」。默认检查 GitHub Release 的 `android.json`，安装包同时放在局域网 `HarnessPortable-Releases`。

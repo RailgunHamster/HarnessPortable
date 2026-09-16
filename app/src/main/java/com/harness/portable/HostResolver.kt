@@ -564,22 +564,30 @@ class ResolvingSocketFactory(
 
     override fun createSocket(host: String, port: Int): Socket {
         android.util.Log.d("HarnessTunnel", "factory: resolving '$host'")
-        val r = HostResolver.resolve(host) ?: throw UnknownHostException(
-            HostResolver.failureMessage(host)
-        )
-        android.util.Log.d("HarnessTunnel", "factory: connecting ${r.ip}:$port (${r.source})")
         val s = Socket()
+        s.tcpNoDelay = true
+        s.keepAlive = true
+        val targetIp: String
+        if (!HostResolver.isIpLiteral(host) && !host.contains('.')) {
+            val r = HostResolver.resolve(host) ?: throw UnknownHostException(
+                HostResolver.failureMessage(host)
+            )
+            onResolved(r)
+            targetIp = r.ip
+            android.util.Log.d("HarnessTunnel", "factory: connecting ${r.ip}:$port (${r.source})")
+        } else {
+            targetIp = host
+            android.util.Log.d("HarnessTunnel", "factory: connecting $host:$port")
+        }
         try {
-            s.tcpNoDelay = true
-            s.connect(InetSocketAddress(r.ip, port), 15_000)
+            s.connect(InetSocketAddress(targetIp, port), 15_000)
         } catch (e: Exception) {
-            android.util.Log.w("HarnessTunnel", "factory: connect to ${r.ip}:$port failed: $e")
+            android.util.Log.w("HarnessTunnel", "factory: connect to $targetIp:$port failed: $e")
             HostResolver.invalidate(host)
             try { s.close() } catch (_: Exception) {}
             throw e
         }
-        android.util.Log.d("HarnessTunnel", "factory: tcp connected ${r.ip}:$port")
-        onResolved(r)
+        android.util.Log.d("HarnessTunnel", "factory: tcp connected $targetIp:$port")
         return s
     }
 
