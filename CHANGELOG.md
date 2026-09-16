@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.6.3
+
+- Android：桌面应用名从 `Harness Portable` 缩短为 `Harness` —— 原来 13 个字符在图标标签下会被截断。
+
 ## 2.6.2
 
 - Android / Windows：更新源改成「家庭目录 + GitHub」两个槽位加一个选择，两个地址都保留，切换不丢。Android 默认走 GitHub（手机读不了 UNC 共享），Windows 默认走家庭目录（PC 能直接读）。升级时原来填过的地址会自动落到对应槽位。
