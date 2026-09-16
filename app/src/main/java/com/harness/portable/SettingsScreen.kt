@@ -89,7 +89,14 @@ fun SettingsScreen(
     var editorFor by remember { mutableStateOf<TunnelProfile?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var directInput by remember { mutableStateOf("") }
-    var updateServer by remember { mutableStateOf(ApkUpdate.storedServer(ctx)) }
+    val initialSources = remember {
+        // Fold the pre-two-slot single setting into the new pair once, so an
+        // existing install keeps checking wherever the user had aimed it.
+        UpdateSourceStore.migrateLegacy(ctx, ApkUpdate.storedServer(ctx))
+        UpdateSourceStore.load(ctx)
+    }
+    var updateSources by remember { mutableStateOf(initialSources) }
+    var updateUrl by remember { mutableStateOf(initialSources.url()) }
     var updateStatus by remember { mutableStateOf("尚未检查更新") }
     var updateNotes by remember { mutableStateOf("") }
     var updateBusy by remember { mutableStateOf(false) }
@@ -98,15 +105,26 @@ fun SettingsScreen(
     val versionName = remember { ApkUpdate.currentVersionName(ctx) }
     val versionCode = remember { ApkUpdate.currentVersionCode(ctx) }
 
+    /** Writes the edited URL into its slot, so switching sources keeps both. */
+    fun storeSources(): UpdateSources {
+        val next = when (updateSources.selected) {
+            UpdateSourceKind.GitHub -> updateSources.copy(github = updateUrl.trim())
+            UpdateSourceKind.File -> updateSources.copy(home = updateUrl.trim())
+        }
+        UpdateSourceStore.save(ctx, next)
+        updateSources = next
+        return next
+    }
+
     fun checkUpdate() {
-        ApkUpdate.saveServer(ctx, updateServer)
+        val sources = storeSources()
         updateBusy = true
         updateProgress = -1
         updateStatus = "正在检查更新…"
         pendingFeed = null
         scope.launch {
             try {
-                val feed = withContext(Dispatchers.IO) { ApkUpdate.fetchFeed(updateServer) }
+                val feed = withContext(Dispatchers.IO) { ApkUpdate.fetchFeed(sources.url()) }
                 pendingFeed = feed
                 updateNotes = feed.notes
                 updateStatus = if (feed.versionCode > versionCode) {
@@ -284,11 +302,58 @@ fun SettingsScreen(
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                 )
                 OutlinedTextField(
-                    value = updateServer,
-                    onValueChange = { updateServer = it },
-                    label = { Text("更新服务器（GitHub 仓库或 android.json 地址）") },
+                    value = updateUrl,
+                    onValueChange = { updateUrl = it },
+                    label = {
+                        Text(
+                            if (updateSources.selected == UpdateSourceKind.GitHub)
+                                "GitHub 仓库"
+                            else "家庭目录（局域网路径或 http 地址）"
+                        )
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "使用：" + updateSources.selected.let {
+                        if (it == UpdateSourceKind.GitHub) "GitHub" else "家庭目录"
+                    },
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    UpdateSourceKind.entries.forEach { kind ->
+                        if (kind == updateSources.selected) {
+                            Button(
+                                onClick = {},
+                                enabled = !updateBusy
+                            ) { Text(kind.label()) }
+                        } else {
+                            OutlinedButton(
+                                onClick = {
+                                    // Keep what is typed against the source it
+                                    // belongs to, then swap the field over.
+                                    val kept = storeSources()
+                                    updateSources = kept.copy(selected = kind)
+                                    updateUrl = kept.url(kind)
+                                    UpdateSourceStore.save(ctx, updateSources)
+                                    updateStatus = "已切换到${kind.label()}"
+                                    pendingFeed = null
+                                },
+                                enabled = !updateBusy
+                            ) { Text(kind.label()) }
+                        }
+                    }
+                }
+                Text(
+                    "将请求：" + runCatching { updateSources.feedUrl() }.getOrDefault(""),
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 6.dp)
                 )
                 Row(
                     modifier = Modifier.padding(top = 8.dp),
@@ -296,8 +361,8 @@ fun SettingsScreen(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            ApkUpdate.saveServer(ctx, updateServer)
-                            updateStatus = "已保存更新服务器"
+                            storeSources()
+                            updateStatus = "已保存更新地址"
                         },
                         enabled = !updateBusy
                     ) { Text("保存") }
@@ -331,7 +396,10 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    "安装包发布在 GitHub Release 与局域网 HarnessPortable-Releases。手机默认走 GitHub；若有 http 目录，把地址填到上面。",
+                    "两个地址都保留，切换不丢。家庭目录是局域网共享路径" +
+                        "（\\\\server-home\\public\\Software\\HarnessPortable-Releases），" +
+                        "手机读不了 UNC，要在手机上用它请填一个同目录的 http 地址。" +
+                        "手机默认走 GitHub。",
                     color = MaterialTheme.colorScheme.outline,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 8.dp)

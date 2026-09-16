@@ -68,9 +68,17 @@ Windows 与 macOS 桌面版允许**同一进程内同时运行多个隧道**：
   （DockWidth/DockHeight 的 GridLength 值），可多个预设一键切换；
 - F11 进入全屏（只留标签和网页），Esc 退出；
 - 布局预设包含“管理”标签的位置；
-- 应用设置（如关闭主窗口行为、启动恢复上次布局、Windows 更新服务器）存 `settings.json`，
-  默认“直接退出”、默认启动恢复上次布局；Windows `UpdateServerUrl` 为空时使用
-  `\\server-home\public\Software\HarnessPortable-Releases`，也可填 GitHub 仓库 URL；
+- 应用设置（如关闭主窗口行为、启动恢复上次布局、更新源）存 `settings.json`，
+  默认“直接退出”、默认启动恢复上次布局；
+- 更新源是**两个槽位加一个选择**，两个地址都会保留，切换不丢：
+  - Windows：`UpdateHomeUrl`（局域网共享，默认
+    `\\server-home\public\Software\HarnessPortable-Releases`）与
+    `UpdateGitHubUrl`（默认仓库地址），`UpdateSourceSelected` 取 `home` / `github`
+    决定实际用哪个；默认选 `home`（PC 能直接读共享）。
+  - Android：`update_source_home` / `update_source_github` /
+    `update_source_selected`，默认选 `github`（手机读不了 UNC）。
+  - 两者都存在时旧字段 `UpdateServerUrl` / `update_server_url` 只作镜像，
+    不再决定行为；首次升级它会被折进对应的槽位，不丢用户原本填的地址；
 - 关闭标签不停止隧道，停止隧道才关闭对应标签；
 - 直连项可多开：每点击一次“连接”新开一个标签，互不影响；
 - 停止/删除某一条隧道不得影响其他隧道；

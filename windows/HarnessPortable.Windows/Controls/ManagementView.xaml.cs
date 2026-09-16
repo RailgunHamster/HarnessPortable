@@ -144,12 +144,50 @@ public partial class ManagementView : System.Windows.Controls.UserControl
     {
         _suppressSettings = true;
         var settings = _services.Settings.Load();
-        UpdateServerBox.Text = string.IsNullOrWhiteSpace(settings.UpdateServerUrl)
-            ? UpdateSourceFactory.DefaultServerUrl
-            : settings.UpdateServerUrl;
+        var selection = UpdateSelection.From(settings);
+        UpdateSourceBox.SelectedIndex = selection.Slot == UpdateSourceSlot.GitHub ? 1 : 0;
+        UpdateServerBox.Text = selection.Url();
         VersionText.Text = "当前版本 " + _services.Updates.CurrentVersion
             + " · " + _services.Updates.DeploymentLabel;
         RefreshUpdatePanel();
+        _suppressSettings = false;
+    }
+
+    /// <summary>
+    /// Reads both slots out of the UI. The address box always belongs to the
+    /// slot the picker is on, so the other slot keeps whatever it had.
+    /// </summary>
+    private UpdateSelection LoadUpdateSelection()
+    {
+        var stored = UpdateSelection.From(_services.Settings.Load());
+        var slot = UpdateSourceBox.SelectedItem is ComboBoxItem { Tag: "github" }
+            ? UpdateSourceSlot.GitHub
+            : UpdateSourceSlot.Home;
+        var typed = UpdateServerBox.Text.Trim();
+        return new UpdateSelection
+        {
+            Slot = slot,
+            HomeUrl = slot == UpdateSourceSlot.Home ? typed : stored.HomeUrl,
+            GitHubUrl = slot == UpdateSourceSlot.GitHub ? typed : stored.GitHubUrl,
+        };
+    }
+
+    private void UpdateSourceBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressSettings)
+        {
+            return;
+        }
+
+        // Keep what was typed against the slot it was typed for, then show
+        // the slot being switched to.
+        var selection = LoadUpdateSelection();
+        var settings = _services.Settings.Load();
+        selection.Store(settings);
+        _services.Settings.Save(settings);
+
+        _suppressSettings = true;
+        UpdateServerBox.Text = selection.Url();
         _suppressSettings = false;
     }
 
@@ -195,16 +233,16 @@ public partial class ManagementView : System.Windows.Controls.UserControl
 
     private string CurrentUpdateServerUrl()
     {
-        var typed = UpdateServerBox.Text.Trim();
+        var selection = LoadUpdateSelection();
+        var typed = selection.Url();
         return typed.Length == 0 ? UpdateSourceFactory.DefaultServerUrl : typed;
     }
 
     private void SaveUpdateServer_Click(object sender, RoutedEventArgs e)
     {
         var settings = _services.Settings.Load();
-        settings.UpdateServerUrl = CurrentUpdateServerUrl();
+        LoadUpdateSelection().Store(settings);
         _services.Settings.Save(settings);
-        UpdateServerBox.Text = settings.UpdateServerUrl;
     }
 
     private async void CheckUpdate_Click(object sender, RoutedEventArgs e)

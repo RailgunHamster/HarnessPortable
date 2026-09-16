@@ -11,7 +11,7 @@
 ## 核心功能
 
 - **SSH 本地端口转发**：等价于 `ssh -N -L local:remoteHost:remotePort user@host`；支持私钥登录（可不填密码），密码错误不会反复重试
-- **Windows 自动更新**：Velopack（Setup 安装包和便携 zip 都能更新）；设置里可改更新服务器并查看更新日志
+- **Windows 自动更新**：Velopack（Setup 安装包和便携 zip 都能更新）；更新源可选「家庭目录」（局域网共享）或 GitHub，两个地址都保留，设置里一键切换，并可查看更新日志
 - **多隧道并发**：同一进程可同时连接多个服务器，每个隧道独立重连/停止
 - **TOFU 主机密钥**：首次连接记住服务器公钥；密钥变化直接拒绝，防中间人
 - **智能主机名解析**：IP / 域名 / Tailscale MagicDNS / NetBIOS 名

@@ -95,7 +95,10 @@ public partial class MainWindow : Window
         RestoreLastLayoutIfEnabled();
         Loaded += (_, _) =>
         {
-            _ = _services.Updates.CheckAsync(_services.Settings.Load().UpdateServerUrl);
+            // Resolve the two-slot selection rather than the retired single
+            // URL, so startup follows whichever source is picked.
+            var settings = _services.Settings.Load();
+            _ = _services.Updates.CheckAsync(UpdateSelection.From(settings).Url());
         };
     }
 

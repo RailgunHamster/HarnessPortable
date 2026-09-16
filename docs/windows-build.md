@@ -105,7 +105,9 @@ pwsh -File scripts/release-windows.ps1 -SkipGitHub
 pwsh -File scripts/release-windows.ps1 -SkipShare
 ```
 
-应用设置里可改更新服务器（UNC、http 目录或 GitHub 仓库 URL），并查看更新日志。
+应用设置里的更新源是**两个槽位加一个选择**：家庭目录（默认局域网共享，PC 能直接读）
+与 GitHub 仓库，两个地址都保留，用下拉切换实际用哪个。安装包发布在两处，所以随便哪个
+通都能更新。旁边可查看更新日志。
 
 开发时直接 `dotnet run` 不会走更新（Velopack 未安装）。
 

@@ -23,6 +23,9 @@ object ApkUpdate {
     const val PREF_SERVER = "update_server_url"
     const val DEFAULT_SERVER = "https://github.com/RailgunHamster/HarnessPortable"
 
+    /** The LAN release directory the PC reads directly and phones cannot. */
+    const val DEFAULT_HOME_DIR = "\\\\server-home\\public\\Software\\HarnessPortable-Releases"
+
     fun currentVersionName(ctx: Context): String =
         ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0"
 
@@ -30,6 +33,28 @@ object ApkUpdate {
         val info = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
         return if (Build.VERSION.SDK_INT >= 28) info.longVersionCode.toInt() else @Suppress("DEPRECATION") info.versionCode
     }
+
+    /**
+     * Whether an address is a GitHub repository (whose feed lives at
+     * `releases/latest/download/`) rather than a plain path or directory URL.
+     */
+    fun looksLikeGitHub(url: String): Boolean = githubRepo(url) != null
+
+    /**
+     * Whether an address is a filesystem path — the UNC form of the home
+     * directory, or any Windows / POSIX path. A phone cannot read one.
+     */
+    fun looksLikeReadablePath(url: String): Boolean {
+        val v = url.trim()
+        if (v.isEmpty()) return false
+        if (v.startsWith("http://", true) || v.startsWith("https://", true)) return false
+        return v.startsWith("\\\\") || v.startsWith("//") ||
+            v.matches(Regex("^[A-Za-z]:[\\\\/].*")) || v.startsWith("/")
+    }
+
+    /** Classifies an address the way the update feed expects to read it. */
+    fun classify(url: String): UpdateSourceKind =
+        if (looksLikeGitHub(url)) UpdateSourceKind.GitHub else UpdateSourceKind.File
 
     fun storedServer(ctx: Context): String =
         ctx.getSharedPreferences("harness_portable", Context.MODE_PRIVATE)
@@ -49,16 +74,22 @@ object ApkUpdate {
         if (github != null) {
             return "https://github.com/${github.first}/${github.second}/releases/latest/download/android.json"
         }
-        return if (raw.endsWith("android.json", ignoreCase = true)) raw
-        else "$raw/android.json"
+        if (raw.endsWith("android.json", ignoreCase = true)) return raw
+        // A directory path (UNC or local) or a plain http directory both just
+        // get the feed name appended, with the right separator.
+        return if (looksLikeReadablePath(raw)) "$raw\\android.json" else "$raw/android.json"
     }
 
     fun apkUrl(feedUrl: String, apkField: String): String {
         val apk = apkField.trim()
         if (apk.startsWith("http://", true) || apk.startsWith("https://", true)) return apk
-        val slash = feedUrl.lastIndexOf('/')
-        val base = if (slash >= 0) feedUrl.substring(0, slash + 1) else feedUrl
-        return base + apk.trimStart('/')
+        // Resolve a bare file name next to the feed. A UNC feed is
+        // backslash-separated, so cutting at '/' alone would yield the whole
+        // path rather than its directory and double the file name.
+        val sep = if (looksLikeReadablePath(feedUrl)) maxOf(feedUrl.lastIndexOf('\\'), feedUrl.lastIndexOf('/'))
+        else feedUrl.lastIndexOf('/')
+        val base = if (sep >= 0) feedUrl.substring(0, sep + 1) else feedUrl
+        return base + apk.trimStart('/', '\\')
     }
 
     fun fetchFeed(server: String): ApkFeed {

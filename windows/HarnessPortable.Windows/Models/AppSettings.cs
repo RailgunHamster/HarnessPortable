@@ -17,8 +17,18 @@ public sealed class AppSettings
     public string SshConfigPath { get; set; } = "";
 
     /// <summary>
-    /// Velopack update feed: UNC path, http(s) directory, or GitHub repo URL.
-    /// Empty uses the built-in LAN share default.
+    /// Velopack update feed selected by <see cref="UpdateSourceSelected"/>.
+    /// Kept for settings files written before the two-slot model; on load it
+    /// is folded into <see cref="UpdateHomeUrl"/> or <see cref="UpdateGitHubUrl"/>.
     /// </summary>
     public string UpdateServerUrl { get; set; } = "";
+
+    /// <summary>LAN release share the PC reads directly.</summary>
+    public string UpdateHomeUrl { get; set; } = "";
+
+    /// <summary>GitHub repository the feed is pulled from.</summary>
+    public string UpdateGitHubUrl { get; set; } = "";
+
+    /// <summary>"home" or "github" — which of the two a check uses.</summary>
+    public string UpdateSourceSelected { get; set; } = "";
 }

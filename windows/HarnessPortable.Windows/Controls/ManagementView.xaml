@@ -134,7 +134,14 @@
 
                         <TextBlock Margin="0,16,0,0" FontSize="13" Foreground="#111827" Text="自动更新"/>
                         <TextBlock x:Name="VersionText" Margin="0,4,0,0" Style="{StaticResource ModernMutedText}"/>
-                        <TextBlock Margin="0,8,0,4" Style="{StaticResource ModernMutedText}" Text="更新服务器（UNC 路径、http 目录或 GitHub 仓库）"/>
+                        <TextBlock Margin="0,8,0,4" Style="{StaticResource ModernMutedText}"
+                                   Text="更新源（两个地址都会保留，切换不丢）"/>
+                        <ComboBox x:Name="UpdateSourceBox" MinWidth="160"
+                                  SelectionChanged="UpdateSourceBox_SelectionChanged">
+                            <ComboBoxItem Content="家庭目录（局域网共享）" Tag="home"/>
+                            <ComboBoxItem Content="GitHub" Tag="github"/>
+                        </ComboBox>
+                        <TextBlock Margin="0,8,0,4" Style="{StaticResource ModernMutedText}" Text="地址（家庭目录填 UNC 路径或 http 目录；GitHub 填仓库地址）"/>
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="保存" Padding="12,6" Margin="8,0,0,0"
                                     Style="{StaticResource ModernButton}" Click="SaveUpdateServer_Click"/>
