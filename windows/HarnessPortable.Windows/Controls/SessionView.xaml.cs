@@ -124,7 +124,20 @@ public partial class SessionView : System.Windows.Controls.UserControl
         // block for a long time; queuing it at idle priority lets the tab
         // close / layout switch return immediately instead of freezing the
         // whole window (close button, taskbar close, everything).
-        WebView.Dispatcher.InvokeAsync(
+        ScheduleWebViewDisposal();
+    }
+
+    /// <summary>
+    /// How long <see cref="WebView2.Dispose"/> may block the UI thread before
+    /// the dispatcher is released. A wedged WebView2 browser process makes
+    /// Dispose block indefinitely, and because it runs on the UI thread that
+    /// freezes the entire window with no way out but Task Manager.
+    /// </summary>
+    private static readonly TimeSpan DisposalBudget = TimeSpan.FromSeconds(5);
+
+    private void ScheduleWebViewDisposal()
+    {
+        var operation = WebView.Dispatcher.InvokeAsync(
             () =>
             {
                 try
@@ -137,6 +150,23 @@ public partial class SessionView : System.Windows.Controls.UserControl
                 }
             },
             DispatcherPriority.ApplicationIdle);
+
+        // Release the dispatcher if Dispose never returns. A wedged Dispose is
+        // already Executing and blocking the UI thread, so anything short of
+        // Completed has to be aborted. This is the only way out of a blocked
+        // UI thread from the outside; the browser process is torn down with
+        // the app either way, so giving up on a stuck Dispose costs nothing
+        // user-visible.
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(DisposalBudget).ConfigureAwait(false);
+
+            if (operation.Status != DispatcherOperationStatus.Completed)
+            {
+                FlickerLog.Log("webview", "dispose exceeded the budget; releasing the UI thread");
+                operation.Abort();
+            }
+        });
     }
 
     private void OnTunnelStateChanged(TunnelInfo info)

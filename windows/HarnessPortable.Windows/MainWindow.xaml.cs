@@ -487,6 +487,30 @@ public partial class MainWindow : Window
 
     private void ApplyTabDrop(LayoutDocument doc, LayoutDocumentPane targetPane, DropZone zone)
     {
+        // Restructuring the layout mutates the pane collections that the live
+        // LayoutDocumentPaneControl is bound to, and AvalonDock reacts to the
+        // removal by trying to write into its ItemsPanel's Children directly —
+        // which WPF rejects with "无法显式修改 Panel 的 Children 集合". A throw
+        // there used to unwind the whole drop halfway through (see crash.log),
+        // leaving the dock model and its visual tree disagreeing about where
+        // the tab lives. Deferring past the input event removes that
+        // re-entrancy, and the guards below make a partial failure recoverable
+        // instead of leaving a wedged window behind.
+        var zoneValue = zone;
+        Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Input,
+            () => RunTabDrop(doc, targetPane, zoneValue));
+    }
+
+    private void RunTabDrop(LayoutDocument doc, LayoutDocumentPane targetPane, DropZone zone)
+    {
+        if (doc.Root is null || targetPane.Root is null)
+        {
+            // The document was closed, or the pane dropped out of the layout,
+            // while the drop was queued. Nothing left to move.
+            return;
+        }
+
         if (zone == DropZone.Center)
         {
             MoveDocumentToPane(doc, targetPane);
@@ -498,18 +522,28 @@ public partial class MainWindow : Window
 
     private void MoveDocumentToPane(LayoutDocument doc, LayoutDocumentPane targetPane)
     {
-        if (doc.Parent is not LayoutDocumentPane sourcePane || ReferenceEquals(sourcePane, targetPane))
+        if (doc.Parent is not LayoutDocumentPane sourcePane)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(sourcePane, targetPane))
         {
             doc.IsActive = true;
             doc.IsSelected = true;
             return;
         }
 
-        sourcePane.Children.Remove(doc);
-        targetPane.Children.Add(doc);
-        doc.IsActive = true;
-        doc.IsSelected = true;
-        RemoveEmptyPane(sourcePane);
+        Safely(
+            () =>
+            {
+                sourcePane.Children.Remove(doc);
+                targetPane.Children.Add(doc);
+                doc.IsActive = true;
+                doc.IsSelected = true;
+                RemoveEmptyPane(sourcePane);
+            },
+            () => EnsureDocumentHasAPane(doc, sourcePane));
     }
 
     private void SplitDocumentByMoving(LayoutDocument doc, LayoutDocumentPane targetPane, DropZone zone)
@@ -521,36 +555,93 @@ public partial class MainWindow : Window
             return;
         }
 
-        sourcePane.Children.Remove(doc);
+        Safely(
+            () =>
+            {
+                sourcePane.Children.Remove(doc);
 
-        var newPane = new LayoutDocumentPane();
-        var group = new LayoutDocumentPaneGroup
-        {
-            Orientation = zone is DropZone.Left or DropZone.Right
-                ? System.Windows.Controls.Orientation.Horizontal
-                : System.Windows.Controls.Orientation.Vertical,
-        };
+                var newPane = new LayoutDocumentPane();
+                var group = new LayoutDocumentPaneGroup
+                {
+                    Orientation = zone is DropZone.Left or DropZone.Right
+                        ? System.Windows.Controls.Orientation.Horizontal
+                        : System.Windows.Controls.Orientation.Vertical,
+                };
 
-        parent.ReplaceChild(targetPane, group);
-        if (zone is DropZone.Left or DropZone.Up)
+                parent.ReplaceChild(targetPane, group);
+                if (zone is DropZone.Left or DropZone.Up)
+                {
+                    group.Children.Add(newPane);
+                    group.Children.Add(targetPane);
+                }
+                else
+                {
+                    group.Children.Add(targetPane);
+                    group.Children.Add(newPane);
+                }
+
+                newPane.Children.Add(doc);
+                doc.IsActive = true;
+                doc.IsSelected = true;
+
+                if (!ReferenceEquals(sourcePane, targetPane))
+                {
+                    RemoveEmptyPane(sourcePane);
+                }
+            },
+            () => EnsureDocumentHasAPane(doc, sourcePane));
+    }
+
+    /// <summary>
+    /// Runs one layout restructuring. AvalonDock updates its visual tree from
+    /// the same collection change, so a throw in there can leave both the
+    /// model and the view half-changed; <paramref name="recover"/> then has to
+    /// put the layout back into a state the user can keep working in.
+    /// </summary>
+    private void Safely(Action operation, Action recover)
+    {
+        try
         {
-            group.Children.Add(newPane);
-            group.Children.Add(targetPane);
+            operation();
         }
-        else
+        catch (Exception ex)
         {
-            group.Children.Add(targetPane);
-            group.Children.Add(newPane);
+            FlickerLog.Log("dock", "tab move failed: " + ex.GetType().Name + ": " + ex.Message);
+
+            try
+            {
+                recover();
+            }
+            catch (Exception nested)
+            {
+                FlickerLog.Log("dock", "tab move recovery failed: " + nested.Message);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Last resort for a half-applied move: the document must never be left
+    /// without a pane, because that is the state where the tab vanishes from
+    /// the UI while still holding a live WebView2.
+    /// </summary>
+    private void EnsureDocumentHasAPane(LayoutDocument doc, LayoutDocumentPane preferred)
+    {
+        if (doc.Parent is LayoutDocumentPane)
+        {
+            return;
         }
 
-        newPane.Children.Add(doc);
+        if (preferred.Root is not null)
+        {
+            preferred.Children.Add(doc);
+            doc.IsActive = true;
+            doc.IsSelected = true;
+            return;
+        }
+
+        GetTargetPane().Children.Add(doc);
         doc.IsActive = true;
         doc.IsSelected = true;
-
-        if (!ReferenceEquals(sourcePane, targetPane))
-        {
-            RemoveEmptyPane(sourcePane);
-        }
     }
 
     private void RemoveEmptyPane(LayoutDocumentPane pane)
@@ -564,7 +655,7 @@ public partial class MainWindow : Window
         CollapseEmptyContainer(parent);
     }
 
-    private static void CollapseEmptyContainer(ILayoutContainer container)
+    private void CollapseEmptyContainer(ILayoutContainer container)
     {
         if (container.ChildrenCount == 0 &&
             container is ILayoutElement emptyElement &&
