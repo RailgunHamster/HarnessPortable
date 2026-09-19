@@ -282,6 +282,10 @@ struct SessionView: View {
     @State private var authInput = ""
     @State private var authHint: String?
 
+    @Environment(\.colorScheme) var colorScheme
+
+    private var dsh: DshPalette { Dsh.palette(colorScheme) }
+
     private var profile: TunnelProfile? {
         profiles.findTunnel(id: tab.profileID)
     }
@@ -295,7 +299,7 @@ struct SessionView: View {
         ZStack(alignment: .topTrailing) {
             WebViewContainer(webView: webSessions.webView(for: tab.id))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(dsh.bgBase)
 
             HStack(spacing: 6) {
                 Button {
@@ -315,7 +319,11 @@ struct SessionView: View {
                 .buttonStyle(.borderless)
             }
             .padding(8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .background(dsh.bgLayer2, in: RoundedRectangle(cornerRadius: Dsh.radiusControl))
+            .overlay(
+                RoundedRectangle(cornerRadius: Dsh.radiusControl)
+                    .stroke(dsh.borderL1, lineWidth: Dsh.borderWidth)
+            )
             .padding(8)
 
             if tab.kind == .tunnel && tunnelInfo.status != .connected {
@@ -361,29 +369,31 @@ struct SessionView: View {
         VStack(spacing: 12) {
             Image(systemName: "lock.shield")
                 .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.orange)
+                .foregroundStyle(dsh.warning)
             Text("网页要求重新认证")
                 .font(.headline)
+                .foregroundStyle(dsh.textPrimary)
             Text(
                 "服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。"
                     + "请复制服务器上 dsh web 打印的完整 URL 粘贴到下面，"
                     + "也可直接粘贴 token 本身，将直接在内置浏览器中完成认证。"
             )
             .font(.callout)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(dsh.textSecondary)
             .multilineTextAlignment(.center)
             TextField("完整 URL、?token=… 或 token", text: $authInput)
-                .textFieldStyle(.roundedBorder)
+                .dshInput()
                 .frame(maxWidth: 420)
                 .onSubmit(openPastedAuthUrl)
             if let authHint {
                 Text(authHint)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(dsh.danger)
             }
             HStack {
                 Button("打开", action: openPastedAuthUrl)
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(DshPrimaryButtonStyle())
                 Button("取消") {
                     authHint = nil
                     webSessions.dismissAuth(tabID: tab.id)
@@ -393,8 +403,11 @@ struct SessionView: View {
         }
         .padding(28)
         .frame(maxWidth: 500)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .shadow(radius: 12)
+        .background(dsh.bgLayer1, in: RoundedRectangle(cornerRadius: Dsh.radiusCard))
+        .overlay(
+            RoundedRectangle(cornerRadius: Dsh.radiusCard)
+                .stroke(dsh.borderL1, lineWidth: Dsh.borderWidth)
+        )
     }
 
     private func openPastedAuthUrl() {
@@ -411,20 +424,25 @@ struct SessionView: View {
         VStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.red)
+                .foregroundStyle(dsh.danger)
             Text("页面加载失败")
                 .font(.headline)
+                .foregroundStyle(dsh.textPrimary)
             Text(message)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(Dsh.mono(12))
+                .foregroundStyle(dsh.textSecondary)
                 .multilineTextAlignment(.center)
                 .textSelection(.enabled)
             Button("重新加载") { webSessions.reload(tabID: tab.id) }
+                .buttonStyle(DshPrimaryButtonStyle())
         }
         .padding(28)
         .frame(maxWidth: 520)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .shadow(radius: 12)
+        .background(dsh.bgLayer1, in: RoundedRectangle(cornerRadius: Dsh.radiusCard))
+        .overlay(
+            RoundedRectangle(cornerRadius: Dsh.radiusCard)
+                .stroke(dsh.borderL1, lineWidth: Dsh.borderWidth)
+        )
     }
 
     @ViewBuilder
@@ -435,16 +453,18 @@ struct SessionView: View {
                 .foregroundStyle(statusColor)
             Text(statusTitle)
                 .font(.headline)
+                .foregroundStyle(dsh.textPrimary)
             if let message = tunnelInfo.message, !message.isEmpty {
                 Text(message)
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(dsh.textSecondary)
                     .multilineTextAlignment(.center)
             }
             HStack {
                 if tunnelInfo.status == .failed || tunnelInfo.status == .retrying,
                    let profile {
                     Button("重新连接") { tunnels.start(profile) }
+                        .buttonStyle(DshPrimaryButtonStyle())
                 }
                 Button("关闭标签") { onClose() }
                     .keyboardShortcut(.cancelAction)
@@ -452,8 +472,11 @@ struct SessionView: View {
         }
         .padding(28)
         .frame(maxWidth: 420)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .shadow(radius: 12)
+        .background(dsh.bgLayer1, in: RoundedRectangle(cornerRadius: Dsh.radiusCard))
+        .overlay(
+            RoundedRectangle(cornerRadius: Dsh.radiusCard)
+                .stroke(dsh.borderL1, lineWidth: Dsh.borderWidth)
+        )
     }
 
     private var statusTitle: String {
@@ -478,10 +501,10 @@ struct SessionView: View {
 
     private var statusColor: Color {
         switch tunnelInfo.status {
-        case .failed: return .red
-        case .stopped: return .secondary
-        case .retrying, .connecting, .idle: return .orange
-        case .connected: return .green
+        case .failed: return dsh.danger
+        case .stopped: return dsh.textTertiary
+        case .retrying, .connecting, .idle: return dsh.warning
+        case .connected: return dsh.success
         }
     }
 

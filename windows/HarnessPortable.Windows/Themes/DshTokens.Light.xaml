@@ -1,0 +1,45 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Light alias layer, values taken from DSH's own design system
+         (dsh-client-ui-theme: the dsw-static-neutral-bluish and dsw-alias scales).
+         The dark twin lives in DshTokens.Dark.xaml with exactly the same keys;
+         AppTheme swaps the whole dictionary when Windows changes app mode. -->
+    <SolidColorBrush x:Key="DshBgBase" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="DshBgLayer1" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="DshBgLayer2" Color="#F5F6F7"/>
+    <SolidColorBrush x:Key="DshBgLayer3" Color="#EBEEF2"/>
+
+    <SolidColorBrush x:Key="DshBorderL1" Color="#0A000000"/>
+    <SolidColorBrush x:Key="DshBorderL2" Color="#1A000000"/>
+    <SolidColorBrush x:Key="DshBorderL3" Color="#1F000000"/>
+
+    <SolidColorBrush x:Key="DshTextPrimary" Color="#0F1115"/>
+    <SolidColorBrush x:Key="DshTextSecondary" Color="#61666B"/>
+    <SolidColorBrush x:Key="DshTextTertiary" Color="#81858C"/>
+
+    <SolidColorBrush x:Key="DshBrandFill" Color="#0F1115"/>
+    <SolidColorBrush x:Key="DshBrandFillHover" Color="#2C2C2E"/>
+    <SolidColorBrush x:Key="DshBrandFillPressed" Color="#43454A"/>
+    <SolidColorBrush x:Key="DshBrandText" Color="#FFFFFF"/>
+
+    <SolidColorBrush x:Key="DshAccent" Color="#4176E6"/>
+    <SolidColorBrush x:Key="DshAccentSoft" Color="#144176E6"/>
+
+    <SolidColorBrush x:Key="DshGreen" Color="#22C55E"/>
+    <SolidColorBrush x:Key="DshRed" Color="#EC1313"/>
+    <SolidColorBrush x:Key="DshAmber" Color="#F7AD31"/>
+
+    <SolidColorBrush x:Key="DshDangerText" Color="#EC1313"/>
+    <SolidColorBrush x:Key="DshDangerBorder" Color="#F3C1C1"/>
+    <SolidColorBrush x:Key="DshDangerFillHover" Color="#FDE8E8"/>
+
+    <SolidColorBrush x:Key="DshInputBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="DshInputBorder" Color="#1A000000"/>
+    <SolidColorBrush x:Key="DshScrollThumb" Color="#D4D4D4"/>
+
+    <FontFamily x:Key="DshUiFont">Segoe UI, Microsoft YaHei UI</FontFamily>
+    <FontFamily x:Key="DshMonoFont">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
+    <CornerRadius x:Key="DshRadiusCard">12</CornerRadius>
+    <CornerRadius x:Key="DshRadiusControl">8</CornerRadius>
+</ResourceDictionary>

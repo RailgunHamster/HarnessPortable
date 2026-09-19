@@ -56,6 +56,9 @@ struct HarnessPortableApp: App {
 private struct MenuBarView: View {
     @ObservedObject var services: AppServices
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.colorScheme) var colorScheme
+
+    private var dsh: DshPalette { Dsh.palette(colorScheme) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -67,12 +70,17 @@ private struct MenuBarView: View {
             if !services.tunnels.activeStates.isEmpty {
                 Divider()
                 ForEach(services.tunnels.activeStates) { state in
-                    HStack {
+                    HStack(spacing: 6) {
                         Image(systemName: state.status == .connected ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
-                            .foregroundStyle(state.status == .connected ? Color.green : Color.orange)
+                            .foregroundStyle(state.status == .connected ? dsh.success : dsh.warning)
                         Text(state.profileName ?? "隧道")
+                            .foregroundStyle(dsh.textPrimary)
                         Spacer()
-                        if state.localPort > 0 { Text(String(state.localPort)).foregroundStyle(.secondary) }
+                        if state.localPort > 0 {
+                            Text(String(state.localPort))
+                                .font(Dsh.mono(11))
+                                .foregroundStyle(dsh.textSecondary)
+                        }
                     }
                     .frame(minWidth: 220)
                 }
@@ -88,5 +96,6 @@ private struct MenuBarView: View {
             }
         }
         .padding(8)
+        .background(dsh.bgBase)
     }
 }

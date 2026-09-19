@@ -18,7 +18,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +33,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Close
@@ -44,7 +45,9 @@ import androidx.compose.material.icons.filled.StayCurrentLandscape
 import androidx.compose.material.icons.filled.StayCurrentPortrait
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -63,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -88,6 +92,7 @@ internal fun WebViewScreen(
 ) {
     val ctx = LocalContext.current
     val localDensity = LocalDensity.current
+    val dsh = LocalDsh.current
     val prefs = remember { ctx.getSharedPreferences("harness_portable", Context.MODE_PRIVATE) }
 
     var webRef by remember { mutableStateOf<WebView?>(null) }
@@ -241,12 +246,15 @@ internal fun WebViewScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f)),
+                    .background(dsh.scrim),
                 contentAlignment = Alignment.Center
             ) {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    tonalElevation = 4.dp,
+                    shape = DshCardShape,
+                    color = dsh.layer1,
+                    border = BorderStroke(1.dp, dsh.borderOver(dsh.borderL2, dsh.layer1)),
+                    shadowElevation = 0.dp,
+                    tonalElevation = 0.dp,
                     modifier = Modifier.padding(24.dp)
                 ) {
                     Column(
@@ -259,27 +267,39 @@ internal fun WebViewScreen(
                                 Text(
                                     "连接失败",
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp
+                                    fontSize = 15.sp,
+                                    color = dsh.danger
                                 )
                                 tunnelInfo.message?.let {
                                     Text(
                                         it, fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.outline,
+                                        color = dsh.textTertiary,
                                         textAlign = TextAlign.Center
                                     )
                                 }
-                                OutlinedButton(onClick = onReconnect) { Text("重连") }
+                                OutlinedButton(
+                                    onClick = onReconnect,
+                                    shape = DshControlShape,
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = dsh.accent
+                                    )
+                                ) { Text("重连") }
                             }
 
                             TunnelState.Status.RETRYING,
                             TunnelState.Status.CONNECTING,
                             TunnelState.Status.IDLE -> {
-                                CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                CircularProgressIndicator(
+                                    color = dsh.accent,
+                                    trackColor = dsh.layer3,
+                                    modifier = Modifier.size(28.dp)
+                                )
                                 Text(
                                     if (tunnelInfo?.status == TunnelState.Status.RETRYING)
                                         "隧道中断，正在重连…"
                                     else "正在连接隧道…",
-                                    fontSize = 14.sp
+                                    fontSize = 14.sp,
+                                    color = dsh.textPrimary
                                 )
                             }
 
@@ -287,19 +307,33 @@ internal fun WebViewScreen(
                                 Text(
                                     "隧道未连接",
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp
+                                    fontSize = 15.sp,
+                                    color = dsh.warning
                                 )
                                 tunnelInfo?.message?.let {
                                     Text(
                                         it, fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.outline,
+                                        color = dsh.textTertiary,
                                         textAlign = TextAlign.Center
                                     )
                                 }
-                                OutlinedButton(onClick = onReconnect) { Text("重连") }
+                                OutlinedButton(
+                                    onClick = onReconnect,
+                                    shape = DshControlShape,
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = dsh.accent
+                                    )
+                                ) { Text("重连") }
                             }
                         }
-                        Button(onClick = onChangeServer) { Text("返回") }
+                        Button(
+                            onClick = onChangeServer,
+                            shape = DshControlShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = dsh.brandFill,
+                                contentColor = dsh.brandText
+                            )
+                        ) { Text("返回") }
                     }
                 }
             }
@@ -317,7 +351,7 @@ internal fun WebViewScreen(
                                     "请复制服务器上 dsh web 打印的完整 URL —— 或只复制 token 本身 —— " +
                                     "粘贴到下面，将直接在内置浏览器中完成认证。",
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.outline
+                            color = dsh.textTertiary
                         )
                         OutlinedTextField(
                             value = authInput,
@@ -327,10 +361,13 @@ internal fun WebViewScreen(
                             },
                             label = { Text("完整 URL、?token=… 或 token") },
                             singleLine = true,
+                            shape = DshControlShape,
+                            textStyle = dsh.monoStyle(14),
+                            colors = dshFieldColors(),
                             modifier = Modifier.fillMaxWidth()
                         )
                         authHint?.let {
-                            Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                            Text(it, fontSize = 11.sp, color = dsh.danger)
                         }
                     }
                 },
@@ -339,7 +376,11 @@ internal fun WebViewScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showAuthPrompt = false }) { Text("取消") }
-                }
+                },
+                shape = DshCardShape,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                titleContentColor = dsh.textPrimary,
+                textContentColor = dsh.textSecondary
             )
         }
 
@@ -396,10 +437,10 @@ internal fun WebViewScreen(
                         )
                     }
             ) {
-                SmallFloatingActionButton(
+                ActionBall(
                     onClick = { controlsExpanded = !controlsExpanded },
-                    shape = CircleShape,
-                    containerColor = MaterialTheme.colorScheme.primary,
+                    containerColor = dsh.accent,
+                    contentColor = Color.White,
                     modifier = Modifier
                         .size(ballSizeDp)
                         .alpha(if (dragging) 1f else 0.85f)
@@ -407,7 +448,7 @@ internal fun WebViewScreen(
                     Icon(
                         if (controlsExpanded) Icons.Filled.Close else Icons.Filled.MoreVert,
                         contentDescription = if (controlsExpanded) "收起" else "菜单",
-                        tint = MaterialTheme.colorScheme.onPrimary,
+                        tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -429,57 +470,57 @@ internal fun WebViewScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     horizontalAlignment = Alignment.End
                 ) {
-                    SmallFloatingActionButton(
+                    ActionBall(
                         onClick = { webRef?.reload() },
-                        shape = CircleShape,
-                        containerColor = MaterialTheme.colorScheme.primary,
+                        containerColor = dsh.accent,
+                        contentColor = Color.White,
                         modifier = Modifier.size(ballSizeDp).alpha(0.85f)
                     ) {
                         Icon(
                             Icons.Filled.Refresh,
                             contentDescription = "刷新",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
                     }
-                    SmallFloatingActionButton(
+                    ActionBall(
                         onClick = onToggleOrientation,
-                        shape = CircleShape,
-                        containerColor = MaterialTheme.colorScheme.primary,
+                        containerColor = dsh.accent,
+                        contentColor = Color.White,
                         modifier = Modifier.size(ballSizeDp).alpha(0.85f)
                     ) {
                         Icon(
                             orientation.icon(),
                             contentDescription = "方向: ${orientation.storage}",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
                     }
-                    SmallFloatingActionButton(
+                    ActionBall(
                         onClick = onChangeServer,
-                        shape = CircleShape,
-                        containerColor = MaterialTheme.colorScheme.primary,
+                        containerColor = if (tunnelMode) dsh.danger else dsh.accent,
+                        contentColor = Color.White,
                         modifier = Modifier.size(ballSizeDp).alpha(0.85f)
                     ) {
                         Icon(
                             if (tunnelMode) Icons.Filled.LinkOff else Icons.Filled.Dns,
                             contentDescription =
                                 if (tunnelMode) "断开并返回" else "服务器",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
                     }
                     if (tunnelMode) {
-                        SmallFloatingActionButton(
+                        ActionBall(
                             onClick = onReconnect,
-                            shape = CircleShape,
-                            containerColor = MaterialTheme.colorScheme.primary,
+                            containerColor = dsh.accent,
+                            contentColor = Color.White,
                             modifier = Modifier.size(ballSizeDp).alpha(0.85f)
                         ) {
                             Icon(
                                 Icons.Filled.Autorenew,
                                 contentDescription = "重连隧道",
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                tint = Color.White,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -491,6 +532,43 @@ internal fun WebViewScreen(
 
     BackHandler(enabled = canGoBack) {
         webRef?.goBack()
+    }
+}
+
+/**
+ * The floating control bubble: accent disc with a 1dp rank-1 border instead of
+ * a shadow, so it reads the same as every other DSH surface.
+ */
+@Composable
+private fun ActionBall(
+    onClick: () -> Unit,
+    containerColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    SmallFloatingActionButton(
+        onClick = onClick,
+        shape = CircleShape,
+        containerColor = containerColor,
+        contentColor = contentColor,
+        elevation = FloatingActionButtonDefaults.elevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp
+        ),
+        modifier = modifier.border(
+            1.dp,
+            LocalDsh.current.borderOver(
+                if (LocalDsh.current.isDark) LocalDsh.current.borderL3
+                else LocalDsh.current.borderL1,
+                containerColor
+            ),
+            CircleShape
+        )
+    ) {
+        Box(contentAlignment = Alignment.Center) { content() }
     }
 }
 

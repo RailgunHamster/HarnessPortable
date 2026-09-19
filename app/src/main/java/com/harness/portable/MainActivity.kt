@@ -11,21 +11,22 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,10 +34,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -101,19 +98,6 @@ class MainActivity : ComponentActivity() {
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
-}
-
-@Composable
-private fun AppTheme(content: @Composable () -> Unit) {
-    val ctx = LocalContext.current
-    val dark = isSystemInDarkTheme()
-    val scheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        dark -> darkColorScheme()
-        else -> lightColorScheme()
-    }
-    MaterialTheme(colorScheme = scheme, content = content)
 }
 
 private const val PREFS_NAME = "harness_portable"
@@ -388,7 +372,11 @@ fun AppRoot() {
                     BatteryExemption.markPrompted(ctx)
                     batteryPrompt = false
                 }) { Text("稍后") }
-            }
+            },
+            shape = DshCardShape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 
@@ -408,16 +396,21 @@ fun AppRoot() {
 /** Shown while a direct URL's machine name is being resolved to an IP. */
 @Composable
 internal fun DirectResolvingScreen(host: String) {
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize(),
+    val dsh = LocalDsh.current
+    Box(
+        modifier = Modifier.fillMaxSize().dshPage(),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            CircularProgressIndicator(modifier = Modifier.size(28.dp))
-            Text("正在解析 $host…", fontSize = 14.sp)
+            CircularProgressIndicator(
+                color = dsh.accent,
+                trackColor = dsh.layer3,
+                modifier = Modifier.size(28.dp)
+            )
+            Text("正在解析 $host…", fontSize = 14.sp, color = dsh.textSecondary)
         }
     }
 }
@@ -430,38 +423,58 @@ internal fun ConnectingScreen(
     onRetry: () -> Unit,
     onChangePassword: () -> Unit
 ) {
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize(),
+    val dsh = LocalDsh.current
+    Box(
+        modifier = Modifier.fillMaxSize().dshPage(),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(24.dp).widthIn(max = 420.dp)
+            modifier = Modifier
+                .padding(24.dp)
+                .widthIn(max = 420.dp)
+                .dshCard()
+                .padding(20.dp)
         ) {
             when (info.status) {
                 TunnelState.Status.FAILED -> {
                     Icon(
                         Icons.Filled.ErrorOutline,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(48.dp)
+                        tint = dsh.danger,
+                        modifier = Modifier.size(40.dp)
                     )
-                    Text("连接失败", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text(
+                        "连接失败",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        color = dsh.textPrimary
+                    )
                 }
 
                 TunnelState.Status.STOPPED -> {
-                    Text("隧道已停止", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text(
+                        "隧道已停止",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        color = dsh.textPrimary
+                    )
                 }
 
                 else -> {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(
+                        color = dsh.accent,
+                        trackColor = dsh.layer3,
+                        modifier = Modifier.size(28.dp)
+                    )
                     Text(
                         if (info.status == TunnelState.Status.RETRYING)
                             "连接失败，正在重试…"
                         else "正在连接 ${profile.name}…",
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
+                        fontSize = 16.sp,
+                        color = dsh.textPrimary
                     )
                 }
             }
@@ -469,7 +482,8 @@ internal fun ConnectingScreen(
                 Text(
                     it,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.outline,
+                    fontFamily = DshMonoFontFamily,
+                    color = dsh.textTertiary,
                     textAlign = TextAlign.Center
                 )
             }
@@ -477,13 +491,35 @@ internal fun ConnectingScreen(
                 TunnelState.Status.FAILED -> Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(onClick = onChangePassword) { Text("修改密码") }
-                    Button(onClick = onRetry) { Text("重试") }
+                    OutlinedButton(
+                        onClick = onChangePassword,
+                        shape = DshControlShape,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent)
+                    ) { Text("修改密码") }
+                    Button(
+                        onClick = onRetry,
+                        shape = DshControlShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = dsh.brandFill,
+                            contentColor = dsh.brandText
+                        )
+                    ) { Text("重试") }
                 }
 
-                TunnelState.Status.STOPPED -> Button(onClick = onCancel) { Text("返回") }
+                TunnelState.Status.STOPPED -> Button(
+                    onClick = onCancel,
+                    shape = DshControlShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = dsh.brandFill,
+                        contentColor = dsh.brandText
+                    )
+                ) { Text("返回") }
 
-                else -> OutlinedButton(onClick = onCancel) { Text("取消") }
+                else -> OutlinedButton(
+                    onClick = onCancel,
+                    shape = DshControlShape,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent)
+                ) { Text("取消") }
             }
         }
     }
@@ -504,18 +540,21 @@ internal fun PasswordDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     "${profile.user}@${profile.sshHost}:${profile.sshPort}",
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    fontFamily = DshMonoFontFamily,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     "密码将使用 Android Keystore 加密后存储在本机，仅用于建立隧道。",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.outline
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedTextField(
                     value = pass,
                     onValueChange = { pass = it },
                     label = { Text("密码") },
                     singleLine = true,
+                    shape = DshControlShape,
                     visualTransformation =
                         if (visible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
@@ -534,6 +573,10 @@ internal fun PasswordDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }
-        }
+        },
+        shape = DshCardShape,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }

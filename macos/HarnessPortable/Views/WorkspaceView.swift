@@ -20,6 +20,10 @@ struct WorkspaceView: View {
     @State private var keyMonitor: Any?
     @State private var didStart = false
 
+    @Environment(\.colorScheme) var colorScheme
+
+    private var dsh: DshPalette { Dsh.palette(colorScheme) }
+
     init(services: AppServices) {
         self.services = services
         _workspace = StateObject(wrappedValue: WorkspaceStore())
@@ -51,7 +55,7 @@ struct WorkspaceView: View {
                 statusBar
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(dsh.bgBase)
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
             installKeyMonitor()
@@ -104,6 +108,7 @@ struct WorkspaceView: View {
         HStack(spacing: 10) {
             Text("Harness Portable")
                 .font(.headline)
+                .foregroundStyle(dsh.textPrimary)
             Divider().frame(height: 18)
             Button {
                 workspace.openManagement()
@@ -150,27 +155,30 @@ struct WorkspaceView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
+        .background(dsh.bgBase)
     }
 
     private var statusBar: some View {
         HStack(spacing: 12) {
             if services.tunnels.activeStates.isEmpty {
                 Label("就绪", systemImage: "circle")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(dsh.textSecondary)
             } else {
                 ForEach(services.tunnels.activeStates) { state in
                     Label(statusLabel(state), systemImage: statusIcon(state.status))
-                        .foregroundStyle(state.status == .connected ? Color.green : Color.orange)
+                        .font(Dsh.mono(11))
+                        .foregroundStyle(state.status == .connected ? dsh.success : dsh.warning)
                         .lineLimit(1)
                 }
             }
             Spacer()
             Text("\(workspace.tabCount) 个标签")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(dsh.textSecondary)
         }
         .font(.caption)
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
+        .background(dsh.bgBase)
     }
 
     private var layoutSelection: Binding<String?> {
@@ -510,6 +518,10 @@ private struct WorkspacePaneView: View {
     let onDelete: (TunnelProfile) -> Void
     @State private var activeDropDirection: SplitDirection?
 
+    @Environment(\.colorScheme) var colorScheme
+
+    private var dsh: DshPalette { Dsh.palette(colorScheme) }
+
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
@@ -534,7 +546,7 @@ private struct WorkspacePaneView: View {
                     .id(selectedTab?.id)
             }
         }
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(dsh.bgBase)
     }
 
     private var paneID: UUID { node.id }
@@ -558,7 +570,7 @@ private struct WorkspacePaneView: View {
             .padding(.vertical, 4)
         }
         .frame(minHeight: 34, maxHeight: 36)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(dsh.bgLayer2)
         .contentShape(Rectangle())
         .zIndex(2)
     }
@@ -589,7 +601,7 @@ private struct WorkspacePaneView: View {
                 )
             }
         } else {
-            Color(nsColor: .textBackgroundColor)
+            dsh.bgBase
         }
     }
 
@@ -597,6 +609,7 @@ private struct WorkspacePaneView: View {
         let selected = selectedTab?.id == tab.id
         return HStack(spacing: 5) {
             Text(title(for: tab))
+                .foregroundStyle(selected ? dsh.textPrimary : dsh.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
             if tab.kind != .management {
@@ -612,8 +625,8 @@ private struct WorkspacePaneView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .background(selected ? Color(nsColor: .controlAccentColor).opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
-        .overlay(RoundedRectangle(cornerRadius: 5).stroke(selected ? Color(nsColor: .controlAccentColor).opacity(0.55) : Color(nsColor: .separatorColor), lineWidth: 1))
+        .background(selected ? dsh.accent.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: Dsh.radiusControl))
+        .overlay(RoundedRectangle(cornerRadius: Dsh.radiusControl).stroke(selected ? dsh.accent.opacity(0.55) : dsh.borderL1, lineWidth: Dsh.borderWidth))
         .contentShape(Rectangle())
         .onTapGesture { workspace.selectTab(tab.id, in: paneID) }
         .zIndex(3)
@@ -684,7 +697,7 @@ private struct WorkspacePaneView: View {
 
     private func edgeDrop(direction: SplitDirection) -> some View {
         let highlighted = activeDropDirection == direction
-        return Color(nsColor: .controlAccentColor)
+        return dsh.accent
             .opacity(highlighted ? 0.18 : 0.001)
             .frame(width: direction == .left || direction == .right ? 64 : nil,
                    height: direction == .up || direction == .down ? 64 : nil)

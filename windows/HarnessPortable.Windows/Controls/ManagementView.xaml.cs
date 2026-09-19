@@ -27,12 +27,14 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         public string Host => ProfileStore.HostOf(Url);
     }
 
+    // DSH status colours (static-green-500 / deepseek-450-ish / static-red-500):
+    // identical on both token sets, so they survive a theme switch.
     private static readonly System.Windows.Media.Brush GreenBrush =
-        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x05, 0x96, 0x69));
+        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0xC5, 0x5E));
     private static readonly System.Windows.Media.Brush BlueBrush =
-        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x25, 0x63, 0xEB));
+        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x56, 0x86, 0xFE));
     private static readonly System.Windows.Media.Brush RedBrush =
-        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26));
+        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44));
 
     private readonly AppServices _services;
     private readonly ObservableCollection<TunnelListItem> _tunnelItems = [];
@@ -120,10 +122,12 @@ public partial class ManagementView : System.Windows.Controls.UserControl
                 Profile = profile,
                 StatusText = state.Status switch
                 {
-                    TunnelStatus.Connected => "● 已连接",
-                    TunnelStatus.Connecting => "● 连接中…",
-                    TunnelStatus.Retrying => "● 重连中",
-                    TunnelStatus.Failed => "● 失败",
+                    // The coloured dot is drawn next to this label (see the XAML),
+                    // so the text itself carries no glyph.
+                    TunnelStatus.Connected => "已连接",
+                    TunnelStatus.Connecting => "连接中…",
+                    TunnelStatus.Retrying => "重连中",
+                    TunnelStatus.Failed => "失败",
                     _ => "",
                 },
                 StatusBrush = state.Status switch

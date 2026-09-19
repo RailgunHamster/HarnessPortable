@@ -16,6 +16,9 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
         AppPaths.Ensure();
+        // Before any window is created, so the first render already uses the
+        // system's light/dark token set.
+        AppTheme.Start();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;

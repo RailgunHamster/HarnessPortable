@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.6.9
+
+- 三端界面统一改用 DSH 自己的设计 token 重做，配色**跟随系统深浅色**。
+  - token 不是自创的：直接取自 DSH 前端的设计系统（`dsh-client-ui-theme`）——底色与分层（浅色 `#FFFFFF`/`#F5F6F7`/`#EBEEF2`，深色 `#151517`/`#232324`/`#2C2C2E`/`#353638`）、三档描边（`#0000000A`↔`#FFFFFF0F` 等）、三级文本色、品牌主按钮（浅色黑底白字／深色白底深字）、强调色 `#4176E6`↔`#5686FE`、状态色（绿 `#22C55E`／红 `#EC1313`↔`#F25A5A`／琥珀 `#F7AD31`）、圆角（卡片 12／控件 8）、技术值（host、端口、URL、版本）一律等宽字体；用 1px 描边取代阴影。
+  - Windows：管理窗口整体重做（新增 `Themes/DshTokens.Light.xaml`、`Themes/DshTokens.Dark.xaml`、`Themes/DshManagement.xaml`、`Services/AppTheme.cs`）。读 Windows「应用模式」并监听 `UserPreferenceChanged`，切换系统深浅色时整本 token 字典热替换，管理窗口立即换肤、无需重启；`flicker.log` 的 `[theme]` 行会记下当前生效的是哪套。主窗口与其它弹窗保持原有浅色样式。
+  - macOS：新增 `Theme/DshTheme.swift`（同一套 token，按 `colorScheme` 解析），管理界面、会话页（含认证/错误/状态浮层）、工作区标签与状态栏全部改用 token。
+  - Android：新增 `Theme.kt`（同一套 token 生成 Material3 `light/darkColorScheme`，不再用 `dynamic*ColorScheme` 动态取色），管理/设置页、连接中与认证界面、网页浮层统一到 token。
+  - Android 仍然只有应用内的设置页，没有单独的“管理窗口”。
+- 管理页细节：直连输入框补上占位提示；更新日志改用次要色（原先纯白太抢眼）；隧道状态由文本里的“●”字符改为彩色圆点 + 文字，圆点随状态走绿/蓝/琥珀/红。
+
 ## 2.6.8
 
 - Windows：管理界面（隧道/直连维护、应用设置、检查更新）从工作区标签改成**独立窗口**，不再可能被工作区的问题连累到打不开。

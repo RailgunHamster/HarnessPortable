@@ -17,6 +17,10 @@ struct ManagementView: View {
     @State private var editingProfile: TunnelProfile?
     @State private var directInput = ""
 
+    @Environment(\.colorScheme) var colorScheme
+
+    private var dsh: DshPalette { Dsh.palette(colorScheme) }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -26,11 +30,12 @@ struct ManagementView: View {
                     } label: {
                         Label("添加", systemImage: "plus")
                     }
+                    .buttonStyle(DshPrimaryButtonStyle())
                 }
 
                 if profiles.tunnels.isEmpty {
                     Text("还没有保存的隧道")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(dsh.textSecondary)
                         .padding(.vertical, 8)
                 } else {
                     VStack(spacing: 0) {
@@ -39,13 +44,13 @@ struct ManagementView: View {
                             if profile.id != profiles.tunnels.last!.id { Divider() }
                         }
                     }
-                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                    .dshCard()
                 }
 
                 sectionHeader("直连地址", systemImage: "globe") {
                     HStack(spacing: 6) {
                         TextField("主机或 URL", text: $directInput)
-                            .textFieldStyle(.roundedBorder)
+                            .dshInput()
                             .frame(width: 240)
                         Button {
                             guard let url = profiles.addDirect(directInput) else { return }
@@ -61,15 +66,17 @@ struct ManagementView: View {
 
                 if profiles.directs.isEmpty {
                     Text("还没有保存的直连地址")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(dsh.textSecondary)
                         .padding(.vertical, 8)
                 } else {
                     VStack(spacing: 0) {
                         ForEach(profiles.directs, id: \.self) { url in
                             HStack(spacing: 10) {
                                 Image(systemName: "link")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(dsh.textTertiary)
                                 Text(url)
+                                    .font(Dsh.mono(12))
+                                    .foregroundStyle(dsh.textPrimary)
                                     .lineLimit(1)
                                 Spacer()
                                 Button {
@@ -83,6 +90,7 @@ struct ManagementView: View {
                                     profiles.deleteDirect(url)
                                 } label: {
                                     Image(systemName: "trash")
+                                        .foregroundStyle(dsh.danger)
                                 }
                                 .help("删除")
                                 .buttonStyle(.borderless)
@@ -92,7 +100,7 @@ struct ManagementView: View {
                             if url != profiles.directs.last! { Divider() }
                         }
                     }
-                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                    .dshCard()
                 }
 
                 sectionHeader("设置", systemImage: "gearshape")
@@ -105,11 +113,12 @@ struct ManagementView: View {
                     Toggle("启动时恢复上次布局", isOn: restoreLayoutBinding)
                 }
                 .padding(14)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                .dshCard()
             }
-            .padding(24)
+            .padding(20)
             .frame(maxWidth: 900, alignment: .leading)
         }
+        .background(dsh.bgBase)
         .sheet(item: $editingProfile) { profile in
             ProfileEditorView(profile: profile, keychain: keychain) { saved in
                 profiles.upsertTunnel(saved)
@@ -125,13 +134,14 @@ struct ManagementView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(profile.displayName)
                     .font(.headline)
+                    .foregroundStyle(dsh.textPrimary)
                 Text(profile.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Dsh.mono(11))
+                    .foregroundStyle(dsh.textSecondary)
                 if let message = state.message, state.status != .idle {
                     Text(message)
                         .font(.caption2)
-                        .foregroundStyle(state.status == .failed ? Color.red : Color.secondary)
+                        .foregroundStyle(state.status == .failed ? dsh.danger : dsh.textSecondary)
                         .lineLimit(1)
                 }
             }
@@ -139,7 +149,7 @@ struct ManagementView: View {
             statusBadge(state)
             if keychain.hasPassword(for: profile.id) {
                 Image(systemName: "key.fill")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(dsh.textTertiary)
                     .help("密码已保存在 macOS Keychain")
             }
             if isHostKeyFailure(state.message) {
@@ -184,6 +194,7 @@ struct ManagementView: View {
                 onDelete(profile)
             } label: {
                 Image(systemName: "trash")
+                    .foregroundStyle(dsh.danger)
             }
             .help("删除")
         }
@@ -203,26 +214,33 @@ struct ManagementView: View {
     private func statusBadge(_ state: TunnelInfo) -> some View {
         switch state.status {
         case .connected:
-            Label(state.localPort > 0 ? "已连接 \(state.localPort)" : "已连接", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+            statusLabel(
+                state.localPort > 0 ? "已连接 \(state.localPort)" : "已连接",
+                color: dsh.success
+            )
         case .connecting:
-            Label("连接中", systemImage: "ellipsis.circle")
-                .foregroundStyle(.orange)
+            statusLabel("连接中", color: dsh.warning)
         case .retrying:
-            Label("重连中", systemImage: "arrow.triangle.2.circlepath")
-                .foregroundStyle(.orange)
+            statusLabel("重连中", color: dsh.warning)
         case .failed:
-            Label("失败", systemImage: "xmark.circle.fill")
-                .foregroundStyle(.red)
+            statusLabel("失败", color: dsh.danger)
         case .stopped, .idle:
             EmptyView()
         }
     }
 
+    private func statusLabel(_ title: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            DshStatusDot(color: color)
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(dsh.textSecondary)
+        }
+    }
+
     private func sectionHeader(_ title: String, systemImage: String) -> some View {
         HStack {
-            Label(title, systemImage: systemImage)
-                .font(.title3.weight(.semibold))
+            sectionTitle(title, systemImage: systemImage)
             Spacer()
         }
     }
@@ -233,11 +251,17 @@ struct ManagementView: View {
         @ViewBuilder trailing: () -> Content
     ) -> some View {
         HStack {
-            Label(title, systemImage: systemImage)
-                .font(.title3.weight(.semibold))
+            sectionTitle(title, systemImage: systemImage)
             Spacer()
             trailing()
         }
+    }
+
+    private func sectionTitle(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .textCase(.uppercase)
+            .foregroundStyle(dsh.textTertiary)
     }
 
     private var closeBehaviorBinding: Binding<String> {
@@ -261,6 +285,9 @@ struct ProfileEditorView: View {
     let keychain: KeychainStore
     let onSave: (TunnelProfile) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) var colorScheme
+
+    private var dsh: DshPalette { Dsh.palette(colorScheme) }
 
     @State private var name: String
     @State private var sshHost: String
@@ -301,6 +328,7 @@ struct ProfileEditorView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(original.sshHost.isEmpty ? "添加 SSH 隧道" : "编辑 SSH 隧道")
                 .font(.title2.weight(.semibold))
+                .foregroundStyle(dsh.textPrimary)
             Form {
                 TextField("名称", text: $name)
                 HStack(spacing: 8) {
@@ -308,7 +336,7 @@ struct ProfileEditorView: View {
                     Menu {
                         if sshConfigHosts.isEmpty {
                             Text("未找到 ~/.ssh/config")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(dsh.textSecondary)
                         } else {
                             Button("清除配置选择") {
                                 selectedSSHConfigAlias = ""
@@ -337,7 +365,7 @@ struct ProfileEditorView: View {
                 }
                 Text("选择配置后会填入 HostName、User、Port 和 IdentityFile；这些字段仍可手动修改。")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(dsh.textSecondary)
                 TextField("SSH 端口", text: $sshPort)
                 TextField("用户名", text: $user)
                 TextField("远端主机", text: $remoteHost)
@@ -350,13 +378,13 @@ struct ProfileEditorView: View {
                 .pickerStyle(.radioGroup)
                 Text("NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志并自动登录；手动方式：连接时用上面保存的认证 URL/token，留空则页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。密码与认证 URL/token 只存 Keychain，不写入配置文件。")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(dsh.textSecondary)
 
                 if authMode == TunnelProfile.authModeManual {
                     TextField("Web 认证 URL 或 token（可选）", text: $authInput)
                     Text("粘贴服务器上 dsh web 打印的带 token 的 URL，或直接粘贴 token 本身。留空则连接后在页面上粘贴。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(dsh.textSecondary)
                 }
 
                 Section("SSH 认证") {
@@ -369,7 +397,7 @@ struct ProfileEditorView: View {
                     }
                     Text("留空则使用 ~/.ssh 默认私钥和 ssh-agent。密钥登录可不填密码。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(dsh.textSecondary)
                     SecureField("密码（留空保持当前密码；密钥登录可留空）", text: $password)
                         .onChange(of: password) { newValue in
                             if !newValue.isEmpty { removeStoredPassword = false }
@@ -377,7 +405,7 @@ struct ProfileEditorView: View {
                     HStack(spacing: 8) {
                         if hasStoredPassword && !removeStoredPassword {
                             Label("已保存在 Keychain", systemImage: "key.fill")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(dsh.textSecondary)
                             Spacer()
                             Button {
                                 password = ""
@@ -389,7 +417,7 @@ struct ProfileEditorView: View {
                             .help("清除已保存密码")
                         } else if removeStoredPassword {
                             Label("保存时清除密码", systemImage: "trash")
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(dsh.warning)
                             Spacer()
                             Button {
                                 removeStoredPassword = false
@@ -400,12 +428,12 @@ struct ProfileEditorView: View {
                             .help("保留已保存密码")
                         } else {
                             Label("未保存密码", systemImage: "key")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(dsh.textSecondary)
                         }
                     }
                     Text("密码只保存到 macOS Keychain，不写入配置文件。密码错误只尝试一次，不会反复重连。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(dsh.textSecondary)
                 }
             }
             HStack {
@@ -415,10 +443,12 @@ struct ProfileEditorView: View {
                 Button("保存") { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canSave)
+                    .buttonStyle(DshPrimaryButtonStyle())
             }
         }
-        .padding(24)
+        .padding(20)
         .frame(width: 460)
+        .background(dsh.bgBase)
         .onAppear { reloadSSHConfig() }
         .alert("无法写入 Keychain", isPresented: keychainErrorPresented) {
             Button("确定", role: .cancel) { keychainError = nil }
@@ -521,16 +551,20 @@ struct PasswordPromptView: View {
     let profile: TunnelProfile
     let onSave: (String) -> Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @State private var password = ""
+
+    private var dsh: DshPalette { Dsh.palette(colorScheme) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("输入 SSH 密码")
                 .font(.title2.weight(.semibold))
+                .foregroundStyle(dsh.textPrimary)
             Text(profile.displayName)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(dsh.textSecondary)
             SecureField("密码", text: $password)
-                .textFieldStyle(.roundedBorder)
+                .dshInput()
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }
@@ -540,9 +574,11 @@ struct PasswordPromptView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(password.isEmpty)
+                .buttonStyle(DshPrimaryButtonStyle())
             }
         }
-        .padding(24)
+        .padding(20)
         .frame(width: 360)
+        .background(dsh.bgBase)
     }
 }

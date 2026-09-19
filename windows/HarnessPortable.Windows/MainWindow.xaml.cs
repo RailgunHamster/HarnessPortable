@@ -75,6 +75,9 @@ public partial class MainWindow : Window
         // Flicker diagnostics: system-wide focus events + this window's
         // focus/geometry transitions land in %APPDATA%\HarnessPortable\flicker.log.
         FlickerLog.Start();
+        // AppTheme resolved the palette before this log existed; record which one
+        // the app actually opened with.
+        FlickerLog.Log("theme", AppTheme.IsDark ? "dark tokens" : "light tokens");
         Activated += (_, _) => FlickerLog.Log("window", "Activated");
         Deactivated += (_, _) => FlickerLog.Log("window", "Deactivated");
         PreviewGotKeyboardFocus += (_, e) => FlickerLog.Log("wpf-focus", "got " + (e.NewFocus?.GetType().Name ?? "?"));
