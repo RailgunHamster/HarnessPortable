@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using HarnessPortable.Windows.Models;
 using HarnessPortable.Windows.Services;
@@ -30,6 +31,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private bool _coreReady;
     private bool _initialized;
     private bool _shutdown;
+    private int _focusClaimPending;
     private string? _customLabel;
     private ulong _authCheckedNavId;
     private string? _lastAuthNav;
@@ -38,6 +40,14 @@ public partial class SessionView : System.Windows.Controls.UserControl
     public event Action<string>? TitleChanged;
     public event Action? FullScreenToggleRequested;
     public event Action? EscapeRequested;
+
+    /// <summary>
+    /// Raised when the embedded browser takes keyboard focus (the user clicked
+    /// into the page). The pane template no longer wraps the content in a
+    /// LayoutDocumentControl, so the owner uses this to mark the document
+    /// active on a real click.
+    /// </summary>
+    public event Action? WebViewFocused;
 
     public string? ProfileId => _profile?.Id;
     public bool IsTunnel => _isTunnel;
@@ -90,6 +100,8 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         Loaded += async (_, _) =>
         {
+            LogHostState("Loaded");
+
             if (_initialized)
             {
                 return;
@@ -100,7 +112,54 @@ public partial class SessionView : System.Windows.Controls.UserControl
             await InitializeWebViewAsync();
         };
 
+        // The WebView2 is an HwndHost: every re-host destroys and recreates its
+        // child window, which flashes. Recording Loaded/Unloaded plus the HWND
+        // is what tells a re-host storm apart from a purely visual flicker.
+        Unloaded += (_, _) => LogHostState("Unloaded");
+
         SizeChanged += (_, _) => PositionOverlay();
+    }
+
+    private void LogHostState(string what)
+    {
+        try
+        {
+            FlickerLog.Log(
+                "session",
+                what + " handle=" + WebView.Handle.ToInt64().ToString("X") +
+                " chain=" + DescribeVisualChain() +
+                " (" + LogTag + ")");
+        }
+        catch
+        {
+            FlickerLog.Log("session", what + " handle=? (" + LogTag + ")");
+        }
+    }
+
+    /// <summary>
+    /// Visual-ancestor chain of this view, innermost first. AvalonDock's focus
+    /// manager only rewrites a document's IsActive when the focused HwndHost
+    /// sits under a <c>LayoutDocumentControl</c>, so this chain decides whether
+    /// the WebView2 can drive the dock's activation at all.
+    /// </summary>
+    private string DescribeVisualChain()
+    {
+        var names = new List<string>();
+        DependencyObject? current = this;
+        while (current is not null && names.Count < 8)
+        {
+            names.Add(current.GetType().Name);
+            try
+            {
+                current = VisualTreeHelper.GetParent(current);
+            }
+            catch
+            {
+                break;
+            }
+        }
+
+        return string.Join(">", names);
     }
 
     public void Shutdown()
@@ -201,9 +260,25 @@ public partial class SessionView : System.Windows.Controls.UserControl
             return;
         }
 
+        // AvalonDock activates a document from *any* Win32 focus event inside
+        // its HwndHost (FocusElementManager.WindowFocusChanging), and each
+        // activation is reported as ActiveContentChanged. Claiming focus once
+        // per notification turns a burst of activations into a burst of
+        // Focus() calls, each of which fires more focus events. Collapse the
+        // burst onto the two dispatcher passes that matter.
+        if (Interlocked.CompareExchange(ref _focusClaimPending, 1, 0) == 1)
+        {
+            FlickerLog.Log("focus-web", "coalesced into the pending claim (" + LogTag + ")");
+            return;
+        }
+
         FlickerLog.Log("focus-web", "FocusWebView queued (" + LogTag + ")");
         Dispatcher.BeginInvoke(DispatcherPriority.Input, FocusWebViewCore);
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, FocusWebViewCore);
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            Interlocked.Exchange(ref _focusClaimPending, 0);
+            FocusWebViewCore();
+        });
     }
 
     private void FocusWebViewCore()
@@ -217,6 +292,15 @@ public partial class SessionView : System.Windows.Controls.UserControl
         // it back into the page would cancel pasting/IME mid-entry.
         if (AuthOverlay.Visibility == Visibility.Visible)
         {
+            return;
+        }
+
+        // A collapsed or not-yet-loaded tab must never be focused: claiming
+        // focus inside a hidden HwndHost is what makes two documents fight
+        // over Win32 focus.
+        if (!IsVisible || !IsLoaded)
+        {
+            FlickerLog.Log("focus-web", "skip: view not shown (" + LogTag + ")");
             return;
         }
 
@@ -346,7 +430,11 @@ public partial class SessionView : System.Windows.Controls.UserControl
             WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
 
             var core = WebView.CoreWebView2;
-            WebView.GotFocus += (_, _) => FlickerLog.Log("webview", "GotFocus (" + LogTag + ")");
+            WebView.GotFocus += (_, _) =>
+            {
+                FlickerLog.Log("webview", "GotFocus (" + LogTag + ")");
+                WebViewFocused?.Invoke();
+            };
             WebView.LostFocus += (_, _) => FlickerLog.Log("webview", "LostFocus (" + LogTag + ")");
             core.NavigationStarting += (_, e) => FlickerLog.Log("webview-nav", "start " + e.Uri + " (" + LogTag + ")");
             core.NavigationCompleted += async (_, e) =>

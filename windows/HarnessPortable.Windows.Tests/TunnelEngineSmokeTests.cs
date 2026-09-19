@@ -21,7 +21,7 @@ public sealed class TunnelEngineSmokeTests : IDisposable
     }
 
     [Fact]
-    public void Start_UnreachableHost_LeavesConnectingAndCanBeStopped()
+    public void Start_UnreachableHost_FailsTerminally_WithoutEnteringTheRetryLoop()
     {
         var profile = new TunnelProfile
         {
@@ -37,6 +37,15 @@ public sealed class TunnelEngineSmokeTests : IDisposable
         _profiles.SaveTunnels([profile]);
         _secrets.SetPassword(profile.Id, "wrong-password");
 
+        var seen = new List<TunnelStatus>();
+        _engine.State.StateChanged += info =>
+        {
+            lock (seen)
+            {
+                seen.Add(info.Status);
+            }
+        };
+
         _engine.Start(profile.Id);
 
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
@@ -48,9 +57,18 @@ public sealed class TunnelEngineSmokeTests : IDisposable
             status = _engine.State.Current.Status;
         }
 
-        Assert.True(
-            status is TunnelStatus.Retrying or TunnelStatus.Failed,
-            $"Expected Retrying/Failed, got {status}");
+        Assert.Equal(TunnelStatus.Failed, status);
+
+        // Nothing was ever established, so there is nothing to reconnect to:
+        // the old watchdog restarted the worker every 45s, resetting the
+        // backoff and retrying an unreachable host forever — which is what got
+        // the client blocked by the server.
+        Thread.Sleep(1_000);
+        Assert.Equal(TunnelStatus.Failed, _engine.State.Current.Status);
+        lock (seen)
+        {
+            Assert.DoesNotContain(TunnelStatus.Retrying, seen);
+        }
 
         _engine.Stop();
         Assert.Equal(TunnelStatus.Stopped, _engine.State.Current.Status);

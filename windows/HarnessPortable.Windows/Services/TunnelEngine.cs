@@ -26,6 +26,25 @@ public sealed partial class TunnelEngine
 
     private TunnelProfile? _activeProfile;
 
+    /// <summary>First rung of the reconnect escalation (3s → 6s → … → 30s).</summary>
+    private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(3);
+
+    /// <summary>Ceiling of the reconnect escalation.</summary>
+    private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How long one connect attempt may stay in CONNECTING before it counts as
+    /// wedged rather than merely slow. Waiting out a backoff (RETRYING) is
+    /// normal and is never touched by the watchdog.
+    /// </summary>
+    private static readonly TimeSpan StallBudget = TimeSpan.FromSeconds(45);
+
+    // Reconnect bookkeeping, guarded by _gate. Both survive a watchdog restart
+    // — a stalled attempt must not reset the escalation — and are cleared only
+    // by a Start() the user (or a layout restore) asked for.
+    private TimeSpan _backoff = InitialBackoff;
+    private bool _connectedOnce;
+
     public TunnelEngine(ProfileStore profiles, SecureStore secrets, KnownHostsStore knownHosts)
     {
         _profiles = profiles;
@@ -55,10 +74,29 @@ public sealed partial class TunnelEngine
             return;
         }
 
+        StartCore(profile, resetBackoff: true);
+    }
+
+    /// <summary>
+    /// Starts (or restarts) the worker for <paramref name="profile"/>.
+    /// <paramref name="resetBackoff"/> is true for a start the user asked for
+    /// (connect button, reconnect button, layout restore): the escalation and
+    /// the "have we ever been connected" flag both start over. The watchdog
+    /// restarts a stalled reconnect attempt with false, so a wedged attempt can
+    /// never push the retry loop back to a 3 second cadence.
+    /// </summary>
+    private void StartCore(TunnelProfile profile, bool resetBackoff)
+    {
         CancellationTokenSource cts;
         int generation;
         lock (_gate)
         {
+            if (resetBackoff)
+            {
+                _backoff = InitialBackoff;
+                _connectedOnce = false;
+            }
+
             generation = ++_generation;
             _activeProfile = profile;
             _cts?.Cancel();
@@ -153,7 +191,6 @@ public sealed partial class TunnelEngine
 
     private async Task RunAsync(TunnelProfile profile, int generation, CancellationToken token)
     {
-        var backoff = TimeSpan.FromSeconds(3);
         var watchdog = StartWatchdog(profile, generation, token);
 
         try
@@ -326,7 +363,10 @@ public sealed partial class TunnelEngine
                         _forward = forward;
                     }
 
-                    backoff = TimeSpan.FromSeconds(3);
+                    // A session exists: from here on a drop is a transient
+                    // network event and may be retried, and the escalation
+                    // starts over.
+                    MarkConnected();
 
                     // dsh-web style services gate the browser behind a
                     // launch token printed on the server. In NSSM mode grab
@@ -392,6 +432,20 @@ public sealed partial class TunnelEngine
                     {
                         Publish(generation, new TunnelInfo(
                             profile.Id, profile.DisplayName, TunnelStatus.Failed, $"认证失败：{message}"));
+                        MarkTerminated(generation);
+                        return;
+                    }
+
+                    // Contract (spec/config-schema.md): the reconnect loop only
+                    // covers a network drop *after* a session was established.
+                    // An attempt that never connected must fail terminally —
+                    // hammering a wrong port, a down host or an address the
+                    // server already blocked is what gets this app banned by
+                    // sshd / fail2ban / pam_faillock.
+                    if (!ConnectedOnce)
+                    {
+                        Publish(generation, new TunnelInfo(
+                            profile.Id, profile.DisplayName, TunnelStatus.Failed, $"连接失败：{message}"));
                         MarkTerminated(generation);
                         return;
                     }
@@ -466,17 +520,19 @@ public sealed partial class TunnelEngine
                     }
                 }
 
-                // Interruptible backoff before the next attempt.
+                // Interruptible backoff before the next attempt. The escalation
+                // lives on the engine, so a watchdog restart of a wedged
+                // reconnect resumes it instead of dropping back to 3 seconds.
                 try
                 {
-                    await Task.Delay(backoff, token).ConfigureAwait(false);
+                    await Task.Delay(CurrentBackoff(), token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
                     return;
                 }
 
-                backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, 30));
+                GrowBackoff();
             }
         }
         finally
@@ -507,7 +563,8 @@ public sealed partial class TunnelEngine
 
     /// <summary>
     /// Marks a run as terminal (resolve failure, auth failure, changed host
-    /// key). Increments the generation so the watchdog does not resurrect it.
+    /// key, or a first attempt that never connected). Increments the generation
+    /// so the watchdog does not resurrect it.
     /// </summary>
     private void MarkTerminated(int generation)
     {
@@ -521,29 +578,95 @@ public sealed partial class TunnelEngine
         }
     }
 
+    /// <summary>True once this engine established a session since the last user start.</summary>
+    private bool ConnectedOnce
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _connectedOnce;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Records that a session is up: drops from here on are transient network
+    /// events that may be retried, and the escalation restarts at 3 seconds.
+    /// </summary>
+    private void MarkConnected()
+    {
+        lock (_gate)
+        {
+            _connectedOnce = true;
+            _backoff = InitialBackoff;
+        }
+    }
+
+    private TimeSpan CurrentBackoff()
+    {
+        lock (_gate)
+        {
+            return _backoff;
+        }
+    }
+
+    private void GrowBackoff()
+    {
+        lock (_gate)
+        {
+            _backoff = TimeSpan.FromSeconds(
+                Math.Min(_backoff.TotalSeconds * 2, MaxBackoff.TotalSeconds));
+        }
+    }
+
     private async Task StartWatchdog(TunnelProfile profile, int generation, CancellationToken token)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(45), token).ConfigureAwait(false);
+            await Task.Delay(StallBudget, token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             return;
         }
 
-        var current = State.Current;
-        if (generation == Volatile.Read(ref _generation) &&
-            current.ProfileId == profile.Id &&
-            current.Status is TunnelStatus.Connecting or TunnelStatus.Retrying &&
-            !token.IsCancellationRequested)
+        if (generation != Volatile.Read(ref _generation) || token.IsCancellationRequested)
         {
-            // A connect attempt stalled (vendor power management, wedged
-            // network stack): tear the worker down and start over.
-            // Never restart Failed — a wrong password must not be retried.
-            DetachCurrentForTeardown();
-            Start(profile.Id);
+            return;
         }
+
+        var current = State.Current;
+        if (current.ProfileId != profile.Id)
+        {
+            return;
+        }
+
+        // Only an attempt that is still CONNECTING past its own timeout is a
+        // stall. RETRYING is the backoff wait: restarting the worker there is
+        // what used to reset the escalation and leave a failing tunnel
+        // retrying every few seconds forever (and get the host blocked).
+        if (current.Status != TunnelStatus.Connecting)
+        {
+            return;
+        }
+
+        if (!ConnectedOnce)
+        {
+            // Nothing was ever established, so this is not a reconnect: give up
+            // instead of hammering a server that is dropping our SYNs.
+            Publish(generation, new TunnelInfo(
+                profile.Id, profile.DisplayName, TunnelStatus.Failed,
+                "连接超时：服务器无响应"));
+            MarkTerminated(generation);
+            return;
+        }
+
+        // A reconnect attempt wedged (half-dead TCP, vendor power management,
+        // wedged network stack): tear it down and start over, keeping the
+        // backoff we already earned.
+        DetachCurrentForTeardown();
+        StartCore(profile, resetBackoff: false);
     }
 
     private static PrivateKeyFile? TryLoadPrivateKey(string path, string? passphrase)

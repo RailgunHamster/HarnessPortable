@@ -21,7 +21,7 @@ public sealed class TunnelManagerTests : IDisposable
     }
 
     [Fact]
-    public void TwoProfiles_CanRunAtTheSameTime_AndStopIndependently()
+    public void TwoProfiles_AreTrackedIndependently_AndStopIndependently()
     {
         var first = AddProfile("p1", "隧道一", 1);
         var second = AddProfile("p2", "隧道二", 2);
@@ -29,29 +29,34 @@ public sealed class TunnelManagerTests : IDisposable
         _manager.Start(first.Id);
         _manager.Start(second.Id);
 
-        WaitUntil(() => _manager.GetActiveStates().Count() == 2);
-        Assert.Equal(2, _manager.GetActiveStates().Count());
+        // Neither host answers, so both attempts must end in the terminal
+        // Failed state: the reconnect loop is reserved for a network drop
+        // *after* a session was established (spec/config-schema.md).
+        WaitUntil(() => _manager.GetState(first.Id).Status == TunnelStatus.Failed);
+        WaitUntil(() => _manager.GetState(second.Id).Status == TunnelStatus.Failed);
 
         _manager.Stop(first.Id);
-        WaitUntil(() => _manager.GetActiveStates().Count() == 1);
 
-        var remaining = _manager.GetActiveStates().Single();
-        Assert.Equal(second.Id, remaining.ProfileId);
+        WaitUntil(() => _manager.GetState(first.Id).Status == TunnelStatus.Stopped);
+        Assert.Equal(TunnelStatus.Failed, _manager.GetState(second.Id).Status);
     }
 
     [Fact]
     public void StopAll_TerminatesEveryTunnel()
     {
-        AddProfile("p1", "隧道一", 1);
-        AddProfile("p2", "隧道二", 2);
+        var first = AddProfile("p1", "隧道一", 1);
+        var second = AddProfile("p2", "隧道二", 2);
 
-        _manager.Start("p1");
-        _manager.Start("p2");
-        WaitUntil(() => _manager.GetActiveStates().Count() == 2);
+        _manager.Start(first.Id);
+        _manager.Start(second.Id);
+        WaitUntil(() =>
+            _manager.GetState(first.Id).Status != TunnelStatus.Idle &&
+            _manager.GetState(second.Id).Status != TunnelStatus.Idle);
 
         _manager.StopAll();
 
-        WaitUntil(() => !_manager.GetActiveStates().Any());
+        WaitUntil(() => _manager.GetState(first.Id).Status == TunnelStatus.Stopped);
+        WaitUntil(() => _manager.GetState(second.Id).Status == TunnelStatus.Stopped);
         Assert.Empty(_manager.GetActiveStates());
     }
 

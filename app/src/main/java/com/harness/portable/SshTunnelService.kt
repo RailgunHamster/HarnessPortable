@@ -52,6 +52,17 @@ class SshTunnelService : Service() {
         private const val SERVER_ALIVE_COUNT_MAX = 4
         private const val WAKE_LOCK_CHUNK_MS = 60 * 60 * 1_000L
 
+        /** Reconnect escalation after a session was established: 3s → … → 30s. */
+        private const val INITIAL_BACKOFF_MS = 3_000L
+        private const val MAX_BACKOFF_MS = 30_000L
+
+        /**
+         * How long one connect attempt may sit in CONNECTING before it counts
+         * as stalled. Waiting out a backoff (RETRYING) is normal and is never
+         * touched by the watchdog.
+         */
+        private const val STALL_BUDGET_MS = 45_000L
+
         fun start(ctx: Context, profileId: String, restart: Boolean = false) {
             val intent = Intent(ctx, SshTunnelService::class.java)
                 .setAction(ACTION_START)
@@ -111,6 +122,22 @@ class SshTunnelService : Service() {
 
     @Volatile
     private var generation = 0
+
+    /**
+     * True once a session was established since the last fresh start. Until
+     * then a failed attempt is terminal — retrying a host that never answered
+     * is what gets the client blocked by sshd / fail2ban / pam_faillock.
+     */
+    @Volatile
+    private var connectedOnce = false
+
+    /**
+     * Next reconnect delay. Kept on the service (not as a loop local) so a
+     * watchdog restart of a stalled attempt resumes the escalation instead of
+     * dropping back to 3 seconds.
+     */
+    @Volatile
+    private var nextBackoffMs = INITIAL_BACKOFF_MS
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -219,8 +246,12 @@ class SshTunnelService : Service() {
 
     private fun svcPrefs() = getSharedPreferences(SVC_PREFS, Context.MODE_PRIVATE)
 
-    private fun startWorker(p: TunnelProfile) {
+    private fun startWorker(p: TunnelProfile, resetBackoff: Boolean = true) {
         generation++
+        if (resetBackoff) {
+            nextBackoffMs = INITIAL_BACKOFF_MS
+            connectedOnce = false
+        }
         val g = generation
         Thread {
             TunnelState.set(
@@ -229,26 +260,39 @@ class SshTunnelService : Service() {
             updateNotification("正在连接 ${p.name}…")
             // Watchdog: if a connect attempt silently stalls (vendor power
             // management, wedged keystore, unresponsive stack), tear the
-            // worker down and start over. Never fires while CONNECTED —
-            // the monitor loop is expected to stay there indefinitely.
+            // worker down and start over. Never fires while CONNECTED (the
+            // monitor loop is expected to stay there indefinitely) and never
+            // while RETRYING (that is the backoff wait, not a stall).
             var watchdogFired = false
             val watchdog = Thread {
                 try {
-                    Thread.sleep(45_000)
+                    Thread.sleep(STALL_BUDGET_MS)
                 } catch (_: InterruptedException) {
                     return@Thread
                 }
                 val st = TunnelState.flow.value.status
-                if (g == generation &&
-                    st != TunnelState.Status.CONNECTED &&
-                    st != TunnelState.Status.FAILED &&
-                    st != TunnelState.Status.STOPPED
-                ) {
-                    watchdogFired = true
-                    Log.w(TAG, "watchdog: stalled in $st, restarting worker")
-                    try { session?.disconnect() } catch (_: Exception) {}
-                    startWorker(p)
+                if (g != generation || st != TunnelState.Status.CONNECTING) {
+                    return@Thread
                 }
+                watchdogFired = true
+                Log.w(TAG, "watchdog: stalled in $st")
+                try { session?.disconnect() } catch (_: Exception) {}
+                if (!connectedOnce) {
+                    // Never established a session: this is not a reconnect.
+                    // Give up instead of hammering a server that drops our SYNs.
+                    generation++
+                    TunnelState.set(
+                        TunnelState.Info(
+                            p.id, p.name, TunnelState.Status.FAILED,
+                            "连接超时：服务器无响应"
+                        )
+                    )
+                    updateNotification("${p.name} 连接超时")
+                    svcPrefs().edit().remove(PREF_ACTIVE).apply()
+                    stopSelf()
+                    return@Thread
+                }
+                startWorker(p, resetBackoff = false)
             }.apply { isDaemon = true; start() }
             try {
                 runLoop(g, p)
@@ -294,7 +338,6 @@ class SshTunnelService : Service() {
     }
 
     private fun runLoop(g: Int, p: TunnelProfile) {
-        var backoff = 3_000L
         while (g == generation) {
             holdRuntimeLocks()
             var s: Session? = null
@@ -387,7 +430,10 @@ class SshTunnelService : Service() {
                 if (bound < 0) throw (lastBindError ?: JSchException("无法绑定本地端口"))
 
                 stage("connected")
-                backoff = 3_000L
+                // A session exists: from here on a drop is a transient network
+                // event that may be retried, and the escalation starts over.
+                connectedOnce = true
+                nextBackoffMs = INITIAL_BACKOFF_MS
 
                 // dsh-web style services gate the browser behind a launch
                 // token printed on the server. In NSSM mode grab it on every
@@ -475,6 +521,24 @@ class SshTunnelService : Service() {
                     }
 
                     else -> {
+                        // Contract (spec/config-schema.md): the reconnect loop
+                        // only covers a network drop after a session was
+                        // established. A first attempt that never connected
+                        // fails terminally — hammering a wrong port, a down
+                        // host, or an address the server already blocked is
+                        // what gets this app banned.
+                        if (!connectedOnce) {
+                            TunnelState.set(
+                                TunnelState.Info(
+                                    p.id, p.name, TunnelState.Status.FAILED,
+                                    "连接失败：$msg"
+                                )
+                            )
+                            updateNotification("${p.name} 连接失败")
+                            svcPrefs().edit().remove(PREF_ACTIVE).apply()
+                            stopSelf()
+                            return
+                        }
                         TunnelState.set(
                             TunnelState.Info(p.id, p.name, TunnelState.Status.RETRYING, msg)
                         )
@@ -486,7 +550,10 @@ class SshTunnelService : Service() {
                 if (session === s) session = null
             }
 
-            // Interruptible backoff before the next attempt.
+            // Interruptible backoff before the next attempt. The escalation
+            // lives on the service, so a watchdog restart of a stalled
+            // reconnect resumes it instead of dropping back to 3 seconds.
+            val backoff = nextBackoffMs
             var waited = 0L
             while (g == generation && waited < backoff) {
                 try {
@@ -496,7 +563,7 @@ class SshTunnelService : Service() {
                     return
                 }
             }
-            backoff = (backoff * 2).coerceAtMost(30_000L)
+            nextBackoffMs = (nextBackoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
         }
     }
 

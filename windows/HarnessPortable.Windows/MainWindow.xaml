@@ -75,7 +75,21 @@
             <Setter Property="ContentTemplate">
                 <Setter.Value>
                     <DataTemplate>
-                        <avalonDock:LayoutDocumentControl Model="{Binding}"/>
+                        <!-- Present the document's Content directly instead of
+                             wrapping it in a LayoutDocumentControl. AvalonDock's
+                             FocusElementManager rewrites a document's IsActive
+                             (and through it IsSelected and Root.ActiveContent)
+                             whenever a Win32 focus event lands inside a HwndHost
+                             that has a LayoutDocumentControl ancestor. The
+                             WebView2 is exactly such an HwndHost, so the wrapper
+                             turned every focus change inside the page into an
+                             activation -> ActiveContentChanged -> focus claim ->
+                             focus event loop, re-hosting the browser each round
+                             (the white flashing). Without the wrapper the focus
+                             manager cannot associate the event with a document;
+                             the app activates the document itself on click
+                             (see MainWindow.ActivateSessionDoc). -->
+                        <ContentPresenter Content="{Binding Content}"/>
                     </DataTemplate>
                 </Setter.Value>
             </Setter>

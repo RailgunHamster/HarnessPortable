@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.6.5
+
+- Windows / Android：修复「失败后疯狂重连，最后被服务器挡住」。
+  - 45 秒看门狗以前把「正在退避等待」（RETRYING）也算成卡死，重启 worker 时又把退避重置回 3 秒。由于 3+6+12+24 恰好等于 45 秒，指数退避**永远到不了 30 秒上限**，连接失败后大约每 10 秒就敲一次服务器，足以触发 fail2ban / sshd `MaxStartups` / `pam_faillock`。现在看门狗只把「仍停在 CONNECTING 且超过自身超时」当作卡死，退避保存在引擎/服务上，重启不再清零。
+  - 按 `spec/config-schema.md` 的既有约定，重连循环只覆盖「曾经连接成功之后的网络中断」：从未连通的失败（端口写错、主机不可达、已被服务端封锁）直接进入失败态并停止，不再自动重试，只有手动「重连」才会再试。此前 Windows / Android 都在**首次失败**就进入重连循环，这正是账号/IP 被锁的直接原因。
+- Windows：修复「一打开、自动恢复布局预设就一直疯狂闪烁 / 抢焦点」。
+  - 根因：AvalonDock 5 的 `FocusElementManager` 会挂一个系统级 Win32 焦点钩子，只要焦点事件落进某个 `HwndHost`，它就把该 `HwndHost` **在视觉树上的 `LayoutDocumentControl` 祖先**所对应的文档置为 `IsActive`；而 `IsActive` 会连带写 `IsSelected` 和 `Root.ActiveContent`（也就是本应用订阅的 `ActiveContentChanged`）。WebView2 正是 `HwndHost`，且原来就包在 `LayoutDocumentControl` 里——所以网页里每发生一次焦点变化（页面加载、点输入框、IME 激活），AvalonDock 都会"激活"该标签，面板随之重新挂载内容，WebView2 的子窗口被销毁重建，接着又产生新的焦点事件。而应用每收到一次 `ActiveContentChanged` 还会主动认领一次焦点（原来一次激活排两次 `Focus()`），把这个环继续喂下去。启动恢复预设时"程序化激活 + 窗口激活 + 页面抢焦点"撞在一起，正是环闭合的时刻。
+  - 修法：面板内容不再用 `LayoutDocumentControl` 包裹，直接把文档的 `Content` 交给 `ContentPresenter`，焦点钩子再也无法把焦点事件关联到文档上；文档激活改由应用在用户真正点进页面时完成（`SessionView.WebViewFocused` → `MainWindow.ActivateSessionDoc`），保证 `Layout.ActiveContent`（决定新标签开在哪个面板）仍然跟着用户走。另外一次激活爆发最多认领一次焦点（Input + Background 两趟合并），隐藏或未加载的标签页不再被认领，并新增 `session Loaded/Unloaded handle=… chain=…` 诊断，用于确认 WebView2 是否在被反复重建。
+
 ## 2.6.4
 
 - Windows：修复运行中窗口「卡死、只能用任务管理器关」的三个成因。
