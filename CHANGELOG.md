@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.6
+
+- Windows：把「检查更新」从黑盒变成有据可查，并让非 Velopack 构建也能得到有用的回答。
+  - 每次检查更新都会写进 `flicker.log`：源地址、Velopack 的判定（`installed` / `portable` / `current` / `appId`），以及结果 `available X` / `no update` / `FAILED <异常类型>: <消息>`。以后再遇到「某个源检查更新没用」，点一次按钮就能定性：是源读不到、不是 Velopack 部署、还是已经最新。
+  - 以前只要当前进程不是 Velopack 部署（`dotnet publish` 输出、拷贝出来的 exe、或直接跑便携 zip 里 `current\` 的那个 exe），按钮只会回一句「无法在线更新」。现在它会**直接读 feed**，回答「最新版本 2.6.5（当前 …，开发构建 不能自更新：请用 Setup 安装包或便携 zip）」，并展示该版本的更新日志。
+  - 实测确认：安装版与便携版（解压后运行根目录 `Harness Portable.exe`）都能从 `\\server-home\public\Software\HarnessPortable-Releases` 读到 feed 并识别新版本。
+
 ## 2.6.5
 
 - Windows / Android：修复「失败后疯狂重连，最后被服务器挡住」。

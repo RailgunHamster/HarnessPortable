@@ -1,5 +1,6 @@
 using Velopack;
 using Velopack.Exceptions;
+using Velopack.Logging;
 
 namespace HarnessPortable.Windows.Services;
 
@@ -48,15 +49,17 @@ public sealed class UpdateService
         try
         {
             var manager = new UpdateManager(UpdateSourceFactory.Create(url));
+            FlickerLog.Log(
+                "update",
+                "check source=" + MaskUrl(url) +
+                " installed=" + manager.IsInstalled +
+                " portable=" + manager.IsPortable +
+                " current=" + manager.CurrentVersion +
+                " appId=" + manager.AppId);
             if (!manager.IsInstalled)
             {
-                FinishCheck(
-                    pending: null,
-                    url,
-                    available: null,
-                    canApply: false,
-                    status: $"当前版本 {CurrentVersion}（{DeploymentLabel}，无法在线更新。请使用 Setup 安装包或便携 zip）",
-                    notes: Changelog.ReadEmbedded());
+                FlickerLog.Log("update", "not a Velopack deployment (" + DeploymentLabel + "); reading the feed directly");
+                await ReportFeedWithoutDeploymentAsync(url).ConfigureAwait(false);
                 return;
             }
 
@@ -65,6 +68,7 @@ public sealed class UpdateService
             token.ThrowIfCancellationRequested();
             if (info is null)
             {
+                FlickerLog.Log("update", "no update (current=" + manager.CurrentVersion + ")");
                 FinishCheck(
                     pending: null,
                     url,
@@ -81,6 +85,7 @@ public sealed class UpdateService
                 notes = Changelog.ReadEmbedded();
             }
 
+            FlickerLog.Log("update", "available " + info.TargetFullRelease.Version + " (current=" + manager.CurrentVersion + ")");
             FinishCheck(
                 pending: info,
                 url,
@@ -91,6 +96,7 @@ public sealed class UpdateService
         }
         catch (NotInstalledException)
         {
+            FlickerLog.Log("update", "NotInstalledException");
             FinishCheck(
                 pending: null,
                 url,
@@ -101,10 +107,12 @@ public sealed class UpdateService
         }
         catch (OperationCanceledException)
         {
+            FlickerLog.Log("update", "cancelled");
             SetBusy(false, "已取消检查");
         }
         catch (Exception ex)
         {
+            FlickerLog.Log("update", "FAILED " + ex.GetType().Name + ": " + ex.Message);
             FinishCheck(
                 pending: null,
                 url,
@@ -114,6 +122,83 @@ public sealed class UpdateService
                 notes: Changelog.ReadEmbedded());
         }
     }
+
+    /// <summary>Never write query strings (tokens) into the debug log.</summary>
+    private static string MaskUrl(string url)
+    {
+        var at = url.IndexOf('?');
+        return at >= 0 ? url[..at] + "?…" : url;
+    }
+
+    /// <summary>Channel Velopack packs Windows feeds under (releases.win.json).</summary>
+    private const string WindowsChannel = "win";
+
+    /// <summary>
+    /// A build Velopack does not manage — a plain <c>dotnet publish</c> output or
+    /// a copy of one — cannot install anything itself, but it can still answer
+    /// the question the button asks ("is there something newer?") by reading the
+    /// release feed directly. The user then learns the version and its notes
+    /// instead of only being told that updates are unavailable here.
+    /// </summary>
+    private async Task ReportFeedWithoutDeploymentAsync(string url)
+    {
+        try
+        {
+            var feed = await UpdateSourceFactory.Create(url)
+                .GetReleaseFeed(
+                    NullVelopackLogger.Instance,
+                    appId: "HarnessPortable",
+                    channel: WindowsChannel,
+                    stagingId: null,
+                    latestLocalRelease: null)
+                .ConfigureAwait(false);
+
+            var newest = feed.Assets
+                .Where(a => a.Type == VelopackAssetType.Full)
+                .OrderByDescending(a => a.Version.Version)
+                .FirstOrDefault();
+
+            if (newest is null || !IsNewerThanCurrent(newest.Version.Version))
+            {
+                FlickerLog.Log("update", "feed has no release newer than " + CurrentVersion);
+                FinishCheck(
+                    pending: null,
+                    url,
+                    available: null,
+                    canApply: false,
+                    status: $"当前版本 {CurrentVersion}（{DeploymentLabel}），已是最新",
+                    notes: Changelog.ReadEmbedded());
+                return;
+            }
+
+            var notes = string.IsNullOrWhiteSpace(newest.NotesMarkdown)
+                ? Changelog.ReadEmbedded()
+                : newest.NotesMarkdown;
+
+            FlickerLog.Log("update", "feed has " + newest.Version + " but this build cannot self-update");
+            FinishCheck(
+                pending: null,
+                url,
+                available: newest.Version.ToString(),
+                canApply: false,
+                status: $"最新版本 {newest.Version}（当前 {CurrentVersion}，{DeploymentLabel} 不能自更新：请用 Setup 安装包或便携 zip）",
+                notes: notes);
+        }
+        catch (Exception ex)
+        {
+            FlickerLog.Log("update", "feed read FAILED " + ex.GetType().Name + ": " + ex.Message);
+            FinishCheck(
+                pending: null,
+                url,
+                available: null,
+                canApply: false,
+                status: $"当前版本 {CurrentVersion}（{DeploymentLabel}，无法在线更新。请使用 Setup 安装包或便携 zip）",
+                notes: Changelog.ReadEmbedded());
+        }
+    }
+
+    private static bool IsNewerThanCurrent(Version candidate) =>
+        Version.TryParse(AppVersion.Current, out var installed) && candidate.CompareTo(installed) > 0;
 
     public async Task ApplyAsync(string? updateUrl, CancellationToken token = default)
     {
@@ -145,6 +230,7 @@ public sealed class UpdateService
         try
         {
             var manager = new UpdateManager(UpdateSourceFactory.Create(url));
+            FlickerLog.Log("update", "apply " + pending.TargetFullRelease.Version + " from " + MaskUrl(url));
             await manager.DownloadUpdatesAsync(pending, p =>
             {
                 lock (_gate)
@@ -167,10 +253,12 @@ public sealed class UpdateService
         }
         catch (OperationCanceledException)
         {
+            FlickerLog.Log("update", "apply cancelled");
             SetBusy(false, "已取消更新");
         }
         catch (Exception ex)
         {
+            FlickerLog.Log("update", "apply FAILED " + ex.GetType().Name + ": " + ex.Message);
             SetBusy(false, "更新失败：" + ex.Message);
         }
     }
