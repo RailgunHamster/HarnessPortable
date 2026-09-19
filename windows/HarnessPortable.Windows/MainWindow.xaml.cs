@@ -768,33 +768,6 @@ public partial class MainWindow : Window
         view.CloseRequested += () => CloseDocByView(view);
         view.FullScreenToggleRequested += ToggleFullScreen;
         view.EscapeRequested += ExitFullScreen;
-        view.WebViewFocused += () => ActivateSessionDoc(view);
-    }
-
-    /// <summary>
-    /// Marks the document owning <paramref name="view"/> active when the page
-    /// takes focus from a real click. The pane template deliberately presents
-    /// the content without a LayoutDocumentControl (see MainWindow.xaml), so
-    /// AvalonDock cannot do this from the click itself; doing it here keeps
-    /// <c>Layout.ActiveContent</c> — and therefore where a new tab opens —
-    /// pointing at the pane the user is actually working in.
-    /// </summary>
-    private void ActivateSessionDoc(SessionView view)
-    {
-        if (FindDocForView(view) is not { } doc)
-        {
-            return;
-        }
-
-        if (!doc.IsActive)
-        {
-            doc.IsActive = true;
-        }
-
-        if (!doc.IsSelected)
-        {
-            doc.IsSelected = true;
-        }
     }
 
     private string NextTunnelSuffix(string profileId)

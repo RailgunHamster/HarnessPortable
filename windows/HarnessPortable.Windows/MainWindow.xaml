@@ -86,9 +86,10 @@
                              activation -> ActiveContentChanged -> focus claim ->
                              focus event loop, re-hosting the browser each round
                              (the white flashing). Without the wrapper the focus
-                             manager cannot associate the event with a document;
-                             the app activates the document itself on click
-                             (see MainWindow.ActivateSessionDoc). -->
+                             manager cannot associate the event with a document.
+                             Activating the document is still covered: the pane
+                             control marks its selected content active whenever
+                             the selection changes. -->
                         <ContentPresenter Content="{Binding Content}"/>
                     </DataTemplate>
                 </Setter.Value>

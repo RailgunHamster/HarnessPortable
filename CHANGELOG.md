@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.7
+
+- Windows：修复 2.6.5 引入的回归——点「管理」标签会被立刻切回网页标签，导致管理界面根本打不开。
+  - 原因：2.6.5 为了让「点进网页时该文档仍被标记为激活」，把 `SessionView` 的 `WebView.GotFocus` 接到了「把这个文档设为激活」上。可是 WebView2 是 `HwndHost`：标签切换时它会被卸载并重新挂载，这个过程同样会触发 `GotFocus`，于是应用又把刚刚被切走的那个文档设回 `IsActive`/`IsSelected`，把用户点的那一下顶掉。
+  - 现在这条接线整个去掉：切换标签时 AvalonDock 的 `LayoutDocumentPaneControl.OnSelectionChanged` 本来就会把选中的文档置为激活，不需要额外补偿。2.6.5 的闪烁修复（面板内容不再包 `LayoutDocumentControl`，焦点钩子无法再把网页里的焦点事件写成"激活"）保持不变。
+
 ## 2.6.6
 
 - Windows：把「检查更新」从黑盒变成有据可查，并让非 Velopack 构建也能得到有用的回答。

@@ -41,14 +41,6 @@ public partial class SessionView : System.Windows.Controls.UserControl
     public event Action? FullScreenToggleRequested;
     public event Action? EscapeRequested;
 
-    /// <summary>
-    /// Raised when the embedded browser takes keyboard focus (the user clicked
-    /// into the page). The pane template no longer wraps the content in a
-    /// LayoutDocumentControl, so the owner uses this to mark the document
-    /// active on a real click.
-    /// </summary>
-    public event Action? WebViewFocused;
-
     public string? ProfileId => _profile?.Id;
     public bool IsTunnel => _isTunnel;
     public string? DirectUrl => _isTunnel ? null : _url;
@@ -430,11 +422,13 @@ public partial class SessionView : System.Windows.Controls.UserControl
             WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
 
             var core = WebView.CoreWebView2;
-            WebView.GotFocus += (_, _) =>
-            {
-                FlickerLog.Log("webview", "GotFocus (" + LogTag + ")");
-                WebViewFocused?.Invoke();
-            };
+            // Focus here is only ever *observed*: the WebView2 is an HwndHost,
+            // so it also takes focus while the pane tears it down and re-hosts
+            // it (every tab switch). Reacting to that by activating its document
+            // fights the tab the user just clicked, so nothing subscribes to
+            // this event — the pane control already marks the selected document
+            // active on a real selection change.
+            WebView.GotFocus += (_, _) => FlickerLog.Log("webview", "GotFocus (" + LogTag + ")");
             WebView.LostFocus += (_, _) => FlickerLog.Log("webview", "LostFocus (" + LogTag + ")");
             core.NavigationStarting += (_, e) => FlickerLog.Log("webview-nav", "start " + e.Uri + " (" + LogTag + ")");
             core.NavigationCompleted += async (_, e) =>
