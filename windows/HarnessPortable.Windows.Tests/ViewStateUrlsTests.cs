@@ -1,3 +1,4 @@
+using HarnessPortable.Windows.Models;
 using HarnessPortable.Windows.Services;
 
 namespace HarnessPortable.Windows.Tests;
@@ -61,7 +62,7 @@ public sealed class ViewStateUrlsTests
     {
         var merged = ViewStateUrls.Merge(
             "http://127.0.0.1:3080/s/session-abc?token=secret#anchor",
-            new ViewState("session-abc", 0, 320));
+            new LayoutWebState { SessionId = "session-abc", Sidebar = 0, Rightbar = 320 });
 
         // Order: untouched parameters first, ours appended.
         Assert.Equal(
@@ -74,7 +75,7 @@ public sealed class ViewStateUrlsTests
     {
         var merged = ViewStateUrls.Merge(
             "http://127.0.0.1:3080/?dsh_session=session-old&dsh_sidebar=280&token=t",
-            new ViewState("session-new", 300, 0));
+            new LayoutWebState { SessionId = "session-new", Sidebar = 300, Rightbar = 0 });
 
         Assert.Equal(
             "http://127.0.0.1:3080/?dsh_session=session-new&dsh_sidebar=300&token=t&dsh_rightbar=0",
@@ -86,7 +87,7 @@ public sealed class ViewStateUrlsTests
     {
         var merged = ViewStateUrls.Merge(
             "http://127.0.0.1:3080/?dsh_sidebar=280",
-            new ViewState("session-abc", null, null));
+            new LayoutWebState { SessionId = "session-abc" });
 
         Assert.Equal("http://127.0.0.1:3080/?dsh_sidebar=280&dsh_session=session-abc", merged);
     }
@@ -95,7 +96,7 @@ public sealed class ViewStateUrlsTests
     public void Merge_IsANoOpWithoutStateOrOnForeignUrls()
     {
         Assert.Equal("http://127.0.0.1:3080/?token=t", ViewStateUrls.Merge("http://127.0.0.1:3080/?token=t", null));
-        Assert.Equal("about:blank", ViewStateUrls.Merge("about:blank", new ViewState("s", 1, 1)));
+        Assert.Equal("about:blank", ViewStateUrls.Merge("about:blank", new LayoutWebState { SessionId = "s", Sidebar = 1, Rightbar = 1 }));
     }
 
     [Fact]
@@ -103,7 +104,7 @@ public sealed class ViewStateUrlsTests
     {
         var merged = ViewStateUrls.Merge(
             "http://127.0.0.1:3080/s/session-abc?token=secret",
-            new ViewState("session-abc", 264, 0));
+            new LayoutWebState { SessionId = "session-abc", Sidebar = 264, Rightbar = 0 });
 
         var state = ViewStateUrls.Extract(merged);
 
@@ -118,7 +119,7 @@ public sealed class ViewStateUrlsTests
     {
         var merged = ViewStateUrls.Merge(
             "http://127.0.0.1:3080/",
-            new ViewState("session-a b&c", null, null));
+            new LayoutWebState { SessionId = "session-a b&c" });
 
         Assert.Contains("dsh_session=session-a%20b%26c", merged);
         Assert.Equal("session-a b&c", ViewStateUrls.Extract(merged)!.SessionId);

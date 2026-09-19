@@ -7,7 +7,10 @@ namespace HarnessPortable.Windows.Services;
 /// <summary>
 /// Persists saved workspace layouts in <c>%APPDATA%\HarnessPortable\layouts.json</c>.
 /// A layout records the split tree plus which tunnel profile / direct URL each
-/// tab points at; it does not store passwords or WebView state.
+/// tab points at, and — when the <c>dsh-view-state</c> plugin is installed — the
+/// tab's selected session and panel geometry, read from the plugin's three
+/// whitelisted query parameters. It never stores passwords or a raw page URL
+/// (dsh's startup URL carries a process token).
 /// </summary>
 public sealed class LayoutPresetStore
 {

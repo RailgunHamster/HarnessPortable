@@ -49,6 +49,32 @@ public partial class SessionView : System.Windows.Controls.UserControl
     public bool AppFullScreenActive { get; set; }
     public string? CustomLabel => _customLabel;
 
+    /// <summary>
+    /// Web state recorded in the layout preset for this tab. Used for the first
+    /// navigation only; see <see cref="MergeWebState"/>.
+    /// </summary>
+    public LayoutWebState? InitialWebState { get; set; }
+
+    /// <summary>
+    /// The page's live address, which the <c>dsh-view-state</c> plugin keeps in
+    /// step with the selected session and panel geometry. Null before the browser
+    /// exists or while the page is blank.
+    /// </summary>
+    public string? CurrentUrl
+    {
+        get
+        {
+            try
+            {
+                return _coreReady ? WebView.CoreWebView2?.Source : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
     /// <summary>Label shown in the rename dialog: never includes the status dot.</summary>
     public string DisplayLabel => _customLabel
         ?? (_isTunnel ? _profile?.DisplayName : ProfileStore.HostOf(_url))
@@ -506,6 +532,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private void Navigate(string url)
     {
+        url = MergeWebState(url);
         FlickerLog.Log("navigate", MaskUrl(url) + " (" + LogTag + ")");
 
         if (_isTunnel && url.StartsWith("http://127.0.0.1:"))
@@ -518,6 +545,19 @@ public partial class SessionView : System.Windows.Controls.UserControl
         {
             WebView.CoreWebView2.Navigate(url);
         }
+    }
+
+    /// <summary>
+    /// Re-attaches the dsh view state (session, sidebar, panel widths) to a
+    /// navigation target. What the page currently shows wins over what the preset
+    /// recorded, so reloading or reconnecting never throws the user back to a
+    /// session they have since switched away from; the recorded state is the
+    /// starting point for the tab's first navigation.
+    /// </summary>
+    private string MergeWebState(string url)
+    {
+        var state = ViewStateUrls.Extract(CurrentUrl) ?? InitialWebState;
+        return state is null ? url : ViewStateUrls.Merge(url, state);
     }
 
     /// <summary>Never write token query strings into the debug log.</summary>

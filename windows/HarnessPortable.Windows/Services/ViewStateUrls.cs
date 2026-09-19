@@ -1,4 +1,5 @@
 using System.Globalization;
+using HarnessPortable.Windows.Models;
 
 namespace HarnessPortable.Windows.Services;
 
@@ -31,7 +32,7 @@ public static class ViewStateUrls
     /// URL is not an http(s) URL or carries none of them, so callers can keep the
     /// preset untouched instead of storing an empty blob.
     /// </summary>
-    public static ViewState? Extract(string? url)
+    public static LayoutWebState? Extract(string? url)
     {
         if (string.IsNullOrWhiteSpace(url) ||
             !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) ||
@@ -50,10 +51,12 @@ public static class ViewStateUrls
             return null;
         }
 
-        return new ViewState(
-            string.IsNullOrWhiteSpace(session) ? null : session,
-            sidebar,
-            rightbar);
+        return new LayoutWebState
+        {
+            SessionId = string.IsNullOrWhiteSpace(session) ? null : session,
+            Sidebar = sidebar,
+            Rightbar = rightbar,
+        };
     }
 
     /// <summary>
@@ -62,7 +65,7 @@ public static class ViewStateUrls
     /// preserved byte for byte, and a null field is left alone rather than cleared
     /// (the plugin falls back to its stored copy for keys the URL does not carry).
     /// </summary>
-    public static string Merge(string url, ViewState? state)
+    public static string Merge(string url, LayoutWebState? state)
     {
         if (state is null ||
             string.IsNullOrWhiteSpace(url) ||
@@ -147,4 +150,4 @@ public static class ViewStateUrls
 }
 
 /// <summary>One tab's captured web view state; null fields mean "not recorded".</summary>
-public sealed record ViewState(string? SessionId, int? Sidebar, int? Rightbar);
+

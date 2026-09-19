@@ -38,4 +38,29 @@ public sealed class LayoutTabRef
 
     /// <summary>Optional user-renamed tab label.</summary>
     public string? Label { get; set; }
+
+    /// <summary>
+    /// Per-tab dsh web view state (selected session, sidebar fold state and
+    /// width, right panel width) as mirrored into the page URL by the
+    /// <c>dsh-view-state</c> dsh plugin. Null when the plugin is not installed,
+    /// or when the page carried nothing to record.
+    /// </summary>
+    public LayoutWebState? Web { get; set; }
+}
+
+/// <summary>
+/// One tab's captured dsh web view state. Only the plugin's three whitelisted
+/// parameters are ever read into it — never the page URL itself, which carries
+/// dsh's process token on first navigation.
+/// </summary>
+public sealed class LayoutWebState
+{
+    /// <summary>Selected session id, absent when there is none.</summary>
+    public string? SessionId { get; set; }
+
+    /// <summary>Sidebar width in px; 0 means collapsed.</summary>
+    public int? Sidebar { get; set; }
+
+    /// <summary>Right panel width in px; 0 means hidden.</summary>
+    public int? Rightbar { get; set; }
 }

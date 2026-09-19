@@ -791,16 +791,16 @@ public partial class MainWindow : Window
         CreateTunnelDoc(profile, localPort, GetTargetPane(), activate: true);
     }
 
-    private SessionView CreateTunnelView(TunnelProfile profile, int localPort)
+    private SessionView CreateTunnelView(TunnelProfile profile, int localPort, LayoutWebState? webState = null)
     {
-        var view = new SessionView(_services, profile, localPort);
+        var view = new SessionView(_services, profile, localPort) { InitialWebState = webState };
         WireSessionView(view);
         return view;
     }
 
-    private SessionView CreateDirectView(string url)
+    private SessionView CreateDirectView(string url, LayoutWebState? webState = null)
     {
-        var view = new SessionView(_services, url);
+        var view = new SessionView(_services, url) { InitialWebState = webState };
         WireSessionView(view);
         return view;
     }
@@ -829,10 +829,11 @@ public partial class MainWindow : Window
         TunnelProfile profile,
         int localPort,
         LayoutDocumentPane targetPane,
-        bool activate)
+        bool activate,
+        LayoutWebState? webState = null)
     {
         var suffix = NextTunnelSuffix(profile.Id);
-        var view = CreateTunnelView(profile, localPort);
+        var view = CreateTunnelView(profile, localPort, webState);
 
         var doc = new LayoutDocument
         {
@@ -874,9 +875,14 @@ public partial class MainWindow : Window
         return doc;
     }
 
-    private LayoutDocument CreateDirectDoc(string url, string suffix, LayoutDocumentPane targetPane, bool activate)
+    private LayoutDocument CreateDirectDoc(
+        string url,
+        string suffix,
+        LayoutDocumentPane targetPane,
+        bool activate,
+        LayoutWebState? webState = null)
     {
-        var view = CreateDirectView(url);
+        var view = CreateDirectView(url, webState);
 
         var doc = new LayoutDocument
         {
@@ -1607,9 +1613,16 @@ public partial class MainWindow : Window
                     Kind = "tunnel",
                     ProfileId = profileId,
                     Label = view.CustomLabel,
+                    Web = ViewStateUrls.Extract(view.CurrentUrl),
                 }
                 : !view.IsTunnel && view.DirectUrl is { } url
-                    ? new LayoutTabRef { Kind = "direct", Url = url, Label = view.CustomLabel }
+                    ? new LayoutTabRef
+                    {
+                        Kind = "direct",
+                        Url = url,
+                        Label = view.CustomLabel,
+                        Web = ViewStateUrls.Extract(view.CurrentUrl),
+                    }
                     : null
             : null;
     }
@@ -1676,7 +1689,7 @@ public partial class MainWindow : Window
 
             var state = _services.Tunnels.GetState(profile.Id);
             var port = state.LocalPort > 0 ? state.LocalPort : profile.LocalPort;
-            var doc = CreateTunnelDoc(profile, port, pane, activate: false);
+            var doc = CreateTunnelDoc(profile, port, pane, activate: false, webState: tab.Web);
             if (tab.Label is { } label && doc.Content is SessionView tunnelView)
             {
                 _docSuffixes[doc] = "";
@@ -1690,7 +1703,7 @@ public partial class MainWindow : Window
         }
         else if (tab.Kind == "direct" && tab.Url is { } url)
         {
-            var doc = CreateDirectDoc(url, NextDirectSuffix(url), pane, activate: false);
+            var doc = CreateDirectDoc(url, NextDirectSuffix(url), pane, activate: false, webState: tab.Web);
             if (tab.Label is { } label && doc.Content is SessionView directView)
             {
                 _docSuffixes[doc] = "";
