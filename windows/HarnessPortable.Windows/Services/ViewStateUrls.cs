@@ -16,7 +16,11 @@ namespace HarnessPortable.Windows.Services;
 /// Contract (see the plugin's README):
 ///   dsh_session=&lt;sessionId&gt;   current session, absent when there is none
 ///   dsh_sidebar=&lt;px&gt;           sidebar width, 0 = collapsed
-///   dsh_rightbar=&lt;px&gt;          right panel width, 0 = hidden
+///   dsh_rightbar=&lt;px&gt;          right panel's saved width, 0 = none recorded yet
+///
+/// The right panel's <em>visibility</em> is deliberately outside the contract:
+/// it belongs to ui-sidebar-right's per-session store, which reports it to the
+/// frame itself, so driving it from a preset would race that seat.
 /// </summary>
 public static class ViewStateUrls
 {

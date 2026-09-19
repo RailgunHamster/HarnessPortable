@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.6.11
+
+- Windows：布局预设开始记录**每个标签的网页状态**——你在哪个会话、侧边栏开着还是收着、面板多宽。前提是装上配套的 dsh 插件 [`dsh-view-state`](https://github.com/RailgunHamster/dsh-view-state)：dsh 前端没有路由，这些状态原本只活在页面内存里，所以以前"保存布局/重开"永远回到一个空会话。
+  - **保存布局**时从每个标签的页面地址里**只挑三个参数**（`dsh_session` / `dsh_sidebar` / `dsh_rightbar`）写进预设的 `Web` 段；**绝不保存原始 URL** —— dsh 的启动 URL 带进程 token，而预设是磁盘上的明文文件。
+  - **恢复布局**时把这三个参数并回导航目标，其它参数（尤其 `token`）与路径原样不动，所以与 `dsh-session-link` 的 `/s/<会话ID>` 深链并存不冲突。
+  - 页面**当前**显示的状态优先于预设里记的：切换了会话之后重新加载/重连，不会把你踢回预设里的旧会话。
+  - 没装插件（或页面里没有这些参数）时行为与 2.6.10 完全一致；旧预设照常加载。
+  - 插件装法：`dsh plugin --profile web add github:RailgunHamster/dsh-view-state`，然后重启 `dsh web`。部署与能力边界见 `\\server-home\public\Documents\dsh-personal\docs\dsh-view-state.md`。
+  - 已知边界：侧边栏"收起后原来拖的宽度"会被 dsh 自身丢弃（重新展开用契约默认 280）；右侧面板"当前是否显示"不可还原（属 `ui-sidebar-right` 每会话 store，外部驱动会与它抢），能还原的是它的宽度偏好。
+
 ## 2.6.10
 
 - Windows：更新下载现在看得见进度。

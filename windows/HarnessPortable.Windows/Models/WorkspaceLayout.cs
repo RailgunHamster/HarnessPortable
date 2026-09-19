@@ -61,6 +61,9 @@ public sealed class LayoutWebState
     /// <summary>Sidebar width in px; 0 means collapsed.</summary>
     public int? Sidebar { get; set; }
 
-    /// <summary>Right panel width in px; 0 means hidden.</summary>
+    /// <summary>
+    /// Right panel's saved width in px; 0 means no width was recorded yet.
+    /// Whether the panel is currently shown is not part of this state.
+    /// </summary>
     public int? Rightbar { get; set; }
 }
