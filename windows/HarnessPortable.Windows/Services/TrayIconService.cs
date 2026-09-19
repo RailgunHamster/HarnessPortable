@@ -20,6 +20,8 @@ public sealed class TrayIconService : IDisposable
     private readonly ToolStripMenuItem _versionItem;
     private readonly ToolStripMenuItem _updateItem;
     private bool _updateRunning;
+    private DateTime _lastProgressBalloon = DateTime.MinValue;
+    private int _lastProgressPercent = -100;
 
     public TrayIconService(AppServices services, Action showMainWindow, Action showManagement, Action exit)
     {
@@ -103,6 +105,36 @@ public sealed class TrayIconService : IDisposable
             : updates.CanApply && updates.AvailableVersion is { } available
                 ? $"安装 {available} 并重启"
                 : "检测并更新";
+
+        // Persistent progress readout: NotifyIcon.Text is capped at 63 characters.
+        var tip = updates.Busy ? $"Harness Portable · {updates.Status}" : "Harness Portable";
+        _icon.Text = tip.Length <= 63 ? tip : tip[..60] + "…";
+
+        ReportDownloadProgress(updates);
+    }
+
+    /// <summary>
+    /// A tray context menu closes the moment its item is clicked, so its text can
+    /// never carry the progress. The tooltip above always can, and the balloon is
+    /// re-shown as the percentage moves instead of only once at the start.
+    /// </summary>
+    private void ReportDownloadProgress(UpdateService updates)
+    {
+        if (!updates.Busy || updates.Progress <= 0)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (updates.Progress < _lastProgressPercent + 5 &&
+            now - _lastProgressBalloon < TimeSpan.FromSeconds(4))
+        {
+            return;
+        }
+
+        _lastProgressPercent = updates.Progress;
+        _lastProgressBalloon = now;
+        ShowBalloon($"正在下载更新 {updates.Progress}%", "下载完成后会自动重启。", 3000);
     }
 
     private async void OnCheckAndUpdate(object? sender, EventArgs e)
@@ -113,6 +145,8 @@ public sealed class TrayIconService : IDisposable
         }
 
         _updateRunning = true;
+        _lastProgressPercent = -100;
+        _lastProgressBalloon = DateTime.MinValue;
         RefreshUpdateItems();
 
         try

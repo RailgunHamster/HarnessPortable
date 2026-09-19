@@ -241,6 +241,13 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         var updates = _services.Updates;
         UpdateStatusText.Text = updates.Status;
         ChangelogBox.Text = updates.ChangelogText;
+
+        // Real download progress, not just the "42%" inside the status line.
+        UpdateProgressBar.Value = updates.Progress;
+        UpdateProgressBar.Visibility = updates.Busy && updates.Progress > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
         CheckUpdateButton.IsEnabled = !updates.Busy;
         ApplyUpdateButton.IsEnabled = !updates.Busy && updates.CanApply;
         ApplyUpdateButton.Content = updates.CanApply && updates.AvailableVersion is { } version

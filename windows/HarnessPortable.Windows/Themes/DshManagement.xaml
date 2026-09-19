@@ -386,6 +386,34 @@
         </Setter>
     </Style>
 
+    <!-- Progress ======================================================= -->
+
+    <!-- Determinate only: the download is the long part and reports real
+         percentages, while the check is short and already named by the status
+         line. The template keeps the contract WPF expects (PART_Track +
+         PART_Indicator, whose Width the control drives). -->
+    <Style x:Key="DshProgressBar" TargetType="ProgressBar">
+        <Setter Property="Height" Value="4"/>
+        <Setter Property="Background" Value="{DynamicResource DshBgLayer3}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DshAccent}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="2" ClipToBounds="True">
+                        <Grid>
+                            <Rectangle x:Name="PART_Track"/>
+                            <Rectangle x:Name="PART_Indicator"
+                                       HorizontalAlignment="Left"
+                                       Fill="{TemplateBinding Foreground}"
+                                       RadiusX="2" RadiusY="2"/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Scrollbars: thin, borderless, token-coloured. Scoped to the management
          view through an implicit style there, so the light windows keep theirs. -->
     <Style x:Key="DshScrollBar" TargetType="ScrollBar">

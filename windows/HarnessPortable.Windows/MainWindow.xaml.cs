@@ -93,6 +93,7 @@ public partial class MainWindow : Window
         InitializeDockLayout();
         DockManager.ActiveContentChanged += DockLayout_ActiveContentChanged;
         _services.Tunnels.StateChanged += OnTunnelStateChanged;
+        _services.Updates.StateChanged += OnUpdateStateChangedForTaskbar;
         RefreshStatusBar();
         RefreshPresetBox(null);
         RestoreLastLayoutIfEnabled();
@@ -141,6 +142,29 @@ public partial class MainWindow : Window
     private void OpenManagement_Click(object sender, RoutedEventArgs e) => ShowManagementPanel();
 
     /// <summary>
+    /// Mirrors an in-flight update onto the taskbar button, which is where
+    /// Windows users look for it. Harmless when the window is hidden (there is no
+    /// button then); the tray covers that case.
+    /// </summary>
+    private void OnUpdateStateChangedForTaskbar()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(OnUpdateStateChangedForTaskbar);
+            return;
+        }
+
+        var updates = _services.Updates;
+        TaskbarItemInfo ??= new System.Windows.Shell.TaskbarItemInfo();
+        TaskbarItemInfo.ProgressState = !updates.Busy
+            ? System.Windows.Shell.TaskbarItemProgressState.None
+            : updates.Progress > 0
+                ? System.Windows.Shell.TaskbarItemProgressState.Normal
+                : System.Windows.Shell.TaskbarItemProgressState.Indeterminate;
+        TaskbarItemInfo.ProgressValue = updates.Progress / 100.0;
+    }
+
+    /// <summary>
     /// Keeps the keyboard chain alive across tab switches. Without this, the
     /// hidden webview that held Win32 focus drops it during the document swap
     /// and the newly activated one never claims it, so the next Ctrl+Tab (or
@@ -165,8 +189,7 @@ public partial class MainWindow : Window
         view.FocusWebView();
     }
 
-    private void OnTunnelStateChanged(TunnelInfo info)
-    {
+    private void OnTunnelStateChanged(TunnelInfo info)    {
         if (Dispatcher.CheckAccess())
         {
             ApplyTunnelState(info);
