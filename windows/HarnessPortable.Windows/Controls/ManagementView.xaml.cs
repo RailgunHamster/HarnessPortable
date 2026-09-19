@@ -55,15 +55,44 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         DirectInput.ItemsSource = _lanMachines;
 
         _services.Tunnels.StateChanged += OnTunnelStateChanged;
-        _services.Updates.StateChanged += OnUpdateStateChanged;
+
+        // The panel lives in its own window now, so it is unloaded whenever that
+        // window closes and loaded again when it is reopened: hook and unhook
+        // symmetrically, and refresh what the ctor cannot keep current.
+        Loaded += (_, _) =>
+        {
+            HookUpdateEvents(true);
+            RefreshLists();
+            RefreshUpdatePanel();
+        };
         Unloaded += (_, _) =>
         {
             _discoveryCts?.Cancel();
-            _services.Updates.StateChanged -= OnUpdateStateChanged;
+            HookUpdateEvents(false);
         };
         InitializeCloseBehaviorSettings();
         InitializeUpdateSettings();
         RefreshLists();
+    }
+
+    private bool _updateEventsHooked;
+
+    private void HookUpdateEvents(bool hook)
+    {
+        if (hook == _updateEventsHooked)
+        {
+            return;
+        }
+
+        _updateEventsHooked = hook;
+        if (hook)
+        {
+            _services.Updates.StateChanged += OnUpdateStateChanged;
+        }
+        else
+        {
+            _services.Updates.StateChanged -= OnUpdateStateChanged;
+        }
     }
 
     private void OnTunnelStateChanged(TunnelInfo info)

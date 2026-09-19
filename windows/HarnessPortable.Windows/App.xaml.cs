@@ -28,7 +28,9 @@ public partial class App : System.Windows.Application
             MainWindow = main;
 
             _tray = new TrayIconService(
+                _services,
                 showMainWindow: () => ShowMainWindow(main),
+                showManagement: main.ShowManagementPanel,
                 exit: ExitApplication);
 
             main.Show();

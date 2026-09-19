@@ -209,6 +209,8 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Harness Portable" FontSize="16" FontWeight="SemiBold"
                                Foreground="#111827" VerticalAlignment="Center"/>
+                    <Button Content="管理 / 设置" Style="{StaticResource ModernPrimaryButton}"
+                            Margin="12,0,0,0" Padding="12,6" Click="OpenManagement_Click"/>
                 </StackPanel>
             </DockPanel>
         </Border>

@@ -36,7 +36,7 @@ public partial class MainWindow : Window
     private readonly ManagementView _managementView;
     private readonly LayoutPresetStore _layoutPresets;
 
-    private LayoutDocument _managementDoc = null!;
+    private ManagementWindow? _managementWindow;
 
     private readonly Dictionary<string, TunnelProfile> _pendingProfiles = [];
     private readonly Dictionary<string, List<LayoutDocument>> _tunnelDocsByProfile = [];
@@ -104,12 +104,38 @@ public partial class MainWindow : Window
 
     private void InitializeDockLayout()
     {
-        _managementDoc = CreateManagementDoc();
-        var pane = new LayoutDocumentPane(_managementDoc);
+        // The workspace holds sessions only. The management UI is its own window
+        // (see ManagementWindow), so it can never be hidden behind a tab and a
+        // broken workspace can not lock the user out of it.
+        var pane = new LayoutDocumentPane();
         var group = new LayoutDocumentPaneGroup(pane);
         DockManager.Layout = new LayoutRoot { RootPanel = new LayoutPanel(group) };
-        _managementDoc.IsActive = true;
     }
+
+    /// <summary>
+    /// Opens the management window, or brings the open one forward. Independent
+    /// of the workspace window on purpose: the tray entry and the toolbar button
+    /// both reach it while the workspace is hidden, minimized or unusable.
+    /// </summary>
+    public void ShowManagementPanel()
+    {
+        if (_managementWindow is null)
+        {
+            _managementWindow = new ManagementWindow(_managementView);
+            _managementWindow.Closed += (_, _) => _managementWindow = null;
+            _managementWindow.Show();
+            return;
+        }
+
+        if (_managementWindow.WindowState == WindowState.Minimized)
+        {
+            _managementWindow.WindowState = WindowState.Normal;
+        }
+
+        _managementWindow.Activate();
+    }
+
+    private void OpenManagement_Click(object sender, RoutedEventArgs e) => ShowManagementPanel();
 
     /// <summary>
     /// Keeps the keyboard chain alive across tab switches. Without this, the
@@ -135,16 +161,6 @@ public partial class MainWindow : Window
 
         view.FocusWebView();
     }
-
-    private LayoutDocument CreateManagementDoc() => new()
-    {
-        Title = "管理",
-        ContentId = "management",
-        CanClose = false,
-        CanFloat = false,
-        CanMove = false,
-        Content = _managementView,
-    };
 
     private void OnTunnelStateChanged(TunnelInfo info)
     {
@@ -203,7 +219,6 @@ public partial class MainWindow : Window
     {
         if (sender is not LayoutDocumentTabItem tab ||
             tab.Model is not LayoutDocument doc ||
-            ReferenceEquals(doc, _managementDoc) ||
             !doc.CanMove)
         {
             return;
@@ -688,12 +703,14 @@ public partial class MainWindow : Window
             return activePane;
         }
 
-        if (_managementDoc.Parent is LayoutDocumentPane managementPane)
+        // Fall back to whichever pane is still in the tree, so a new tab never
+        // lands somewhere invisible.
+        if (DockManager.Layout.Descendents().OfType<LayoutDocumentPane>().FirstOrDefault() is { } pane)
         {
-            return managementPane;
+            return pane;
         }
 
-        var pane = new LayoutDocumentPane(_managementDoc);
+        pane = new LayoutDocumentPane();
         var group = new LayoutDocumentPaneGroup(pane);
         DockManager.Layout.RootPanel = new LayoutPanel(group);
         return pane;
@@ -1001,7 +1018,7 @@ public partial class MainWindow : Window
         SwitchToMenu.Items.Clear();
 
         var current = _contextDoc;
-        if (current is null || ReferenceEquals(current, _managementDoc) || current.Content is not SessionView currentView)
+        if (current is null || current.Content is not SessionView currentView)
         {
             SwitchToMenu.IsEnabled = false;
             return;
@@ -1050,7 +1067,7 @@ public partial class MainWindow : Window
     private void RenameTab_Click(object sender, RoutedEventArgs e)
     {
         var doc = GetContextDocumentFromMenuItem(sender) ?? _contextDoc;
-        if (doc is null || ReferenceEquals(doc, _managementDoc) || doc.Content is not SessionView view)
+        if (doc is null || doc.Content is not SessionView view)
         {
             return;
         }
@@ -1072,7 +1089,7 @@ public partial class MainWindow : Window
     private void DuplicateTab_Click(object sender, RoutedEventArgs e)
     {
         var doc = GetContextDocumentFromMenuItem(sender);
-        if (doc is null || ReferenceEquals(doc, _managementDoc) || doc.Content is not SessionView view)
+        if (doc is null || doc.Content is not SessionView view)
         {
             return;
         }
@@ -1095,7 +1112,7 @@ public partial class MainWindow : Window
     private void SplitContextDocument(SplitDirection direction, object menuItemSource)
     {
         var doc = GetContextDocumentFromMenuItem(menuItemSource) ?? _contextDoc;
-        if (doc is null || ReferenceEquals(doc, _managementDoc) || doc.Content is not SessionView view)
+        if (doc is null || doc.Content is not SessionView view)
         {
             return;
         }
@@ -1147,7 +1164,7 @@ public partial class MainWindow : Window
 
     private void SwitchDocumentTo(LayoutDocument doc, LayoutTabRef target)
     {
-        if (ReferenceEquals(doc, _managementDoc) || doc.Content is not SessionView oldView)
+        if (doc.Content is not SessionView oldView)
         {
             return;
         }
@@ -1347,20 +1364,16 @@ public partial class MainWindow : Window
         _pendingProfiles.Clear();
         CloseAllSessionDocs();
 
-        _managementDoc = CreateManagementDoc();
-
         var body = DeserializeLayoutNode(layout.Root);
         var rootPanel = body switch
         {
-            null => new LayoutPanel(new LayoutDocumentPane(_managementDoc)),
+            // A preset saved before the management UI became a window may hold
+            // nothing but its tab: keep an empty pane so session tabs still have
+            // somewhere to open.
+            null => new LayoutPanel(new LayoutDocumentPane()),
             LayoutPanel panel => panel,
             _ => new LayoutPanel(body),
         };
-
-        if (!ContainsManagement(layout.Root))
-        {
-            rootPanel.Children.Insert(0, new LayoutDocumentPane(_managementDoc));
-        }
 
         DockManager.Layout = new LayoutRoot { RootPanel = rootPanel };
 
@@ -1374,22 +1387,8 @@ public partial class MainWindow : Window
             firstSession.IsActive = true;
             firstSession.IsSelected = true;
         }
-        else
-        {
-            _managementDoc.IsActive = true;
-        }
 
         RefreshStatusBar();
-    }
-
-    private bool ContainsManagement(LayoutNode node)
-    {
-        if (node.Kind == "pane")
-        {
-            return node.Tabs.Any(t => t.Kind == "management");
-        }
-
-        return node.Children.Any(ContainsManagement);
     }
 
     private IEnumerable<LayoutDocument> AllSessionDocs()
@@ -1575,11 +1574,6 @@ public partial class MainWindow : Window
 
     private LayoutTabRef? TabRefFromDoc(LayoutDocument doc)
     {
-        if (ReferenceEquals(doc, _managementDoc))
-        {
-            return new LayoutTabRef { Kind = "management" };
-        }
-
         return doc.Content is SessionView view
             ? view.IsTunnel && view.ProfileId is { } profileId
                 ? new LayoutTabRef
@@ -1641,7 +1635,8 @@ public partial class MainWindow : Window
     {
         if (tab.Kind == "management")
         {
-            pane.Children.Add(_managementDoc);
+            // Presets saved before the management UI became its own window still
+            // carry its tab; there is nothing to restore for it now.
             return;
         }
 
@@ -1832,7 +1827,7 @@ public partial class MainWindow : Window
         {
             _trayHintShown = true;
             System.Windows.Forms.MessageBox.Show(
-                "Harness Portable 仍在托盘运行，已连接的隧道不会中断。\n双击托盘图标可重新打开窗口，右键图标可退出。",
+                "Harness Portable 仍在托盘运行，已连接的隧道不会中断。\n双击托盘图标可重新打开窗口；右键图标可打开「管理 / 设置」、检查更新或退出。",
                 "Harness Portable",
                 System.Windows.Forms.MessageBoxButtons.OK,
                 System.Windows.Forms.MessageBoxIcon.Information);
