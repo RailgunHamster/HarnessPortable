@@ -31,6 +31,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private bool _coreReady;
     private bool _initialized;
     private bool _shutdown;
+    private bool _webStateReapplied;
     private int _focusClaimPending;
     private string? _customLabel;
     private ulong _authCheckedNavId;
@@ -461,6 +462,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             {
                 FlickerLog.Log("webview-nav", "complete navId=" + e.NavigationId + " ok=" + e.IsSuccess + " (" + LogTag + ")");
                 await CheckAuthRequiredAsync(e.NavigationId);
+                await ReapplyWebStateSoonAsync();
             };
 
             WebView.PreviewKeyDown += OnWebViewPreviewKeyDown;
@@ -558,6 +560,61 @@ public partial class SessionView : System.Windows.Controls.UserControl
     {
         var state = ViewStateUrls.Extract(CurrentUrl) ?? InitialWebState;
         return state is null ? url : ViewStateUrls.Merge(url, state);
+    }
+
+    /// <summary>
+    /// The tab's own dsh root without a query string, used for the one re-apply.
+    /// </summary>
+    private string CleanRootUrl() => _isTunnel ? $"http://127.0.0.1:{_lastPort}" : _url;
+
+    /// <summary>
+    /// Puts a preset's recorded view state back after the page has settled.
+    ///
+    /// dsh's startup URL carries a one-shot token and answers with a redirect to the
+    /// clean root, and that redirect drops the query string: state merged into the
+    /// token URL never reaches the page, while the plugin reads its parameters at
+    /// boot only. So give the page a moment to mirror whatever state it already has,
+    /// and if ours never arrived, navigate once to the clean root carrying it. The
+    /// auth hand-off is left alone — its own completion re-enters here.
+    /// </summary>
+    private async Task ReapplyWebStateSoonAsync()
+    {
+        if (_webStateReapplied || InitialWebState is null || _shutdown)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(1500);
+        }
+        catch
+        {
+            // shutting down
+        }
+
+        if (_webStateReapplied || InitialWebState is null || _shutdown)
+        {
+            return;
+        }
+
+        var live = CurrentUrl;
+
+        if (live is not null && live.Contains("token=", StringComparison.OrdinalIgnoreCase))
+        {
+            // The token hand-off is still in flight; its completion calls us again.
+            return;
+        }
+
+        _webStateReapplied = true;
+
+        if (!ViewStateUrls.NeedsReapply(live))
+        {
+            return;
+        }
+
+        FlickerLog.Log("view-state", "re-applying recorded state after auth (" + LogTag + ")");
+        Navigate(CleanRootUrl());
     }
 
     /// <summary>Never write token query strings into the debug log.</summary>

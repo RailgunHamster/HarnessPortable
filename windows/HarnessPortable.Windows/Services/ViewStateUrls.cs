@@ -104,6 +104,22 @@ public static class ViewStateUrls
         return uri.GetLeftPart(UriPartial.Path) + query + fragment;
     }
 
+    /// <summary>
+    /// Whether a loaded page still needs the recorded state applied to it.
+    ///
+    /// dsh's startup URL carries a one-shot <c>token</c> and answers with a redirect
+    /// to the clean root, and that redirect drops the query string — so state merged
+    /// into the token URL never reaches the page, and the plugin (which reads its
+    /// parameters at boot only) never sees it. Once the real page is up, this says
+    /// whether to put the state back with one extra navigation: true when the page
+    /// is http(s) and carries none of the plugin's parameters.
+    /// </summary>
+    public static bool NeedsReapply(string? liveUrl) =>
+        liveUrl is not null &&
+        Uri.TryCreate(liveUrl.Trim(), UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+        Extract(liveUrl) is null;
+
     private static void Set(List<KeyValuePair<string, string>> pairs, string key, string value)
     {
         for (var i = 0; i < pairs.Count; i++)

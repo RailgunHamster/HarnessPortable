@@ -124,4 +124,23 @@ public sealed class ViewStateUrlsTests
         Assert.Contains("dsh_session=session-a%20b%26c", merged);
         Assert.Equal("session-a b&c", ViewStateUrls.Extract(merged)!.SessionId);
     }
+
+    [Fact]
+    public void NeedsReapply_IsTrueForAPlainPage()
+    {
+        // The token redirect lands here with the query stripped: our parameters
+        // never arrived, so the tab has to put them back.
+        Assert.True(ViewStateUrls.NeedsReapply("http://127.0.0.1:3080/"));
+        Assert.True(ViewStateUrls.NeedsReapply("http://127.0.0.1:3080/?token=x"));
+        Assert.True(ViewStateUrls.NeedsReapply("http://127.0.0.1:3080/s/session-abc"));
+    }
+
+    [Fact]
+    public void NeedsReapply_IsFalseOnceThePageCarriesState()
+    {
+        Assert.False(ViewStateUrls.NeedsReapply("http://127.0.0.1:3080/?dsh_session=session-abc"));
+        Assert.False(ViewStateUrls.NeedsReapply("http://127.0.0.1:3080/?dsh_sidebar=0"));
+        Assert.False(ViewStateUrls.NeedsReapply("about:blank"));
+        Assert.False(ViewStateUrls.NeedsReapply(null));
+    }
 }
