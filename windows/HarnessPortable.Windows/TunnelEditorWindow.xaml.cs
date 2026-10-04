@@ -48,7 +48,15 @@ public partial class TunnelEditorWindow : Window
             RemoteHostBox.Text = initial.RemoteHost;
             RemotePortBox.Text = initial.RemotePort.ToString();
             LocalPortBox.Text = initial.LocalPort.ToString();
-            AuthModeBox.SelectedIndex = initial.AuthMode == TunnelProfile.AuthModeManual ? 1 : 0;
+            AuthModeBox.SelectedIndex = initial.AuthMode switch
+            {
+                TunnelProfile.AuthModeSystemd => 1,
+                TunnelProfile.AuthModeManual => 2,
+                _ => 0,
+            };
+            SystemdUnitBox.Text = initial.SystemdUnit;
+            SystemdScopeBox.SelectedIndex = initial.SystemdScope == "system" ? 1 : 0;
+            SystemdLogPathBox.Text = initial.SystemdLogPath;
             PasswordCaption.Text = "密码（留空保持不变；密钥登录可留空）";
             IdentityFileBox.Text = initial.IdentityFile;
         }
@@ -60,8 +68,8 @@ public partial class TunnelEditorWindow : Window
         UpdateAuthInputVisibility();
 
     /// <summary>
-    /// The stored web-login value only ever applies to the manual mode, so the
-    /// field appears with that choice. SelectionChanged also fires while
+    /// The web-login field is edited in manual mode and also supplies the
+    /// automatic modes' fallback. SelectionChanged also fires while
     /// InitializeComponent is still building the tree (SelectedIndex="0" in
     /// XAML), hence the null guard.
     /// </summary>
@@ -75,6 +83,11 @@ public partial class TunnelEditorWindow : Window
         var manual = (AuthModeBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string
             == TunnelProfile.AuthModeManual;
         AuthInputPanel.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
+        if (SystemdPanel is not null)
+        {
+            SystemdPanel.Visibility = (AuthModeBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string
+                == TunnelProfile.AuthModeSystemd ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     private async void HostBox_DropDownOpened(object sender, EventArgs e)
@@ -241,9 +254,11 @@ public partial class TunnelEditorWindow : Window
             RemoteHost = remoteHost,
             RemotePort = remotePort,
             LocalPort = localPort,
-            AuthMode = (AuthModeBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string == TunnelProfile.AuthModeManual
-                ? TunnelProfile.AuthModeManual
-                : TunnelProfile.AuthModeNssm,
+            AuthMode = (AuthModeBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string
+                ?? TunnelProfile.AuthModeNssm,
+            SystemdUnit = string.IsNullOrWhiteSpace(SystemdUnitBox.Text) ? "dsh-web.service" : SystemdUnitBox.Text.Trim(),
+            SystemdScope = (SystemdScopeBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string ?? "user",
+            SystemdLogPath = SystemdLogPathBox.Text.Trim(),
             IdentityFile = IdentityFileBox.Text.Trim(),
         };
     }

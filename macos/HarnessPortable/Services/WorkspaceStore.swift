@@ -33,12 +33,12 @@ final class WorkspaceStore: ObservableObject {
     @Published private var selectedTabIDs: [UUID: UUID] = [:]
 
     init() {
-        let management = WorkspaceTab(kind: .management)
-        let pane = LayoutNode.pane([management])
+        // The workspace holds session tabs only; the management UI lives in
+        // its own window (parity with the Windows 2.6.8 layout).
+        let pane = LayoutNode.pane([])
         root = pane
         activePaneID = pane.id
-        tabCount = 1
-        selectedTabIDs[pane.id] = management.id
+        tabCount = 0
     }
 
     func node(_ id: UUID) -> LayoutNode? {
@@ -73,11 +73,6 @@ final class WorkspaceStore: ObservableObject {
         guard tabs(in: paneID).contains(where: { $0.id == tabID }) else { return }
         activePaneID = paneID
         selectedTabIDs[paneID] = tabID
-    }
-
-    func openManagement() {
-        guard let location = findTab(root, tabID: nil, kind: .management) else { return }
-        selectTab(location.tab.id, in: location.paneID)
     }
 
     func openDirect(_ url: String) {
@@ -228,8 +223,20 @@ final class WorkspaceStore: ObservableObject {
         return result
     }
 
-    func captureLayout() -> LayoutNode {
-        root
+    func captureLayout(webState: ((UUID) -> LayoutWebState?)? = nil) -> LayoutNode {
+        guard let webState else { return root }
+        var captured = root
+        attachWebState(&captured, webState)
+        return captured
+    }
+
+    private func attachWebState(_ node: inout LayoutNode, _ webState: (UUID) -> LayoutWebState?) {
+        for index in node.tabs.indices where node.tabs[index].kind != .management {
+            node.tabs[index].web = webState(node.tabs[index].id)
+        }
+        for index in node.children.indices {
+            attachWebState(&node.children[index], webState)
+        }
     }
 
     func restore(
@@ -240,12 +247,10 @@ final class WorkspaceStore: ObservableObject {
         var restored = layout.root
         filterInvalidTabs(&restored, validProfileIDs: validProfileIDs, validDirectURLs: validDirectURLs)
         prune(&restored)
-        if !containsManagement(restored) {
-            if let paneID = firstPaneID(restored) {
-                _ = append(WorkspaceTab(kind: .management), to: paneID, root: &restored)
-            } else {
-                restored = .pane([WorkspaceTab(kind: .management)])
-            }
+        // Presets saved before the management window split may contain nothing
+        // but management tabs; keep an empty pane so new tabs still land there.
+        if firstPaneID(restored) == nil {
+            restored = .pane([])
         }
         root = restored
         selectedTabIDs = [:]
@@ -376,8 +381,10 @@ final class WorkspaceStore: ObservableObject {
         if node.kind == .pane {
             node.tabs.removeAll { tab in
                 switch tab.kind {
+                // Legacy presets still carry a management tab; it is ignored
+                // on restore (no error, no re-creation) like on Windows.
                 case .management:
-                    return false
+                    return true
                 case .tunnel:
                     guard let validProfileIDs else { return false }
                     return tab.profileID == nil || !validProfileIDs.contains(tab.profileID!)
@@ -397,14 +404,14 @@ final class WorkspaceStore: ObservableObject {
         node.children.removeAll { child in
             child.kind == .pane ? child.tabs.isEmpty : child.children.isEmpty
         }
+        if node.kind == .split, node.children.isEmpty {
+            // Every child pane went empty (e.g. the last tunnels stopped);
+            // collapse to a plain empty pane so new tabs still land.
+            node = .pane([])
+        }
         if node.kind == .split, node.children.count == 1 {
             node = node.children[0]
         }
-    }
-
-    private func containsManagement(_ node: LayoutNode) -> Bool {
-        if node.kind == .pane { return node.tabs.contains { $0.kind == .management } }
-        return node.children.contains(where: containsManagement)
     }
 
     private func firstPaneID(_ node: LayoutNode) -> UUID? {

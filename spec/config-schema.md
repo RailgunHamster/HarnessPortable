@@ -51,9 +51,20 @@ Windows / macOS / Android 各自实现存储与 UI，但**配置字段语义保�
 | `tunnels[].remoteHost` | string | 否 | 127.0.0.1 | 服务器侧目标 |
 | `tunnels[].remotePort` | int | 否 | 3080 | 1–65535 |
 | `tunnels[].localPort` | int | 否 | 3080 | 本地监听端口；被占用时依次 +1 到 +9 |
-| `tunnels[].authMode` | string | 否 | `nssm` | Web 登录方式：`nssm`（连接后自动经 SSH 在服务器上定位 NSSM 托管的 dsh web 日志，提取带 token 的 URL 并在内置浏览器自动登录）/ `manual`（连接时使用凭据库中保存的认证输入；没有保存时，页面被拒后手动粘贴 URL，登录后凭 cookie 保持约 30 天）。Android 端键名为 `auth_mode` |
+| `tunnels[].authMode` | string | 否 | `nssm` | Web 登录方式：`nssm`（通过 SSH 读取 Windows NSSM 日志）/ `launchd`（macOS 客户端通过 SSH 读取 Mac Launch Agent 日志）/ `systemd`（三端通过 SSH 读取 Linux systemd 服务的本次启动 journal 或指定文件日志）/ `manual`（使用凭据库保存的认证输入，缺失时页面提示粘贴）。自动获取失败回退到保存的输入，再退到页面粘贴框。Android 键名 `auth_mode` |
 | `tunnels[].identityFile` | string | 否 | 空 | SSH 私钥路径。为空时桌面端尝试 `~/.ssh/id_ed25519`、`id_ecdsa`、`id_rsa`（macOS 还会用 ssh-agent）。Android 端键名为 `identity_file`，通常是应用私有目录里导入的副本。密钥登录可不填密码。 |
+| `tunnels[].systemdUnit` | string | 否 | `dsh-web.service` | `authMode=systemd` 使用的 Linux 服务名，可填写实例服务（如 `dsh-web@4080.service`）；Android 键名 `systemd_unit` |
+| `tunnels[].systemdScope` | string | 否 | `user` | `user` 为 SSH 登录用户的 systemd 用户服务，`system` 为系统服务；Android 键名 `systemd_scope` |
+| `tunnels[].systemdLogPath` | string | 否 | 空 | 可选的服务器完整日志路径；空时按本次 `InvocationID` 读取 journal；文件重定向部署填写 stdout 日志路径。Android 键名 `systemd_log_path` |
 | `directs` | array<string> | 否 | `[]` | 直连 URL，保持添加顺序，去重 |
+
+## systemd 自动认证
+
+三端还支持 `tunnels[].authMode=systemd`（Android 为 `auth_mode=systemd`）：
+经 SSH 读取 Linux 服务的启动 token URL，检查远端端口，在服务器侧以无 cookie、
+不跟随跳转的 curl 请求验证 HTTP 303，并确认服务启动标识没有变化。
+默认不改变旧配置的 `nssm` 模式。失败时回退到保存的 Web 认证输入，再退到页面粘贴框，
+不得中断已建立的 SSH 隧道。部署说明见 [Linux systemd 自动认证](../docs/linux-systemd-auth.md)。
 
 ## 多隧道运行约定（桌面端）
 
@@ -82,6 +93,11 @@ Windows 与 macOS 桌面版允许**同一进程内同时运行多个隧道**：
     决定实际用哪个；默认选 `home`（PC 能直接读共享）。
   - Android：`update_source_home` / `update_source_github` /
     `update_source_selected`，默认选 `github`（手机读不了 UNC）。
+  - macOS：`updateHomeUrl` / `updateGithubUrl` / `updateSourceSelected`，默认选
+    `home`；home 默认值 `smb://server-home/public/Software/HarnessPortable-Releases`，
+    运行时映射到 `/Volumes/public[…]` 挂载点（`macos.json` feed，与 android.json
+    同族，多一个 `sha256` 校验字段）；github 槽位默认
+    `https://github.com/RailgunHamster/HarnessPortable/releases/latest/download`。
   - 两者都存在时旧字段 `UpdateServerUrl` / `update_server_url` 只作镜像，
     不再决定行为；首次升级它会被折进对应的槽位，不丢用户原本填的地址；
 - 关闭标签不停止隧道，停止隧道才关闭对应标签；
@@ -121,7 +137,7 @@ SSH 认证顺序：公钥优先，其次才是已保存的密码。每个连接�
   - Windows：DPAPI 加密后存 `secrets.json`，键 `<tunnel.id>#webauth`；
   - macOS：Keychain，service `com.harness.portable`，account `<tunnel.id>#webauth`；
   - Android：Android Keystore 加密后存 SharedPreferences，键 `web_<tunnel.id>`。
-- 使用时机：`authMode=manual` 时每次连接都用它；`authMode=nssm` 时仅在服务器侧
+- 使用时机：`authMode=manual` 时每次连接都用它；`authMode=nssm` / `launchd` / `systemd` 时仅在服务器侧
   抓取失败后回退到它，两者都没有时打开裸地址，由页面的 401 触发粘贴框。
 - 归一化：非 URL 的裸 token 拼成 `http://<remoteHost>:<remotePort>/?token=<token>`，
   随后按实际本地转发端口重写（token 不带本地端口信息）。

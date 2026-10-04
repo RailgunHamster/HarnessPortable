@@ -18,6 +18,7 @@
     <Resource Include="Assets\HarnessPortable.ico" />
     <Resource Include="Assets\HarnessPortable.png" />
     <EmbeddedResource Include="..\..\CHANGELOG.md" LogicalName="CHANGELOG.md" Link="CHANGELOG.md" />
+    <EmbeddedResource Include="..\..\shared\systemd-auth.sh" LogicalName="systemd-auth.sh" Link="systemd-auth.sh" />
   </ItemGroup>
 
   <ItemGroup>

@@ -15,6 +15,7 @@ public sealed record TunnelProfile
     /// overlay instead.
     /// </summary>
     public const string AuthModeManual = "manual";
+    public const string AuthModeSystemd = "systemd";
 
     public string Id { get; init; } = Guid.NewGuid().ToString();
     public string Name { get; init; } = "";
@@ -25,6 +26,9 @@ public sealed record TunnelProfile
     public int RemotePort { get; init; } = 3080;
     public int LocalPort { get; init; } = 3080;
     public string AuthMode { get; init; } = AuthModeNssm;
+    public string SystemdUnit { get; init; } = "dsh-web.service";
+    public string SystemdScope { get; init; } = "user";
+    public string SystemdLogPath { get; init; } = "";
 
     /// <summary>
     /// Optional OpenSSH private key path. Empty: try ~/.ssh/id_ed25519,

@@ -22,9 +22,11 @@ targets:
           - Resources/**
           - Info.plist
       - path: HarnessPortable/Resources/Assets.xcassets
-        type: resources
+        buildPhase: resources
       - path: HarnessPortable/Resources/HarnessPortable.icns
-        type: resources
+        buildPhase: resources
+      - path: ../shared/systemd-auth.sh
+        buildPhase: resources
     dependencies:
       - sdk: AppKit.framework
       - sdk: WebKit.framework

@@ -1,5 +1,46 @@
 # Changelog
 
+## 2.6.17
+
+- Windows / macOS / Android：新增「systemd 自动（Linux 服务器）」Web 登录方式。
+  支持用户服务、系统服务、自定义服务名及日志路径；自动读取本次启动的 journal
+  或指定的 stdout 文件，验证端口、HTTP 303 和服务启动标识，失败沿用手动认证回退。
+
+## 2.6.16
+
+- macOS：**直连地址支持选认证模式**（此前只有隧道能选）。
+  - 管理页直连列表每行新增模式菜单：`无`（默认，行为不变）/ `本机自动`——读取**本机** `/tmp/dsh-web.stdout.log`（Launch Agent `com.deepseek.dsh-web` 自启动的 dsh web），把最新 token 拼到该直连地址后打开；适合直连运行在这台 Mac 上的 dsh。
+  - 模式按 URL 存于 macOS 设置 `directAuthModes`（不改动 `profiles.json` 的跨平台 `directs` 字符串数组契约）；日志缺失或 token 不可用时地址原样打开，仍可走 401 手动粘贴框兜底。
+  - 隧道的 NSSM / Launch Agent（经 SSH）模式不适用于直连（没有 SSH 一跳），故直连只提供上述两档。
+
+## 2.6.15
+
+- macOS：新增第三种 Web 登录方式 **Launch Agent 自动**（与 NSSM 自动、手动输入并列），用于服务器是 Mac、`dsh web` 由 `com.deepseek.dsh-web` Launch Agent 自启动的场景。
+  - 连接后经 SSH 读取服务器上的 `/tmp/dsh-web.stdout.log`，取最新的 `dsh web: http…token…` URL，并在服务器本地用 curl 验证返回 303（令牌仍有效）才采用；失败自动回退到保存的手动认证输入，再退到 401 粘贴框——回退链与 NSSM 模式一致。
+  - `authMode` 新增值 `launchd`；旧配置里的未知值统一回落 `nssm`。
+- spec：`tunnels[].authMode` 增补 `launchd`（macOS 端）。
+
+## 2.6.14
+
+- macOS：管理界面（隧道/直连维护、应用设置、检查更新）从工作区标签改成**独立窗口**，对齐 Windows 2.6.8。
+  - 入口有两个：主窗口工具栏「管理 / 设置」，以及菜单栏（托盘）「管理 / 设置」；主窗口关到菜单栏时也照样能进。
+  - 工作区只放会话标签；旧布局预设里残留的 `management` 标签在恢复时被忽略（不报错、不再重建），只有管理标签的旧预设恢复为空面板（新标签照常落入，面板有占位提示）。
+  - 管理窗口里的「连接 / 打开标签」通过通知转发到工作区窗口（需要时自动唤起主窗口）；SSH 密码提示在管理窗口内就地完成。
+- macOS：应用内自动更新，对齐 Windows 2.6.0–2.6.10 的能力（Velopack 不跨平台，改为轻量自建管道）。
+  - 更新源是「家庭目录 + GitHub」两个槽位加一个选择，两个地址都保留，切换不丢；旧字段 `updateServerUrl` 首次升级折进对应槽位。家庭目录默认 `smb://server-home/public/Software/HarnessPortable-Releases`，运行时映射到 `/Volumes/public[…]` 挂载点（未挂载时给出「在访达连接共享」的明确提示）；GitHub 槽位默认 `releases/latest/download`。
+  - feed 为 `macos.json`（`version` / `dmg` / `sha256` / `notes`，与 android.json 同族），由 `scripts/release-macos.ps1` 生成并发布到共享与 GitHub Release。
+  - 管理页「自动更新」区块：检查更新、更新日志阅读、**4px 下载进度条** + 「正在下载更新… 42%」状态行（对齐 2.6.10）；下载到「下载」文件夹并做 SHA256 校验，之后打开 dmg 由用户拖入「应用程序」（macOS 不允许运行中的应用自替换）。
+  - 菜单栏新增「检测并更新」和「当前版本」行（对齐 2.6.8 托盘行为）。
+- macOS 设置新增字段：`updateHomeUrl` / `updateGithubUrl` / `updateSourceSelected`（语义对齐 `spec/config-schema.md` 的双槽位约定）。
+
+## 2.6.13
+
+- macOS：补齐 2.6.11 / 2.6.12 的布局预设**网页状态**记录与恢复，行为对齐 Windows 版。
+  - **保存布局**时从每个标签的页面地址里只挑三个参数（`dsh_session` / `dsh_sidebar` / `dsh_rightbar`）写进预设标签的 `web` 段；绝不保存原始 URL（dsh 启动 URL 带进程 token）。需要 Mac 端也装上配套插件 [`dsh-view-state`](https://github.com/RailgunHamster/dsh-view-state)。
+  - **恢复布局**时把这三个参数并回导航目标，页面当前显示的状态优先于预设记录；启动令牌 URL 302 丢参后，页面加载完成 1.5 秒仍未见参数则用记录状态对干净根路径再导航一次（认证交接期间不打扰，一次性触发）。
+  - 恢复/切换布局时清理旧标签的 WKWebView 会话，不再残留；预设 `web` 段同时兼容 camelCase（macOS）与 PascalCase（Windows 预设文件）。
+  - macOS 版本号从 `1.0` 对齐到 `2.6.13`；新增 dmg 分发包构建（`scripts/release-macos.ps1`，远程 Mac 上 xcodegen + xcodebuild + ad-hoc 签名 + hdiutil）。
+
 ## 2.6.12
 
 - Windows：修"恢复布局时网页状态到不了页面"。dsh 的启动令牌 URL 会 **302 到干净根路径，而这个重定向会丢掉 query**——2.6.11 把预设里的 `dsh_*` 参数并到令牌 URL 上时，它们根本到不了页面（插件只在启动时读一次参数），于是恢复只剩插件自己的 localStorage 兜底（同 origin 同端口才行）。

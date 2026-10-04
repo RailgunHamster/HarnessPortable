@@ -15,6 +15,30 @@ final class WebSessionStore: ObservableObject {
     private var retryWorkItems: [UUID: DispatchWorkItem] = [:]
     private var retryCounts: [UUID: Int] = [:]
     private let maximumAutomaticRetries = 3
+    /// Per-tab web view state recorded in a layout preset. Seeds the tab's
+    /// first navigation; what the page currently shows always wins afterwards.
+    private var initialWebStates: [UUID: LayoutWebState] = [:]
+    private var webStateReapplied: Set<UUID> = []
+    private var lastLocalPorts: [UUID: Int] = [:]
+    /// Auth mode lookup for direct tabs (keyed by direct URL); configured by
+    /// the workspace from app settings so the store stays UI-agnostic.
+    var directAuthMode: (String) -> String = { _ in LocalDshAuth.modeNone }
+
+    /// The page's current URL, used to capture the live view state when a
+    /// layout preset is saved.
+    func currentURL(forTabID tabID: UUID) -> String? {
+        webViews[tabID]?.url?.absoluteString
+    }
+
+    /// Records the preset's view state for a tab restored from a layout.
+    func setInitialWebState(_ state: LayoutWebState?, forTabID tabID: UUID) {
+        if let state {
+            initialWebStates[tabID] = state
+        } else {
+            initialWebStates.removeValue(forKey: tabID)
+        }
+        webStateReapplied.remove(tabID)
+    }
 
     func webView(for tabID: UUID) -> WKWebView {
         if let existing = webViews[tabID] { return existing }
@@ -52,12 +76,23 @@ final class WebSessionStore: ObservableObject {
     }
 
     func load(tab: WorkspaceTab, profile: TunnelProfile?, state: TunnelInfo) {
-        let destination: String?
+        var destination: String?
         switch tab.kind {
         case .management:
             destination = nil
         case .direct:
             destination = tab.url.flatMap { HostResolver.resolveURL($0) ?? $0 }
+            // Optional auto-login for a dsh web running on this Mac under the
+            // Launch Agent: graft the newest token from its stdout log onto
+            // the destination. No SSH hop is involved for a direct tab, so
+            // the tunnel modes (nssm/launchd-over-ssh) do not apply.
+            if let url = tab.url, directAuthMode(url) == LocalDshAuth.modeLaunchd,
+               let authenticated = LocalDshAuth.authTarget(
+                   destination: destination ?? url,
+                   logText: LocalDshAuth.currentLogText()
+               ) {
+                destination = authenticated
+            }
         case .tunnel:
             guard state.status == .connected, state.localPort > 0 else { return }
             // Prefer the token URL fetched by the tunnel (NSSM mode): it
@@ -67,7 +102,17 @@ final class WebSessionStore: ObservableObject {
                 state.authUrl, localPort: state.localPort, expectedRemotePort: 0
             ) ?? "http://127.0.0.1:\(state.localPort)"
         }
-        guard let destination, let url = URL(string: destination) else { return }
+        guard var destination else { return }
+
+        // Re-attach the dsh view state (session, sidebar, panel widths) to the
+        // navigation target. What the page currently shows wins over what the
+        // preset recorded, so reloading or reconnecting never throws the user
+        // back to a session they have since switched away from; the recorded
+        // state is the starting point for the tab's first navigation.
+        let webState = ViewStateUrls.extract(currentURL(forTabID: tab.id)) ?? initialWebStates[tab.id]
+        destination = ViewStateUrls.merge(destination, state: webState)
+        guard let url = URL(string: destination) else { return }
+        trackLocalPort(forTabID: tab.id, in: destination)
 
         beginLoad(for: tab.id)
         navigationErrors.removeValue(forKey: tab.id)
@@ -110,6 +155,9 @@ final class WebSessionStore: ObservableObject {
         navigationErrors.removeValue(forKey: tabID)
         loadedURLs.removeValue(forKey: tabID)
         authRequired.removeValue(forKey: tabID)
+        initialWebStates.removeValue(forKey: tabID)
+        webStateReapplied.remove(tabID)
+        lastLocalPorts.removeValue(forKey: tabID)
     }
 
     private func beginLoad(for tabID: UUID) {
@@ -137,6 +185,63 @@ final class WebSessionStore: ObservableObject {
         retryCounts.removeValue(forKey: tabID)
         navigationErrors.removeValue(forKey: tabID)
         checkAuthRequired(tabID: tabID, webView: webView)
+        reapplyWebStateSoon(tabID: tabID, webView: webView)
+    }
+
+    /// Remembers the tunnel's live local port so the one-shot state re-apply
+    /// can navigate back to the tab's clean dsh root.
+    private func trackLocalPort(forTabID tabID: UUID, in destination: String) {
+        guard let components = URLComponents(string: destination),
+              components.scheme?.lowercased() == "http",
+              components.host == "127.0.0.1" || components.host == "localhost",
+              let port = components.port else { return }
+        lastLocalPorts[tabID] = port
+    }
+
+    /// Puts a preset's recorded view state back after the page has settled.
+    ///
+    /// dsh's startup URL carries a one-shot token and answers with a redirect
+    /// to the clean root, and that redirect drops the query string: state
+    /// merged into the token URL never reaches the page, while the plugin
+    /// reads its parameters at boot only. So give the page a moment to mirror
+    /// whatever state it already has, and if ours never arrived, navigate once
+    /// to the clean root carrying it. The auth hand-off is left alone — its
+    /// own completion re-enters here.
+    private func reapplyWebStateSoon(tabID: UUID, webView: WKWebView) {
+        guard initialWebStates[tabID] != nil, !webStateReapplied.contains(tabID) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self, weak webView] in
+            guard let self, let webView, self.webViews[tabID] === webView else { return }
+            guard self.initialWebStates[tabID] != nil, !self.webStateReapplied.contains(tabID) else { return }
+            let live = webView.url?.absoluteString
+            if let live, live.range(of: "token=", options: .caseInsensitive) != nil {
+                // The token hand-off is still in flight; its completion calls us again.
+                return
+            }
+            self.webStateReapplied.insert(tabID)
+            guard let live, ViewStateUrls.needsReapply(live),
+                  let root = self.cleanRootURL(forTabID: tabID) else { return }
+            let state = ViewStateUrls.extract(live) ?? self.initialWebStates[tabID]
+            let target = ViewStateUrls.merge(root, state: state)
+            guard let url = URL(string: target) else { return }
+            self.beginLoad(for: tabID)
+            self.navigationErrors.removeValue(forKey: tabID)
+            self.loadedURLs[tabID] = target
+            self.activeNavigations[tabID] = webView.load(
+                URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
+            )
+        }
+    }
+
+    /// The tab's own dsh root without a query string, used for the one re-apply.
+    private func cleanRootURL(forTabID tabID: UUID) -> String? {
+        if let port = lastLocalPorts[tabID] {
+            return "http://127.0.0.1:\(port)"
+        }
+        guard let target = loadedURLs[tabID],
+              var components = URLComponents(string: target) else { return nil }
+        components.query = nil
+        components.fragment = nil
+        return components.url?.absoluteString
     }
 
     /// dsh-web style services print a one-time token URL on the server; the

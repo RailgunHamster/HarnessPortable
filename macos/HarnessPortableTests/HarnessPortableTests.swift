@@ -57,6 +57,270 @@ final class HarnessPortableTests: XCTestCase {
         XCTAssertTrue(layout.root.children[0].tabs.contains { $0.kind == .management })
     }
 
+    func testViewStateUrlsExtractReadsOnlyTheOwnedParameters() {
+        let state = ViewStateUrls.extract(
+            "http://127.0.0.1:3080/?token=secret&dsh_session=session-abc&dsh_sidebar=0&dsh_rightbar=320"
+        )
+        XCTAssertEqual(state?.sessionId, "session-abc")
+        XCTAssertEqual(state?.sidebar, 0)
+        XCTAssertEqual(state?.rightbar, 320)
+
+        XCTAssertEqual(
+            ViewStateUrls.extract("http://127.0.0.1:3080/s/session-abc?dsh_session=session-abc")?.sessionId,
+            "session-abc"
+        )
+        XCTAssertNil(ViewStateUrls.extract("http://127.0.0.1:3080/?token=secret"))
+        XCTAssertNil(ViewStateUrls.extract("http://127.0.0.1:3080/"))
+        XCTAssertNil(ViewStateUrls.extract("about:blank"))
+        XCTAssertNil(ViewStateUrls.extract(nil))
+        XCTAssertNil(ViewStateUrls.extract(""))
+    }
+
+    func testViewStateUrlsExtractRejectsInvalidPixels() {
+        let state = ViewStateUrls.extract(
+            "http://127.0.0.1:3080/?dsh_session=session-abc&dsh_sidebar=nonsense&dsh_rightbar=-5"
+        )
+        XCTAssertEqual(state?.sessionId, "session-abc")
+        XCTAssertNil(state?.sidebar)
+        XCTAssertNil(state?.rightbar)
+        XCTAssertNil(ViewStateUrls.extract("http://127.0.0.1:3080/?dsh_sidebar=nonsense&dsh_rightbar=-5"))
+    }
+
+    func testViewStateUrlsMergePreservesForeignParametersAndPath() {
+        let merged = ViewStateUrls.merge(
+            "http://127.0.0.1:3080/s/session-abc?token=secret#anchor",
+            state: LayoutWebState(sessionId: "session-abc", sidebar: 0, rightbar: 320)
+        )
+        XCTAssertEqual(merged, "http://127.0.0.1:3080/s/session-abc?token=secret&dsh_session=session-abc&dsh_sidebar=0&dsh_rightbar=320#anchor")
+
+        // Existing values are replaced in place, order otherwise preserved.
+        let replaced = ViewStateUrls.merge(
+            "http://127.0.0.1:3080/?dsh_session=session-old&dsh_sidebar=280&token=t",
+            state: LayoutWebState(sessionId: "session-new", sidebar: 300, rightbar: 0)
+        )
+        XCTAssertEqual(replaced, "http://127.0.0.1:3080/?dsh_session=session-new&dsh_sidebar=300&token=t&dsh_rightbar=0")
+
+        // Nil fields are left alone rather than cleared.
+        let appended = ViewStateUrls.merge(
+            "http://127.0.0.1:3080/?dsh_sidebar=280",
+            state: LayoutWebState(sessionId: "session-abc")
+        )
+        XCTAssertEqual(appended, "http://127.0.0.1:3080/?dsh_sidebar=280&dsh_session=session-abc")
+
+        XCTAssertEqual(
+            ViewStateUrls.merge("http://127.0.0.1:3080/?token=t", state: nil),
+            "http://127.0.0.1:3080/?token=t"
+        )
+        XCTAssertEqual(
+            ViewStateUrls.merge("about:blank", state: LayoutWebState(sessionId: "s", sidebar: 1, rightbar: 1)),
+            "about:blank"
+        )
+    }
+
+    func testViewStateUrlsMergeExtractRoundTrip() {
+        let merged = ViewStateUrls.merge(
+            "http://127.0.0.1:3080/?token=t",
+            state: LayoutWebState(sessionId: "session-abc", sidebar: 264, rightbar: 0)
+        )
+        let state = ViewStateUrls.extract(merged)
+        XCTAssertEqual(state?.sessionId, "session-abc")
+        XCTAssertEqual(state?.sidebar, 264)
+        XCTAssertEqual(state?.rightbar, 0)
+
+        // Values outside the unreserved set survive the round trip.
+        let encoded = ViewStateUrls.merge(
+            "http://127.0.0.1:3080/",
+            state: LayoutWebState(sessionId: "session-a b&c")
+        )
+        XCTAssertTrue(encoded.contains("dsh_session=session-a%20b%26c"))
+        XCTAssertEqual(ViewStateUrls.extract(encoded)?.sessionId, "session-a b&c")
+    }
+
+    func testViewStateUrlsNeedsReapply() {
+        XCTAssertTrue(ViewStateUrls.needsReapply("http://127.0.0.1:3080/"))
+        XCTAssertTrue(ViewStateUrls.needsReapply("http://127.0.0.1:3080/?token=x"))
+        XCTAssertTrue(ViewStateUrls.needsReapply("http://127.0.0.1:3080/s/session-abc"))
+        XCTAssertFalse(ViewStateUrls.needsReapply("http://127.0.0.1:3080/?dsh_session=session-abc"))
+        XCTAssertFalse(ViewStateUrls.needsReapply("http://127.0.0.1:3080/?dsh_sidebar=0"))
+        XCTAssertFalse(ViewStateUrls.needsReapply("about:blank"))
+        XCTAssertFalse(ViewStateUrls.needsReapply(nil))
+    }
+
+    func testLayoutTabWebStateDecodesCamelAndPascalCase() throws {
+        let camel = Data(#"""
+        { "kind": "tunnel", "profileID": "one", "web": { "sessionId": "s1", "sidebar": 0, "rightbar": 320 } }
+        """#.utf8)
+        var tab = try JSONDecoder().decode(WorkspaceTab.self, from: camel)
+        XCTAssertEqual(tab.web?.sessionId, "s1")
+        XCTAssertEqual(tab.web?.sidebar, 0)
+        XCTAssertEqual(tab.web?.rightbar, 320)
+
+        // Windows presets serialize PascalCase members.
+        let pascal = Data(#"""
+        { "kind": "direct", "url": "http://127.0.0.1:3080", "web": { "SessionId": "s2", "Sidebar": 280, "Rightbar": 0 } }
+        """#.utf8)
+        tab = try JSONDecoder().decode(WorkspaceTab.self, from: pascal)
+        XCTAssertEqual(tab.web?.sessionId, "s2")
+        XCTAssertEqual(tab.web?.sidebar, 280)
+        XCTAssertEqual(tab.web?.rightbar, 0)
+
+        // Presets written before the field existed still load.
+        let legacy = Data(#"""
+        { "kind": "direct", "url": "http://127.0.0.1:3080" }
+        """#.utf8)
+        tab = try JSONDecoder().decode(WorkspaceTab.self, from: legacy)
+        XCTAssertNil(tab.web)
+    }
+
+    func testUpdateVersionComparison() {
+        XCTAssertTrue(UpdateService.isVersion("2.6.13", newerThan: "2.6.12"))
+        XCTAssertTrue(UpdateService.isVersion("2.7", newerThan: "2.6.13"))
+        XCTAssertTrue(UpdateService.isVersion("3.0.0", newerThan: "2.99.99"))
+        XCTAssertTrue(UpdateService.isVersion("2.6.13.1", newerThan: "2.6.13"))
+        XCTAssertFalse(UpdateService.isVersion("2.6.13", newerThan: "2.6.13"))
+        XCTAssertFalse(UpdateService.isVersion("2.6.12", newerThan: "2.6.13"))
+        XCTAssertFalse(UpdateService.isVersion("2.6.13.0", newerThan: "2.6.13"))
+        // Non-numeric segments count as 0, matching a missing tail.
+        XCTAssertFalse(UpdateService.isVersion("2.6.x", newerThan: "2.6.0"))
+    }
+
+    func testUpdateSourceURLResolution() {
+        XCTAssertEqual(
+            UpdateService.resolveReadableURL("https://example.com/releases")?.absoluteString,
+            "https://example.com/releases"
+        )
+        XCTAssertEqual(
+            UpdateService.resolveReadableURL("  https://example.com/releases  ")?.absoluteString,
+            "https://example.com/releases"
+        )
+        // An smb share maps to its /Volumes mount when one exists; whether
+        // this test host has any mount is environment-specific, so both
+        // outcomes are valid for shares we did not mount ourselves.
+        if let mapped = UpdateService.resolveReadableURL("smb://server-not-mounted.example/public/Releases") {
+            XCTAssertTrue(
+                mapped.path == "/Volumes/public/Releases" ||
+                mapped.path.hasPrefix("/Volumes/public@") ||
+                mapped.path.hasPrefix("/Volumes/public-"),
+                "unexpected mapping: \(mapped.path)"
+            )
+        }
+        XCTAssertNil(UpdateService.resolveReadableURL("ftp://example.com/x"))
+        XCTAssertNil(UpdateService.resolveReadableURL("   "))
+        // A plain path is accepted as-is (mount point or local folder).
+        XCTAssertEqual(
+            UpdateService.resolveReadableURL("/tmp")?.path,
+            "/tmp"
+        )
+        if let mapped = UpdateService.resolveReadableURL("smb://server-home/public/Software/HarnessPortable-Releases") {
+            // When the share is mounted on this machine the smb URL resolves
+            // to one of the /Volumes spellings; otherwise the test host has no
+            // mount and the call returns nil, which the guard below accepts.
+            XCTAssertTrue(
+                mapped.path == "/Volumes/public/Software/HarnessPortable-Releases" ||
+                mapped.path.hasPrefix("/Volumes/public@") ||
+                mapped.path.hasPrefix("/Volumes/public-"),
+                "unexpected mapping: \(mapped.path)"
+            )
+        }
+    }
+
+    func testAppSettingsDecodeLegacyUpdateServerUrl() throws {
+        // The pre-slot field folds into the matching slot instead of being lost.
+        let legacySmb = try JSONDecoder().decode(
+            AppSettings.self,
+            from: Data(#"{ "updateServerUrl": "smb://nas/public/Releases" }"#.utf8)
+        )
+        XCTAssertEqual(legacySmb.updateHomeUrl, "smb://nas/public/Releases")
+        XCTAssertEqual(legacySmb.updateSourceSelected, "home")
+
+        let legacyHttp = try JSONDecoder().decode(
+            AppSettings.self,
+            from: Data(#"{ "updateServerUrl": "https://example.com/feed", "updateSourceSelected": "github" }"#.utf8)
+        )
+        XCTAssertEqual(legacyHttp.updateGithubUrl, "https://example.com/feed")
+        XCTAssertEqual(legacyHttp.updateSourceSelected, "github")
+
+        let defaults = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        XCTAssertEqual(defaults.updateSourceSelected, "home")
+        XCTAssertTrue(defaults.updateGithubUrl.contains("github.com"))
+    }
+
+    func testProfileAuthModeSupportsLaunchdAndNormalizesUnknownValues() throws {
+        let base = TunnelProfile(id: "p1", name: "n", sshHost: "h", user: "u")
+        XCTAssertEqual(base.authMode, TunnelProfile.authModeNssm)
+
+        let launchd = TunnelProfile(
+            id: "p9", name: "n", sshHost: "h", user: "u",
+            authMode: TunnelProfile.authModeLaunchd
+        )
+        let decoded = try JSONDecoder().decode(TunnelProfile.self, from: JSONEncoder().encode(launchd))
+        XCTAssertEqual(decoded.authMode, TunnelProfile.authModeLaunchd)
+
+        // Unknown values on disk fall back to the default.
+        let legacy = try JSONDecoder().decode(
+            TunnelProfile.self,
+            from: Data(#"{ "id": "x", "sshHost": "h", "user": "u", "authMode": "whatever" }"#.utf8)
+        )
+        XCTAssertEqual(legacy.authMode, TunnelProfile.authModeNssm)
+    }
+
+    func testSystemdProfileDefaultsAndRoundTrip() throws {
+        let legacy = try JSONDecoder().decode(TunnelProfile.self, from: Data("{}".utf8))
+        XCTAssertEqual(legacy.authMode, TunnelProfile.authModeNssm)
+        XCTAssertEqual(legacy.systemdUnit, "dsh-web.service")
+        XCTAssertEqual(legacy.systemdScope, "user")
+        XCTAssertEqual(legacy.systemdLogPath, "")
+        let profile = TunnelProfile(
+            sshHost: "linux", user: "me", authMode: TunnelProfile.authModeSystemd,
+            systemdUnit: "dsh-web@4080.service", systemdScope: "system",
+            systemdLogPath: "/var/log/dsh's stdout.log"
+        )
+        let decoded = try JSONDecoder().decode(TunnelProfile.self, from: JSONEncoder().encode(profile))
+        XCTAssertEqual(decoded, profile)
+        let command = try XCTUnwrap(SystemdAuthUrl.command(for: decoded))
+        XCTAssertTrue(command.hasSuffix(" sh 'dsh-web@4080.service' 'system' 3080 '/var/log/dsh'\"'\"'s stdout.log'"))
+    }
+
+    func testLaunchdAuthUrlScriptExtractsNewestURL() {
+        // The remote script greps the last http(s) URL from the launchd log;
+        // extractUrl is the same parser used on its output.
+        let log = """
+        INFO dsh web listening
+        dsh web: http://127.0.0.1:3080/?token=old
+        INFO reloaded
+        dsh web: http://127.0.0.1:3080/?token=new
+        """
+        XCTAssertEqual(
+            NssmAuthUrl.extractUrl(from: log),
+            "http://127.0.0.1:3080/?token=new"
+        )
+        XCTAssertNil(NssmAuthUrl.extractUrl(from: "no url here"))
+    }
+
+    func testLocalDshAuthGraftsNewestTokenOntoDirectURL() {
+        let log = """
+        INFO dsh web listening
+        dsh web: http://127.0.0.1:3080/?token=old
+        dsh web: http://127.0.0.1:3080/?token=new
+        """
+        XCTAssertEqual(
+            LocalDshAuth.authTarget(destination: "http://127.0.0.1:3080", logText: log),
+            "http://127.0.0.1:3080?token=new"
+        )
+        // Existing query parameters survive; a stale token is replaced.
+        XCTAssertEqual(
+            LocalDshAuth.authTarget(destination: "http://127.0.0.1:3080/?token=stale&x=1", logText: log),
+            "http://127.0.0.1:3080/?x=1&token=new"
+        )
+        // No token in the log -> destination untouched (caller keeps the URL).
+        XCTAssertNil(LocalDshAuth.authTarget(destination: "http://127.0.0.1:3080", logText: "no urls here"))
+        XCTAssertNil(LocalDshAuth.authTarget(destination: "http://127.0.0.1:3080", logText: nil))
+        // A log line without a token query is not usable.
+        XCTAssertNil(
+            LocalDshAuth.authTarget(destination: "http://127.0.0.1:3080", logText: "dsh web: http://127.0.0.1:3080/")
+        )
+    }
+
     func testKeychainRoundTrip() throws {
         let store = KeychainStore()
         let account = "test-\(UUID().uuidString)"
@@ -77,11 +341,10 @@ final class HarnessPortableTests: XCTestCase {
 
         XCTAssertEqual(closed.count, 2)
         XCTAssertFalse(workspace.allTabs().contains { $0.tab.profileID == "one" })
-        XCTAssertTrue(workspace.allTabs().contains { $0.tab.kind == .management })
     }
 
     @MainActor
-    func testClosingLastTunnelCollapsesEmptySplitAndKeepsManagement() {
+    func testClosingLastTunnelCollapsesEmptySplit() {
         let workspace = WorkspaceStore()
         workspace.openTunnelTab(profileID: "one")
         guard let tunnelID = workspace.allTabs().first(where: { $0.tab.kind == .tunnel })?.tab.id else {
@@ -92,8 +355,24 @@ final class HarnessPortableTests: XCTestCase {
         _ = workspace.closeTunnelTabs(profileID: "one")
 
         XCTAssertEqual(workspace.root.kind, .pane)
-        XCTAssertEqual(workspace.allTabs().filter { $0.tab.kind == .management }.count, 1)
-        XCTAssertFalse(workspace.allTabs().contains { $0.tab.kind == .tunnel })
+        XCTAssertTrue(workspace.allTabs().filter { $0.tab.kind == .tunnel }.isEmpty)
+    }
+
+    @MainActor
+    func testRestoreIgnoresLegacyManagementTabsAndKeepsAnEmptyPane() throws {
+        let layout = try JSONDecoder().decode(WorkspaceLayout.self, from: Data(#"""
+        {
+          "name": "legacy",
+          "savedAt": "2026-01-01T00:00:00Z",
+          "root": { "kind": "pane", "tabs": [{ "kind": "management" }] }
+        }
+        """#.utf8))
+
+        let workspace = WorkspaceStore()
+        workspace.restore(layout)
+
+        XCTAssertEqual(workspace.root.kind, .pane)
+        XCTAssertTrue(workspace.allTabs().isEmpty)
     }
 
     func testHostClassification() {

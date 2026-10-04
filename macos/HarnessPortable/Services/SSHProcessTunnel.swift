@@ -205,7 +205,7 @@ final class SSHProcessTunnel {
                         askpass: (try? prepareAskpass()) ?? AppPaths.askpassScript,
                         identityFile: profile.identityFile
                     )
-                    if let authUrl, let remote = NssmAuthUrl.port(of: authUrl),
+                    if let fetched = authUrl, let remote = NssmAuthUrl.port(of: fetched),
                        remote != profile.remotePort {
                         appendDiagnostic("authUrl port mismatch (\(remote) != \(profile.remotePort)), ignoring")
                         authUrl = nil
@@ -218,6 +218,44 @@ final class SSHProcessTunnel {
                         )
                     }
                     appendDiagnostic("authUrl " + (authUrl != nil ? "ok" : "miss"))
+                } else if profile.authMode == TunnelProfile.authModeLaunchd {
+                    // macOS server: dsh web runs under Launch Agent
+                    // com.deepseek.dsh-web with stdout in /tmp/dsh-web.stdout.log.
+                    authUrl = LaunchdAuthUrl.fetch(
+                        user: profile.user,
+                        host: resolution.ip,
+                        port: profile.sshPort,
+                        knownHostsFile: knownHostsFile,
+                        passwordFile: passwordFile,
+                        askpass: (try? prepareAskpass()) ?? AppPaths.askpassScript,
+                        identityFile: profile.identityFile
+                    )
+                    if let fetched = authUrl, let remote = NssmAuthUrl.port(of: fetched),
+                       remote != profile.remotePort {
+                        appendDiagnostic("authUrl port mismatch (\(remote) != \(profile.remotePort)), ignoring")
+                        authUrl = nil
+                    }
+                    if authUrl == nil {
+                        authUrl = WebAuthInput.normalize(
+                            keychain.authInput(for: profile.id),
+                            host: profile.remoteHost,
+                            port: profile.remotePort
+                        )
+                    }
+                    appendDiagnostic("authUrl " + (authUrl != nil ? "ok" : "miss"))
+                } else if profile.authMode == TunnelProfile.authModeSystemd {
+                    authUrl = SystemdAuthUrl.fetch(
+                        profile: profile, host: resolution.ip,
+                        knownHostsFile: knownHostsFile, passwordFile: passwordFile,
+                        askpass: (try? prepareAskpass()) ?? AppPaths.askpassScript
+                    )
+                    if authUrl == nil {
+                        authUrl = WebAuthInput.normalize(
+                            keychain.authInput(for: profile.id), host: profile.remoteHost,
+                            port: profile.remotePort
+                        )
+                    }
+                    appendDiagnostic("systemd authUrl " + (authUrl != nil ? "ok" : "miss"))
                 } else if profile.authMode == TunnelProfile.authModeManual {
                     authUrl = WebAuthInput.normalize(
                         keychain.authInput(for: profile.id),

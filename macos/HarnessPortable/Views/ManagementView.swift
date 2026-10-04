@@ -6,6 +6,7 @@ struct ManagementView: View {
     @ObservedObject var profiles: ProfileStore
     @ObservedObject var tunnels: TunnelManager
     @ObservedObject var settings: SettingsStore
+    @ObservedObject var updater: UpdateService
     let keychain: KeychainStore
     let knownHosts: KnownHostsStore
     let onConnect: (TunnelProfile) -> Void
@@ -78,6 +79,16 @@ struct ManagementView: View {
                                     .font(Dsh.mono(12))
                                     .foregroundStyle(dsh.textPrimary)
                                     .lineLimit(1)
+                                Menu {
+                                    Button("无") { setDirectAuthMode(url, mode: LocalDshAuth.modeNone) }
+                                    Button("本机自动（Launch Agent 日志）") { setDirectAuthMode(url, mode: LocalDshAuth.modeLaunchd) }
+                                } label: {
+                                    Text(directAuthModeLabel(url))
+                                        .font(.caption)
+                                }
+                                .menuStyle(.borderlessButton)
+                                .fixedSize()
+                                .help("本机自动：读取本机 /tmp/dsh-web.stdout.log（com.deepseek.dsh-web 自启动的 dsh web），把最新 token 拼到该直连地址；适合直连运行在这台 Mac 上的 dsh")
                                 Spacer()
                                 Button {
                                     onOpenDirect(url)
@@ -111,6 +122,87 @@ struct ManagementView: View {
                     }
                     .pickerStyle(.menu)
                     Toggle("启动时恢复上次布局", isOn: restoreLayoutBinding)
+                }
+                .padding(14)
+                .dshCard()
+
+                sectionHeader("自动更新", systemImage: "arrow.down.circle") {
+                    Button {
+                        updater.check()
+                    } label: {
+                        Label("检查更新", systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(DshPrimaryButtonStyle())
+                    .disabled(isUpdaterBusy)
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("更新源", selection: updateSourceBinding) {
+                        Text("家庭目录").tag("home")
+                        Text("GitHub").tag("github")
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 320)
+                    TextField("家庭目录（smb:// 或已挂载路径）", text: updateHomeBinding)
+                        .dshInput()
+                    TextField("GitHub 发布下载基址", text: updateGithubBinding)
+                        .dshInput()
+
+                    HStack(spacing: 8) {
+                        updateStatusDot
+                        Text(updaterStatusText)
+                            .font(.callout)
+                            .foregroundStyle(dsh.textSecondary)
+                        Spacer()
+                    }
+
+                    if case .downloading = updater.phase {
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(dsh.bgLayer3)
+                                    .frame(height: 4)
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(dsh.accent)
+                                    .frame(width: max(4, geometry.size.width * downloadFraction), height: 4)
+                            }
+                        }
+                        .frame(height: 4)
+                    }
+
+                    switch updater.phase {
+                    case .available:
+                        Button {
+                            updater.download()
+                        } label: {
+                            Label("下载并安装", systemImage: "arrow.down.circle.fill")
+                        }
+                        .buttonStyle(DshPrimaryButtonStyle())
+                    case .readyToInstall:
+                        Button {
+                            updater.openInstaller()
+                        } label: {
+                            Label("打开安装镜像", systemImage: "opticaldiscdrive")
+                        }
+                        .buttonStyle(DshPrimaryButtonStyle())
+                        Text("已下载到「下载」文件夹并校验通过；macOS 上应用不能自替换，请在打开的镜像里把新版本拖入「应用程序」后重新启动。")
+                            .font(.caption)
+                            .foregroundStyle(dsh.textSecondary)
+                    default:
+                        EmptyView()
+                    }
+
+                    if !updater.notes.isEmpty, showsNotes {
+                        ScrollView {
+                            Text(updater.notes)
+                                .font(.callout)
+                                .foregroundStyle(dsh.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 160)
+                    }
+                    Text("当前版本 \(UpdateService.currentVersion)")
+                        .font(Dsh.mono(11))
+                        .foregroundStyle(dsh.textTertiary)
                 }
                 .padding(14)
                 .dshCard()
@@ -277,6 +369,85 @@ struct ManagementView: View {
             set: { newValue in settings.update { $0.restoreLastLayoutOnStartup = newValue } }
         )
     }
+
+    private var updateSourceBinding: Binding<String> {
+        Binding(
+            get: { settings.value.updateSourceSelected },
+            set: { newValue in
+                settings.update { $0.updateSourceSelected = newValue == "github" ? "github" : "home" }
+            }
+        )
+    }
+
+    private var updateHomeBinding: Binding<String> {
+        Binding(
+            get: { settings.value.updateHomeUrl },
+            set: { newValue in settings.update { $0.updateHomeUrl = newValue } }
+        )
+    }
+
+    private var updateGithubBinding: Binding<String> {
+        Binding(
+            get: { settings.value.updateGithubUrl },
+            set: { newValue in settings.update { $0.updateGithubUrl = newValue } }
+        )
+    }
+
+    private func setDirectAuthMode(_ url: String, mode: String) {
+        settings.update { current in
+            if mode == LocalDshAuth.modeLaunchd {
+                current.directAuthModes[url] = mode
+            } else {
+                current.directAuthModes.removeValue(forKey: url)
+            }
+        }
+    }
+
+    private func directAuthModeLabel(_ url: String) -> String {
+        settings.value.directAuthModes[url] == LocalDshAuth.modeLaunchd ? "本机自动" : "无"
+    }
+
+    private var isUpdaterBusy: Bool {
+        switch updater.phase {
+        case .checking, .downloading: return true
+        default: return false
+        }
+    }
+
+    private var downloadFraction: Double {
+        if case .downloading(let fraction) = updater.phase { return min(max(fraction, 0), 1) }
+        return 0
+    }
+
+    private var showsNotes: Bool {
+        switch updater.phase {
+        case .available, .readyToInstall, .upToDate: return true
+        default: return false
+        }
+    }
+
+    private var updaterStatusText: String {
+        switch updater.phase {
+        case .idle: return "未检查"
+        case .checking: return "正在检查更新…"
+        case .upToDate: return "已是最新版本"
+        case .available(let version): return "发现新版本 \(version)"
+        case .downloading(let fraction):
+            return "正在下载更新… \(Int((min(max(fraction, 0), 1)) * 100))%"
+        case .readyToInstall(let version): return "版本 \(version) 已就绪"
+        case .failed(let message): return message
+        }
+    }
+
+    @ViewBuilder
+    private var updateStatusDot: some View {
+        switch updater.phase {
+        case .available, .readyToInstall: DshStatusDot(color: dsh.success)
+        case .failed: DshStatusDot(color: dsh.danger)
+        case .checking, .downloading: DshStatusDot(color: dsh.warning)
+        default: DshStatusDot(color: dsh.borderL1)
+        }
+    }
 }
 
 @MainActor
@@ -297,6 +468,9 @@ struct ProfileEditorView: View {
     @State private var remotePort: String
     @State private var localPort: String
     @State private var authMode: String
+    @State private var systemdUnit: String
+    @State private var systemdScope: String
+    @State private var systemdLogPath: String
     @State private var authInput: String
     @State private var sshConfigHosts: [SSHConfigHost] = []
     @State private var selectedSSHConfigAlias = ""
@@ -316,10 +490,10 @@ struct ProfileEditorView: View {
         _remoteHost = State(initialValue: profile.remoteHost)
         _remotePort = State(initialValue: String(profile.remotePort))
         _localPort = State(initialValue: String(profile.localPort))
-        _authMode = State(
-            initialValue: profile.authMode == TunnelProfile.authModeManual
-                ? TunnelProfile.authModeManual : TunnelProfile.authModeNssm
-        )
+        _authMode = State(initialValue: TunnelProfile.normalizeAuthMode(profile.authMode))
+        _systemdUnit = State(initialValue: profile.systemdUnit)
+        _systemdScope = State(initialValue: profile.systemdScope)
+        _systemdLogPath = State(initialValue: profile.systemdLogPath)
         _authInput = State(initialValue: keychain.authInput(for: profile.id) ?? "")
         _identityFile = State(initialValue: profile.identityFile)
     }
@@ -373,10 +547,23 @@ struct ProfileEditorView: View {
                 TextField("本地端口", text: $localPort)
                 Picker("Web 登录方式", selection: $authMode) {
                     Text("NSSM 自动").tag(TunnelProfile.authModeNssm)
+                    Text("Launch Agent 自动（macOS 服务器）").tag(TunnelProfile.authModeLaunchd)
+                    Text("systemd 自动（Linux 服务器）").tag(TunnelProfile.authModeSystemd)
                     Text("手动输入").tag(TunnelProfile.authModeManual)
                 }
                 .pickerStyle(.radioGroup)
-                Text("NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志并自动登录；手动方式：连接时用上面保存的认证 URL/token，留空则页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。密码与认证 URL/token 只存 Keychain，不写入配置文件。")
+                if authMode == TunnelProfile.authModeSystemd {
+                    TextField("systemd 服务名", text: $systemdUnit)
+                    Picker("服务范围", selection: $systemdScope) {
+                        Text("用户服务（SSH 登录用户）").tag("user")
+                        Text("系统服务").tag("system")
+                    }
+                    TextField("日志路径（可选）", text: $systemdLogPath)
+                    Text("日志路径留空时读取本次启动的 journal；服务将 stdout 重定向到文件时，填写该文件的完整路径。SSH 用户需要有日志读取权限。获取失败时回退到保存的认证输入或页面粘贴。")
+                        .font(.caption)
+                        .foregroundStyle(dsh.textSecondary)
+                }
+                Text("NSSM 方式：每次连接后自动在服务器上定位 NSSM 托管的 dsh web 日志并自动登录；Launch Agent 方式：服务器是 Mac 且 dsh web 由 com.deepseek.dsh-web 自启动（读 /tmp/dsh-web.stdout.log）；手动方式：连接时用上面保存的认证 URL/token，留空则页面提示需要认证时粘贴 URL，登录后凭 cookie 自动保持约 30 天。密码与认证 URL/token 只存 Keychain，不写入配置文件。")
                     .font(.caption)
                     .foregroundStyle(dsh.textSecondary)
 
@@ -516,9 +703,12 @@ struct ProfileEditorView: View {
             remoteHost: remoteHost.trimmingCharacters(in: .whitespacesAndNewlines),
             remotePort: Int(remotePort) ?? 0,
             localPort: Int(localPort) ?? 0,
-            authMode: authMode == TunnelProfile.authModeManual
-                ? TunnelProfile.authModeManual : TunnelProfile.authModeNssm,
-            identityFile: identityFile.trimmingCharacters(in: .whitespacesAndNewlines)
+            authMode: TunnelProfile.normalizeAuthMode(authMode),
+            identityFile: identityFile.trimmingCharacters(in: .whitespacesAndNewlines),
+            systemdUnit: systemdUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "dsh-web.service" : systemdUnit.trimmingCharacters(in: .whitespacesAndNewlines),
+            systemdScope: systemdScope,
+            systemdLogPath: systemdLogPath.trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
 

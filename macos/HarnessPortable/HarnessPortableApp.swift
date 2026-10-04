@@ -7,6 +7,13 @@ final class AppRuntime {
     let services = AppServices()
 }
 
+extension Notification.Name {
+    /// Ask the workspace window (if open) to connect and open a tunnel tab.
+    static let openTunnelTabRequest = Notification.Name("hp.openTunnelTabRequest")
+    /// Ask the workspace window to open a direct-URL tab.
+    static let openDirectTabRequest = Notification.Name("hp.openDirectTabRequest")
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -46,6 +53,15 @@ struct HarnessPortableApp: App {
             }
         }
 
+        // The management UI lives in its own window (2.6.8 parity): it stays
+        // reachable from the toolbar and the menu bar even when the workspace
+        // window is closed to the tray or misbehaving.
+        Window("管理 / 设置", id: "management") {
+            ManagementWindowView(services: services)
+        }
+        .windowResizability(.contentSize)
+        .defaultSize(width: 960, height: 680)
+
         MenuBarExtra("Harness Portable", systemImage: "point.3.connected.trianglepath.dotted") {
             MenuBarView(services: services)
         }
@@ -65,6 +81,11 @@ private struct MenuBarView: View {
             Button("打开工作区", systemImage: "macwindow") {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "main")
+            }
+
+            Button("管理 / 设置", systemImage: "slider.horizontal.3") {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "management")
             }
 
             if !services.tunnels.activeStates.isEmpty {
@@ -90,6 +111,14 @@ private struct MenuBarView: View {
             }
 
             Divider()
+            Text("当前版本 \(UpdateService.currentVersion)（dmg 安装版）")
+                .font(Dsh.mono(10))
+                .foregroundStyle(dsh.textTertiary)
+            Button("检测并更新", systemImage: "arrow.down.circle") {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "management")
+                services.updater.check()
+            }
             Button("退出 Harness Portable", systemImage: "power") {
                 services.shutdown()
                 NSApplication.shared.terminate(nil)

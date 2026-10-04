@@ -381,6 +381,11 @@ public sealed partial class TunnelEngine
                             .TryFetchAsync(client, profile.RemotePort, token)
                             .ConfigureAwait(false);
                     }
+                    else if (profile.AuthMode == TunnelProfile.AuthModeSystemd)
+                    {
+                        authUrl = await SystemdAuthUrlFetcher.TryFetchAsync(client, profile, token)
+                            .ConfigureAwait(false);
+                    }
 
                     authUrl ??= WebAuthInput.Normalize(
                         _secrets.GetAuthInput(profile.Id), profile.RemoteHost, profile.RemotePort);

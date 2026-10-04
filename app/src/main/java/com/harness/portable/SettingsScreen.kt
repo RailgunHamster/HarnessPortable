@@ -900,10 +900,16 @@ private fun TunnelEditorDialog(
     var localPort by remember { mutableStateOf((initial?.localPort ?: 3080).toString()) }
     var authMode by remember {
         mutableStateOf(
-            if (initial?.authMode == TunnelProfile.AUTH_MODE_MANUAL)
-                TunnelProfile.AUTH_MODE_MANUAL else TunnelProfile.AUTH_MODE_NSSM
+            when (initial?.authMode) {
+                TunnelProfile.AUTH_MODE_MANUAL -> TunnelProfile.AUTH_MODE_MANUAL
+                TunnelProfile.AUTH_MODE_SYSTEMD -> TunnelProfile.AUTH_MODE_SYSTEMD
+                else -> TunnelProfile.AUTH_MODE_NSSM
+            }
         )
     }
+    var systemdUnit by remember { mutableStateOf(initial?.systemdUnit ?: "dsh-web.service") }
+    var systemdScope by remember { mutableStateOf(initial?.systemdScope ?: "user") }
+    var systemdLogPath by remember { mutableStateOf(initial?.systemdLogPath ?: "") }
 
     fun portOr(v: String, def: Int) = v.trim().toIntOrNull() ?: def
     val valid = host.isNotBlank() && user.isNotBlank() &&
@@ -1060,6 +1066,50 @@ private fun TunnelEditorDialog(
                     )
                 )
             }
+            FilterChip(
+                selected = authMode == TunnelProfile.AUTH_MODE_SYSTEMD,
+                onClick = { authMode = TunnelProfile.AUTH_MODE_SYSTEMD },
+                label = { Text("systemd 自动（Linux 服务器）") },
+                shape = DshControlShape,
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = dsh.inputBg,
+                    labelColor = dsh.textSecondary,
+                    selectedContainerColor = dsh.layer3,
+                    selectedLabelColor = dsh.textPrimary
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = authMode == TunnelProfile.AUTH_MODE_SYSTEMD,
+                    borderColor = dsh.borderOver(dsh.inputBorder, dsh.inputBg),
+                    selectedBorderColor = dsh.borderOver(dsh.borderL2, dsh.layer3)
+                )
+            )
+            if (authMode == TunnelProfile.AUTH_MODE_SYSTEMD) {
+                OutlinedTextField(
+                    systemdUnit, { systemdUnit = it }, label = { Text("systemd 服务名") },
+                    singleLine = true, shape = DshControlShape,
+                    textStyle = dsh.monoStyle(), colors = dshFieldColors()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = systemdScope == "user", onClick = { systemdScope = "user" },
+                        label = { Text("用户服务") }, shape = DshControlShape
+                    )
+                    FilterChip(
+                        selected = systemdScope == "system", onClick = { systemdScope = "system" },
+                        label = { Text("系统服务") }, shape = DshControlShape
+                    )
+                }
+                OutlinedTextField(
+                    systemdLogPath, { systemdLogPath = it }, label = { Text("日志路径（可选）") },
+                    singleLine = true, shape = DshControlShape,
+                    textStyle = dsh.monoStyle(), colors = dshFieldColors()
+                )
+                Text(
+                    "用户服务对应 SSH 登录用户。日志路径留空时读取本次启动的 journal；服务将 stdout 重定向到文件时，填写该文件的完整路径。SSH 用户需要有日志读取权限。获取失败时回退到保存的认证输入或页面粘贴。",
+                    fontSize = 12.sp, color = dsh.textTertiary
+                )
+            }
             if (authMode == TunnelProfile.AUTH_MODE_MANUAL) {
                 OutlinedTextField(
                     value = authInput,
@@ -1121,7 +1171,10 @@ private fun TunnelEditorDialog(
                             remotePort = portOr(remotePort, 3080),
                             localPort = portOr(localPort, 3080),
                             authMode = authMode,
-                            identityFile = storedIdentity
+                            identityFile = storedIdentity,
+                            systemdUnit = systemdUnit.trim().ifBlank { "dsh-web.service" },
+                            systemdScope = systemdScope,
+                            systemdLogPath = systemdLogPath.trim()
                         ),
                         pass.takeIf { it.isNotEmpty() },
                         authInput.trim().takeIf { it.isNotEmpty() }

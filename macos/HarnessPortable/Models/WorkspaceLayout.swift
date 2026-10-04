@@ -16,28 +16,81 @@ enum SplitOrientation: String, Codable, Hashable {
     case vertical
 }
 
+/// One tab's captured dsh web view state, mirrored into the page URL by the
+/// `dsh-view-state` dsh plugin. Only the plugin's three whitelisted parameters
+/// are ever read into it — never the page URL itself, which carries dsh's
+/// process token on first navigation. Null fields mean "not recorded".
+struct LayoutWebState: Codable, Hashable {
+    /// Selected session id, absent when there is none.
+    var sessionId: String?
+    /// Sidebar width in px; 0 means collapsed.
+    var sidebar: Int?
+    /// Right panel's saved width in px; 0 means no width was recorded yet.
+    var rightbar: Int?
+
+    init(sessionId: String? = nil, sidebar: Int? = nil, rightbar: Int? = nil) {
+        self.sessionId = sessionId
+        self.sidebar = sidebar
+        self.rightbar = rightbar
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionId
+        case sidebar
+        case rightbar
+        // Windows presets serialize PascalCase members; accept them on load so a
+        // preset file copied between platforms still restores its web state.
+        case pascalSessionId = "SessionId"
+        case pascalSidebar = "Sidebar"
+        case pascalRightbar = "Rightbar"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
+            ?? container.decodeIfPresent(String.self, forKey: .pascalSessionId)
+        sidebar = try container.decodeIfPresent(Int.self, forKey: .sidebar)
+            ?? container.decodeIfPresent(Int.self, forKey: .pascalSidebar)
+        rightbar = try container.decodeIfPresent(Int.self, forKey: .rightbar)
+            ?? container.decodeIfPresent(Int.self, forKey: .pascalRightbar)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        // Always write the macOS (camelCase) shape; decoding accepts both.
+        try container.encodeIfPresent(sessionId, forKey: .sessionId)
+        try container.encodeIfPresent(sidebar, forKey: .sidebar)
+        try container.encodeIfPresent(rightbar, forKey: .rightbar)
+    }
+}
+
 struct WorkspaceTab: Identifiable, Codable, Hashable {
     let id: UUID
     var kind: TabKind
     var profileID: String?
     var url: String?
     var label: String?
+    /// Per-tab dsh web view state captured when the layout was saved. Null when
+    /// the `dsh-view-state` plugin is not installed or the page carried nothing.
+    var web: LayoutWebState?
 
     init(
         id: UUID = UUID(),
         kind: TabKind,
         profileID: String? = nil,
         url: String? = nil,
-        label: String? = nil
+        label: String? = nil,
+        web: LayoutWebState? = nil
     ) {
         self.id = id
         self.kind = kind
         self.profileID = profileID
         self.url = url
         self.label = label
+        self.web = web
     }
 
-    private enum CodingKeys: String, CodingKey { case kind, profileID, url, label }
+    private enum CodingKeys: String, CodingKey { case kind, profileID, url, label, web }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -46,6 +99,7 @@ struct WorkspaceTab: Identifiable, Codable, Hashable {
         profileID = try container.decodeIfPresent(String.self, forKey: .profileID)
         url = try container.decodeIfPresent(String.self, forKey: .url)
         label = try container.decodeIfPresent(String.self, forKey: .label)
+        web = try container.decodeIfPresent(LayoutWebState.self, forKey: .web)
     }
 }
 

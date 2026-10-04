@@ -126,23 +126,21 @@ exit 3
         return nil
     }
 
-    /// Runs the discovery script over a one-shot `ssh` process using the same
+    /// Runs a discovery command over a one-shot `ssh` process using the same
     /// askpass/known-hosts plumbing as the tunnel itself. Blocking; call from
-    /// a background queue. Returns the verified absolute URL, or nil on any
+    /// a background queue. Returns stdout on exit code 0, or nil on any
     /// failure/timeout. Never throws.
-    static func fetch(
+    static func runSSHCommand(
         user: String,
         host: String,
         port: Int,
         knownHostsFile: URL,
         passwordFile: URL?,
         askpass: URL,
-        identityFile: String
+        identityFile: String,
+        remoteCommand: String,
+        timeout: TimeInterval = fetchTimeout
     ) -> String? {
-        guard let encoded = script.data(using: .utf16LittleEndian)?.base64EncodedString() else {
-            return nil
-        }
-
         let command = Process()
         command.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
         let escapedKnownHostsPath = knownHostsFile.path.replacingOccurrences(of: "\"", with: "\\\"")
@@ -158,7 +156,7 @@ exit 3
             hasPassword: passwordFile != nil
         ) + [
             "\(user)@\(host)",
-            "powershell -NoProfile -EncodedCommand \(encoded)"
+            remoteCommand
         ]
 
         command.environment = SSHIdentity.sshEnvironment(
@@ -181,14 +179,84 @@ exit 3
             command.waitUntilExit()
             semaphore.signal()
         }
-        if semaphore.wait(timeout: .now() + fetchTimeout) == .timedOut {
+        if semaphore.wait(timeout: .now() + timeout) == .timedOut {
             command.terminate()
             return nil
         }
 
         guard command.terminationStatus == 0 else { return nil }
         let data = output.fileHandleForReading.readDataToEndOfFile()
-        let text = String(data: data, encoding: .utf8) ?? ""
-        return extractUrl(from: text)
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Runs the discovery script over a one-shot `ssh` process using the same
+    /// askpass/known-hosts plumbing as the tunnel itself. Blocking; call from
+    /// a background queue. Returns the verified absolute URL, or nil on any
+    /// failure/timeout. Never throws.
+    static func fetch(
+        user: String,
+        host: String,
+        port: Int,
+        knownHostsFile: URL,
+        passwordFile: URL?,
+        askpass: URL,
+        identityFile: String
+    ) -> String? {
+        guard let encoded = script.data(using: .utf16LittleEndian)?.base64EncodedString() else {
+            return nil
+        }
+        let output = runSSHCommand(
+            user: user,
+            host: host,
+            port: port,
+            knownHostsFile: knownHostsFile,
+            passwordFile: passwordFile,
+            askpass: askpass,
+            identityFile: identityFile,
+            remoteCommand: "powershell -NoProfile -EncodedCommand \(encoded)"
+        )
+        return output.flatMap { extractUrl(from: $0) }
+    }
+}
+
+/// Same job as `NssmAuthUrl.fetch`, for servers whose `dsh web` runs on macOS
+/// under the Launch Agent `com.deepseek.dsh-web`: the agent appends stdout to
+/// /tmp/dsh-web.stdout.log, so the newest `dsh web: http…token…` line names
+/// the current launch URL. The script verifies it against the live server
+/// (expecting the 303 token-redirect) so only a currently-valid URL is
+/// returned; failures fall back to the manual paste sheet like NSSM mode.
+enum LaunchdAuthUrl {
+
+    /// Exit codes: 0 = verified URL on stdout, 3 = not found, 4 = stale token.
+    static let script = """
+    u=$(grep -aoE 'https?://[^[:space:]]+' /tmp/dsh-web.stdout.log 2>/dev/null | tail -1)
+    [ -n "$u" ] || exit 3
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$u")
+    [ "$code" = "303" ] || exit 4
+    printf '%s' "$u"
+    """
+
+    static func fetch(
+        user: String,
+        host: String,
+        port: Int,
+        knownHostsFile: URL,
+        passwordFile: URL?,
+        askpass: URL,
+        identityFile: String
+    ) -> String? {
+        // Single-quote the script for the remote shell; the script itself
+        // contains no single quotes, so no escaping is needed.
+        let output = NssmAuthUrl.runSSHCommand(
+            user: user,
+            host: host,
+            port: port,
+            knownHostsFile: knownHostsFile,
+            passwordFile: passwordFile,
+            askpass: askpass,
+            identityFile: identityFile,
+            remoteCommand: "sh -c '" + script + "'"
+        )
+        return output.flatMap { NssmAuthUrl.extractUrl(from: $0) }
     }
 }

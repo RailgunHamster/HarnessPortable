@@ -447,6 +447,11 @@ class SshTunnelService : Service() {
                     authUrl = NssmAuthUrl.fetch(sess, p.remotePort)
                     stage("auth-url " + (authUrl?.let { "ok" } ?: "miss"))
                 }
+                else if (p.authMode == TunnelProfile.AUTH_MODE_SYSTEMD) {
+                    stage("systemd auth-url fetch")
+                    authUrl = SystemdAuthUrl.fetch(this, sess, p)
+                    stage("auth-url " + (authUrl?.let { "ok" } ?: "miss"))
+                }
                 if (authUrl == null) {
                     stage("auth-url manual")
                     authUrl = WebAuthInput.normalize(

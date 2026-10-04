@@ -7,6 +7,22 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
     /// Let the user paste the token URL when the page rejects (fallback: 401 sheet).
     static let authModeManual = "manual"
 
+    /// macOS servers run `dsh web` under a Launch Agent (`com.deepseek.dsh-web`)
+    /// whose stdout lands in /tmp/dsh-web.stdout.log; this mode reads the token
+    /// URL from that log over SSH (the macOS counterpart of the NSSM mode).
+    static let authModeLaunchd = "launchd"
+    static let authModeSystemd = "systemd"
+
+    /// Unknown authMode values on disk fall back to the NSSM default.
+    static func normalizeAuthMode(_ raw: String) -> String {
+        switch raw {
+        case authModeManual: return authModeManual
+        case authModeLaunchd: return authModeLaunchd
+        case authModeSystemd: return authModeSystemd
+        default: return authModeNssm
+        }
+    }
+
     var id: String
     var name: String
     var sshHost: String
@@ -16,6 +32,9 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
     var remotePort: Int
     var localPort: Int
     var authMode: String
+    var systemdUnit: String
+    var systemdScope: String
+    var systemdLogPath: String
     /// Optional OpenSSH private key path. Empty: default ~/.ssh identities and ssh-agent.
     var identityFile: String
 
@@ -29,7 +48,10 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
         remotePort: Int = 3080,
         localPort: Int = 3080,
         authMode: String = TunnelProfile.authModeNssm,
-        identityFile: String = ""
+        identityFile: String = "",
+        systemdUnit: String = "dsh-web.service",
+        systemdScope: String = "user",
+        systemdLogPath: String = ""
     ) {
         self.id = id
         self.name = name
@@ -40,11 +62,15 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
         self.remotePort = remotePort
         self.localPort = localPort
         self.authMode = authMode
+        self.systemdUnit = systemdUnit
+        self.systemdScope = systemdScope
+        self.systemdLogPath = systemdLogPath
         self.identityFile = identityFile
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, sshHost, sshPort, user, remoteHost, remotePort, localPort, authMode, identityFile
+        case systemdUnit, systemdScope, systemdLogPath
     }
 
     init(from decoder: Decoder) throws {
@@ -57,8 +83,13 @@ struct TunnelProfile: Codable, Identifiable, Hashable {
         remoteHost = try container.decodeIfPresent(String.self, forKey: .remoteHost) ?? "127.0.0.1"
         remotePort = try container.decodeIfPresent(Int.self, forKey: .remotePort) ?? 3080
         localPort = try container.decodeIfPresent(Int.self, forKey: .localPort) ?? 3080
-        authMode = try container.decodeIfPresent(String.self, forKey: .authMode) ?? TunnelProfile.authModeNssm
+        authMode = TunnelProfile.normalizeAuthMode(
+            try container.decodeIfPresent(String.self, forKey: .authMode) ?? TunnelProfile.authModeNssm
+        )
         identityFile = try container.decodeIfPresent(String.self, forKey: .identityFile) ?? ""
+        systemdUnit = try container.decodeIfPresent(String.self, forKey: .systemdUnit) ?? "dsh-web.service"
+        systemdScope = try container.decodeIfPresent(String.self, forKey: .systemdScope) ?? "user"
+        systemdLogPath = try container.decodeIfPresent(String.self, forKey: .systemdLogPath) ?? ""
     }
 
     var displayName: String {

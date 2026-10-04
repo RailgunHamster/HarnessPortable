@@ -20,7 +20,7 @@ android {
         applicationId = "com.harness.portable"
         minSdk = 24
         targetSdk = 36
-        versionCode = 18
+        versionCode = 19
         versionName = rootProject.file("VERSION").takeIf { it.exists() }?.readText()?.trim() ?: "2.5.0"
     }
 
@@ -45,6 +45,7 @@ android {
     buildFeatures {
         compose = true
     }
+    sourceSets.getByName("main").assets.srcDir(rootProject.file("shared"))
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

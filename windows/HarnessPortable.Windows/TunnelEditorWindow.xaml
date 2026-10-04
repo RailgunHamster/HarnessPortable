@@ -82,8 +82,22 @@
                 <ComboBox x:Name="AuthModeBox" Style="{StaticResource ModernComboBox}" SelectedIndex="0"
                           SelectionChanged="AuthModeBox_SelectionChanged">
                     <ComboBoxItem Content="NSSM 自动获取（服务器用 NSSM 托管 dsh web）" Tag="nssm"/>
+                    <ComboBoxItem Content="systemd 自动获取（Linux 服务器）" Tag="systemd"/>
                     <ComboBoxItem Content="手动输入（连接时用下方填写的认证 URL/token）" Tag="manual"/>
                 </ComboBox>
+                <StackPanel x:Name="SystemdPanel" Visibility="Collapsed" Margin="0,10,0,0">
+                    <TextBlock Text="systemd 服务名" Margin="0,0,0,4" Style="{StaticResource ModernMutedText}"/>
+                    <TextBox x:Name="SystemdUnitBox" Text="dsh-web.service" Style="{StaticResource ModernTextBox}"/>
+                    <TextBlock Text="服务范围" Margin="0,10,0,4" Style="{StaticResource ModernMutedText}"/>
+                    <ComboBox x:Name="SystemdScopeBox" SelectedIndex="0" Style="{StaticResource ModernComboBox}">
+                        <ComboBoxItem Content="用户服务（SSH 登录用户）" Tag="user"/>
+                        <ComboBoxItem Content="系统服务" Tag="system"/>
+                    </ComboBox>
+                    <TextBlock Text="日志路径（可选）" Margin="0,10,0,4" Style="{StaticResource ModernMutedText}"/>
+                    <TextBox x:Name="SystemdLogPathBox" Style="{StaticResource ModernTextBox}"/>
+                    <TextBlock Text="留空读取本次启动的 journal；服务将 stdout 重定向到文件时，填写该文件的完整路径。SSH 用户需要有日志读取权限。获取失败时回退到保存的认证输入或页面粘贴。"
+                               Margin="0,4,0,0" TextWrapping="Wrap" Style="{StaticResource ModernMutedText}"/>
+                </StackPanel>
 
                 <StackPanel x:Name="AuthInputPanel" Visibility="Collapsed">
                     <TextBlock x:Name="AuthInputCaption" Text="认证 URL 或 token（可选）" Margin="0,12,0,4"

@@ -9,6 +9,7 @@ final class AppServices: ObservableObject {
     let keychain: KeychainStore
     let knownHosts: KnownHostsStore
     let tunnels: TunnelManager
+    let updater: UpdateService
 
     private var didShutdown = false
 
@@ -21,6 +22,7 @@ final class AppServices: ObservableObject {
         keychain = KeychainStore()
         knownHosts = KnownHostsStore()
         tunnels = TunnelManager(keychain: keychain, knownHosts: knownHosts)
+        updater = UpdateService(settings: settings)
     }
 
     func stopAll() {

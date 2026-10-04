@@ -18,10 +18,13 @@ data class TunnelProfile(
     val remoteHost: String = "127.0.0.1",
     val remotePort: Int = 3080,
     val localPort: Int = 3080,
-    /** How the web login token is obtained; see [AUTH_MODE_NSSM]/[AUTH_MODE_MANUAL]. */
+    /** How the web login token is obtained: NSSM, systemd, or saved/manual input. */
     val authMode: String = AUTH_MODE_NSSM,
     /** Optional OpenSSH private key path. Empty = password-only unless a key is imported. */
-    val identityFile: String = ""
+    val identityFile: String = "",
+    val systemdUnit: String = "dsh-web.service",
+    val systemdScope: String = "user",
+    val systemdLogPath: String = ""
 ) {
     companion object {
         /** On connect, locate the dsh web launch-token URL via NSSM on the server (default). */
@@ -29,6 +32,7 @@ data class TunnelProfile(
 
         /** Let the user paste the token URL when the page rejects (fallback: 401 dialog). */
         const val AUTH_MODE_MANUAL = "manual"
+        const val AUTH_MODE_SYSTEMD = "systemd"
     }
 }
 
@@ -64,7 +68,10 @@ object ProfileStore {
                     authMode = o.optString("auth_mode", TunnelProfile.AUTH_MODE_NSSM)
                         .ifBlank { TunnelProfile.AUTH_MODE_NSSM },
                     identityFile = o.optString("identity_file")
-                        .ifBlank { o.optString("identityFile") }
+                        .ifBlank { o.optString("identityFile") },
+                    systemdUnit = o.optString("systemd_unit", "dsh-web.service"),
+                    systemdScope = o.optString("systemd_scope", "user"),
+                    systemdLogPath = o.optString("systemd_log_path")
                 )
             }.toMutableList()
         } catch (e: Exception) {
@@ -87,6 +94,9 @@ object ProfileStore {
                     .put("local_port", p.localPort)
                     .put("auth_mode", p.authMode)
                     .put("identity_file", p.identityFile)
+                    .put("systemd_unit", p.systemdUnit)
+                    .put("systemd_scope", p.systemdScope)
+                    .put("systemd_log_path", p.systemdLogPath)
             )
         }
         prefs(ctx).edit().putString(KEY_TUNNELS, arr.toString()).apply()

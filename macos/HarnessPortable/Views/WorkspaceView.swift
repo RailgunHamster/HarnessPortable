@@ -21,6 +21,7 @@ struct WorkspaceView: View {
     @State private var didStart = false
 
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.openWindow) private var openWindow
 
     private var dsh: DshPalette { Dsh.palette(colorScheme) }
 
@@ -58,12 +59,24 @@ struct WorkspaceView: View {
         .background(dsh.bgBase)
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
+            webSessions.directAuthMode = { url in
+                services.settings.value.directAuthModes[url] ?? LocalDshAuth.modeNone
+            }
             installKeyMonitor()
             DispatchQueue.main.async {
                 startWorkspaceIfNeeded()
             }
         }
         .onDisappear { removeKeyMonitor() }
+        .onReceive(NotificationCenter.default.publisher(for: .openTunnelTabRequest)) { notification in
+            guard let profileID = notification.object as? String,
+                  let profile = services.profiles.findTunnel(id: profileID) else { return }
+            openTunnel(profile)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openDirectTabRequest)) { notification in
+            guard let url = notification.object as? String else { return }
+            openDirect(url)
+        }
         .sheet(item: $passwordProfile, onDismiss: { passwordRequestID = UUID() }) { profile in
             let requestID = passwordRequestID
             PasswordPromptView(profile: profile) { password in
@@ -111,9 +124,10 @@ struct WorkspaceView: View {
                 .foregroundStyle(dsh.textPrimary)
             Divider().frame(height: 18)
             Button {
-                workspace.openManagement()
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "management")
             } label: {
-                Label("管理", systemImage: "slider.horizontal.3")
+                Label("管理 / 设置", systemImage: "slider.horizontal.3")
             }
             Button {
                 directURLInput = ""
@@ -217,11 +231,15 @@ struct WorkspaceView: View {
            !services.settings.value.lastLayoutName.isEmpty,
            let layout = services.layouts.named(services.settings.value.lastLayoutName) {
             selectedLayoutName = layout.name
+            for item in workspace.allTabs() {
+                webSessions.remove(tabID: item.tab.id)
+            }
             workspace.restore(
                 layout,
                 validProfileIDs: Set(services.profiles.tunnels.map(\.id)),
                 validDirectURLs: Set(services.profiles.directs)
             )
+            seedWebStates(from: layout.root)
             startTunnelsInWorkspace()
         }
     }
@@ -314,20 +332,40 @@ struct WorkspaceView: View {
     private func saveLayout() {
         let name = layoutName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
-        let layout = WorkspaceLayout(name: name, root: workspace.captureLayout())
+        let layout = WorkspaceLayout(
+            name: name,
+            root: workspace.captureLayout { tabID in
+                ViewStateUrls.extract(webSessions.currentURL(forTabID: tabID))
+            }
+        )
         services.layouts.upsert(layout)
         selectedLayoutName = name
         services.settings.update { $0.lastLayoutName = name }
     }
 
     private func apply(_ layout: WorkspaceLayout) {
+        // The restore swaps every tab id; drop the old web sessions and seed
+        // the restored tabs with whatever view state the preset recorded.
+        for item in workspace.allTabs() {
+            webSessions.remove(tabID: item.tab.id)
+        }
         workspace.restore(
             layout,
             validProfileIDs: Set(services.profiles.tunnels.map(\.id)),
             validDirectURLs: Set(services.profiles.directs)
         )
+        seedWebStates(from: layout.root)
         services.settings.update { $0.lastLayoutName = layout.name }
         startTunnelsInWorkspace()
+    }
+
+    private func seedWebStates(from node: LayoutNode) {
+        for tab in node.tabs {
+            webSessions.setInitialWebState(tab.web, forTabID: tab.id)
+        }
+        for child in node.children {
+            seedWebStates(from: child)
+        }
     }
 
     private func deleteSelectedLayout() {
@@ -578,30 +616,28 @@ private struct WorkspacePaneView: View {
     @ViewBuilder
     private var content: some View {
         if let tab = selectedTab {
-            if tab.kind == .management {
-                ManagementView(
-                    profiles: services.profiles,
-                    tunnels: services.tunnels,
-                    settings: services.settings,
-                    keychain: services.keychain,
-                    knownHosts: services.knownHosts,
-                    onConnect: onConnect,
-                     onOpenTunnel: onOpenTunnel,
-                    onStop: onStop,
-                    onOpenDirect: onOpenDirect,
-                     onDelete: onDelete
-                )
-            } else {
-                SessionView(
-                    tab: tab,
-                    profiles: services.profiles,
-                    tunnels: services.tunnels,
-                    webSessions: webSessions,
-                    onClose: { closeTab(tab.id) }
-                )
-            }
+            SessionView(
+                tab: tab,
+                profiles: services.profiles,
+                tunnels: services.tunnels,
+                webSessions: webSessions,
+                onClose: { closeTab(tab.id) }
+            )
         } else {
-            dsh.bgBase
+            // Empty pane (e.g. a legacy preset that held only a management
+            // tab): new tabs still land here.
+            VStack(spacing: 10) {
+                Image(systemName: "rectangle.split.2x1")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(dsh.textTertiary)
+                Text("此面板为空")
+                    .font(.callout)
+                    .foregroundStyle(dsh.textSecondary)
+                Text("连接隧道或打开直连后，标签会在这里出现")
+                    .font(.caption)
+                    .foregroundStyle(dsh.textTertiary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
