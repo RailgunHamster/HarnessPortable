@@ -31,4 +31,11 @@ public sealed class AppSettings
 
     /// <summary>"home" or "github" — which of the two a check uses.</summary>
     public string UpdateSourceSelected { get; set; } = "";
+
+    /// <summary>
+    /// Web-login mode per direct URL: "nssm" = auto-login from this machine's
+    /// NSSM-hosted dsh log, missing/"none" = open as-is. Kept in settings.json
+    /// (per-platform), not in the cross-platform profiles.json directs list.
+    /// </summary>
+    public Dictionary<string, string> DirectAuthModes { get; set; } = [];
 }

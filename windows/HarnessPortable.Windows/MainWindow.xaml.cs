@@ -780,6 +780,10 @@ public partial class MainWindow : Window
 
     private void OpenOrFocusTunnelSession(TunnelProfile profile, int localPort)
     {
+        // The connect click happened in the management window: surf the
+        // workspace so the newly opened tab is not missed behind it.
+        BringToFront();
+
         if (_tunnelDocsByProfile.TryGetValue(profile.Id, out var docs) && docs.Count > 0)
         {
             var doc = docs[0];
@@ -912,7 +916,27 @@ public partial class MainWindow : Window
 
     private void OpenDirectSession(string url)
     {
+        BringToFront();
         CreateDirectDoc(url, NextDirectSuffix(url), GetTargetPane(), activate: true);
+    }
+
+    /// <summary>
+    /// Shows the workspace window and raises it above the management window
+    /// (and anything else), mirroring the tray reopen path in App.xaml.cs.
+    /// </summary>
+    private void BringToFront()
+    {
+        if (!IsVisible)
+        {
+            Show();
+        }
+
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
+        Activate();
     }
 
     private void DuplicateViewInto(SessionView source, LayoutDocumentPane targetPane, bool activate)

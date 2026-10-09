@@ -158,6 +158,9 @@
                                                    Margin="0,5,0,0"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Style="{StaticResource DshRowButton}" Content="{Binding AuthLabel}"
+                                                Tag="{Binding}" Click="DirectAuthToggle_Click"
+                                                ToolTip="认证模式：点击切换。「NSSM 自动」用于 dsh web 就跑在本机（NSSM 托管）的直连地址——打开标签时自动读本机 NSSM 日志取最新 token 并自动登录；失败或日志缺失则原样打开，仍可走页面上的粘贴框兜底。"/>
                                         <Button Style="{StaticResource DshRowButton}" Content="连接"
                                                 Tag="{Binding}" Click="DirectConnect_Click"/>
                                         <Button Style="{StaticResource DshDangerButton}" Content="删除"

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -25,6 +26,19 @@ public partial class ManagementView : System.Windows.Controls.UserControl
     {
         public required string Url { get; init; }
         public string Host => ProfileStore.HostOf(Url);
+
+        /// <summary>Row label for the per-URL auth mode: "无" or "NSSM 自动".</summary>
+        public string AuthLabel
+        {
+            get;
+            set
+            {
+                field = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AuthLabel)));
+            }
+        } = "无";
+
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 
     // DSH status colours (static-green-500 / deepseek-450-ish / static-red-500):
@@ -147,7 +161,11 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         _directItems.Clear();
         foreach (var url in _services.Profiles.LoadDirects())
         {
-            _directItems.Add(new DirectListItem { Url = url });
+            _directItems.Add(new DirectListItem
+            {
+                Url = url,
+                AuthLabel = DirectAuthModeLabel(url),
+            });
         }
 
         TunnelCountText.Text = _tunnelItems.Count.ToString();
@@ -561,6 +579,52 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         var directs = _services.Profiles.LoadDirects();
         directs.RemoveAll(u => u == item.Url);
         _services.Profiles.SaveDirects(directs);
+
+        // The auth mode is keyed by URL and would otherwise linger as a dead
+        // entry once the address is gone (and silently reactivate if the same
+        // URL is added back later without the user noticing).
+        var settings = _services.Settings.Load();
+        if (settings.DirectAuthModes.Remove(item.Url))
+        {
+            _services.Settings.Save(settings);
+        }
+
         RefreshLists();
+    }
+
+    /// <summary>Row label for the URL's saved auth mode.</summary>
+    private string DirectAuthModeLabel(string url) =>
+        _services.Settings.Load().DirectAuthModes.TryGetValue(url, out var mode) &&
+        mode == LocalNssmAuth.ModeNssm
+            ? "NSSM 自动"
+            : "无";
+
+    /// <summary>
+    /// Cycles a direct URL's auth mode between "none" and the local NSSM
+    /// auto-login, stored per-URL in settings.json (profiles.json's directs
+    /// list stays a plain cross-platform string array).
+    /// </summary>
+    private void DirectAuthToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not DirectListItem item)
+        {
+            return;
+        }
+
+        var settings = _services.Settings.Load();
+        var enabled = settings.DirectAuthModes.TryGetValue(item.Url, out var mode) &&
+            mode == LocalNssmAuth.ModeNssm;
+
+        if (enabled)
+        {
+            settings.DirectAuthModes.Remove(item.Url);
+        }
+        else
+        {
+            settings.DirectAuthModes[item.Url] = LocalNssmAuth.ModeNssm;
+        }
+
+        _services.Settings.Save(settings);
+        item.AuthLabel = enabled ? "无" : "NSSM 自动";
     }
 }

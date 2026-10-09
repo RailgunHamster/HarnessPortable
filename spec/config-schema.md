@@ -58,6 +58,20 @@ Windows / macOS / Android 各自实现存储与 UI，但**配置字段语义保�
 | `tunnels[].systemdLogPath` | string | 否 | 空 | 可选的服务器完整日志路径；空时按本次 `InvocationID` 读取 journal；文件重定向部署填写 stdout 日志路径。Android 键名 `systemd_log_path` |
 | `directs` | array<string> | 否 | `[]` | 直连 URL，保持添加顺序，去重 |
 
+## 直连自动认证（按端存储）
+
+直连没有 SSH 一跳，隧道 `authMode` 不适用；如需自动登录，各端把**按 URL** 的直连认证模式
+存在本机 `settings.json`（不改跨平台 `directs` 契约）：
+
+- macOS：`directAuthModes`（`none` / `launchd`），读取本机
+  `/tmp/dsh-web.stdout.log`（`com.deepseek.dsh-web` Launch Agent）；
+- Windows：`DirectAuthModes`（`none` / `nssm`），在本机执行与隧道 NSSM 模式相同的
+  发现脚本（定位 NSSM 托管的 dsh 服务、读 stdout 日志、curl 验证 303），端口一致才把
+  token query 嫁接到直连地址。
+
+默认全部 `none`（行为不变）；日志缺失、token 失效或端口不一致时地址原样打开，
+沿用页面 401 粘贴框兜底。
+
 ## systemd 自动认证
 
 三端还支持 `tunnels[].authMode=systemd`（Android 为 `auth_mode=systemd`）：

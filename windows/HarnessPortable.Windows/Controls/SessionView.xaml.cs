@@ -520,6 +520,12 @@ public partial class SessionView : System.Windows.Controls.UserControl
     /// to an IP first; only when the name is unknown do we fall back to the
     /// original URL and let the browser's resolver try (previous behavior).
     /// The tab's identity (DirectUrl, layouts, saved list) keeps the name.
+    ///
+    /// Optional auto-login: when the direct URL is marked "nssm" in settings
+    /// and this very machine hosts dsh web under NSSM, the verified token
+    /// query is grafted onto the destination — no SSH hop exists for a direct
+    /// tab, so the tunnel modes do not apply. Failures fall through to the
+    /// plain URL and its 401 paste overlay.
     /// </summary>
     private async Task<string> ResolveDirectUrlAsync()
     {
@@ -529,7 +535,27 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
 
         var resolved = await HostResolver.ResolveUrlAsync(_url);
-        return resolved ?? _url;
+        var destination = resolved ?? _url;
+
+        try
+        {
+            if (_services.Settings.Load().DirectAuthModes.TryGetValue(_url, out var mode) &&
+                mode == LocalNssmAuth.ModeNssm)
+            {
+                var authenticated = await LocalNssmAuth.TryBuildAuthTargetAsync(destination, CancellationToken.None);
+                if (authenticated is not null)
+                {
+                    FlickerLog.Log("webview-auth", "local nssm auth applied (direct:" + _url + ")");
+                    return authenticated;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            FlickerLog.Log("webview-auth", "local nssm auth skipped: " + ex.Message);
+        }
+
+        return destination;
     }
 
     private void Navigate(string url)
