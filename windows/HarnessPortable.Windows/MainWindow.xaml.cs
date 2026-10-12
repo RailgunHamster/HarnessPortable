@@ -379,16 +379,20 @@ public partial class MainWindow : Window
     private void BeginTabDrag(WpfPoint point)
     {
         _tabDragActive = true;
-        CaptureMouse();
         SyncTabDragOverlayBounds();
         if (_tabDragOverlayWindow is not null && _tabDragOverlayWindow.Owner is null)
         {
             _tabDragOverlayWindow.Owner = this;
         }
 
+        // Show BEFORE capturing: CaptureMouse synchronously re-dispatches a
+        // mouse-move (MouseDevice.Synchronize), which reaches
+        // UpdateTabDragOverlay while this call is still on the stack — the
+        // canvas must already be connected to a PresentationSource by then.
         _tabDragOverlayWindow?.Show();
         TabDragOverlay.Visibility = Visibility.Visible;
         DragHintCard.Visibility = Visibility.Visible;
+        CaptureMouse();
         UpdateTabDragOverlay(point);
     }
 
@@ -435,7 +439,19 @@ public partial class MainWindow : Window
 
         // Screen-based mapping: the overlay canvas now lives in another
         // window, so TranslatePoint has no common visual ancestor to walk.
-        var paneTopLeft = TabDragOverlay.PointFromScreen(paneControl.PointToScreen(new WpfPoint(0, 0)));
+        // Before the overlay window is shown the canvas has no
+        // PresentationSource and PointFromScreen throws — fall back to
+        // main-window coordinates (the cover is positioned exactly over it).
+        WpfPoint paneTopLeft;
+        if (PresentationSource.FromVisual(TabDragOverlay) is null)
+        {
+            paneTopLeft = paneControl.TranslatePoint(new WpfPoint(0, 0), this);
+        }
+        else
+        {
+            paneTopLeft = TabDragOverlay.PointFromScreen(paneControl.PointToScreen(new WpfPoint(0, 0)));
+        }
+
         var targetRect = new Rect(paneTopLeft, paneControl.RenderSize);
         _tabDragTargetRect = targetRect;
 
@@ -596,6 +612,14 @@ public partial class MainWindow : Window
 
     private static WpfPoint PointToOverlay(MainWindow window, WpfPoint point)
     {
+        // Before the overlay window is shown its canvas is not connected to a
+        // PresentationSource and PointFromScreen throws; the cover is placed
+        // exactly over the main window, so its coordinates coincide.
+        if (PresentationSource.FromVisual(window.TabDragOverlay) is null)
+        {
+            return point;
+        }
+
         var screenPoint = window.PointToScreen(point);
         return window.TabDragOverlay.PointFromScreen(screenPoint);
     }

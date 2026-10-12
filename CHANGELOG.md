@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.25
+
+- Windows：修复 2.6.24 拖动仍崩溃的新栈：`CaptureMouse()` 会**同步**再派发一次 mouse-move（`MouseDevice.Synchronize` 重入），那一刻覆盖窗口还没 `Show()`、Canvas 未连接 PresentationSource，`PointFromScreen` 抛 "此 Visual 未连接到 PresentationSource"。
+  - `BeginTabDrag` 现在**先 `Show()` 覆盖窗口再 `CaptureMouse()`**；
+  - 坐标换算（`PointToOverlay` 与窗格矩形映射）都加了无源回退：覆盖窗口尚未显示时直接用主窗口坐标（覆盖层与主窗口逐像素对齐，两者等价）。
+
 ## 2.6.24
 
 - Windows：修复 2.6.23 引入的**拖动标签即崩溃**：覆盖层 Canvas 原来还在主窗口 Grid 的 `Children` 里，而 WPF 从不自动把子元素移出面板，透明子窗口 `Show()` 时直接抛 "指定的子级已连接到另一个父 Visual"（crash.log 12:35）。现在构造覆盖窗口前先显式从 Grid 摘除 Canvas，并补了一个复现该崩溃形态的 STA 冒烟测试（detach → reparent → Show 全程无异常）。
