@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.20
+
+- Windows：修复直连行「认证模式」按钮**点了没反应**的假象。
+  - 根因：`DirectListItem` 触发了 `PropertyChanged` 事件却**没有声明 `INotifyPropertyChanged` 接口**，WPF 绑定引擎只认接口、不订阅裸事件——点击后设置其实已经保存，但按钮文字永远停在「无」。看起来像没生效，多点几下反而把模式又切回了关，最后 `settings.json` 里什么也没留下（railgunhamster 上的实测：点完仍是 `DirectAuthModes: {}`）。
+  - 现在类正确实现接口，点击后按钮立即在「无」/「NSSM 自动」之间翻转，所见即所存；补了回归单测锁住接口声明。
+
 ## 2.6.19
 
 - Windows：更新源从单地址框升级为**「家庭目录 + GitHub」两个槽位加一个下拉选择**（对齐 macOS 2.6.14、spec/config-schema.md 的双槽位约定）。

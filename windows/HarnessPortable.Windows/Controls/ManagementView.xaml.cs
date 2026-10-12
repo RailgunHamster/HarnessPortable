@@ -22,7 +22,14 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         public Visibility StopVisibility { get; init; } = Visibility.Collapsed;
     }
 
-    public sealed class DirectListItem
+    /// <summary>
+    /// Must declare the interface (not just raise the event): WPF's binding
+    /// engine only subscribes to change notifications when it can cast the
+    /// source to <see cref="INotifyPropertyChanged"/>. Without it the auth-mode
+    /// button saved the new mode but its label never refreshed, so the toggle
+    /// looked dead and extra clicks flipped the mode back off.
+    /// </summary>
+    public sealed class DirectListItem : INotifyPropertyChanged
     {
         public required string Url { get; init; }
         public string Host => ProfileStore.HostOf(Url);
