@@ -127,7 +127,7 @@ Windows 配置目录（所有配置均写入系统用户目录，不会在 exe �
 
 Windows 开发和隔离测试可用绝对路径环境变量 `HARNESS_PORTABLE_DATA_DIRECTORY` 指定独立数据目录。未设置时仍使用上述目录。
 
-UX 测试候选说明与试用步骤见 [UX 测试说明](docs/ux-preview-testing.md)。
+UX 设计、验证记录与试用步骤见 [UX 验证说明](docs/ux-preview-testing.md)。
 
 ---
 
