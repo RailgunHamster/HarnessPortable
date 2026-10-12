@@ -49,6 +49,14 @@ public static class UpdateSourceFactory
         };
     }
 
+    public static bool IsValid(string? value, bool githubOnly = false)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+            return !string.IsNullOrWhiteSpace(uri.Host) && (!githubOnly || LooksLikeGitHub(value) && uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries).Length >= 2);
+        return !githubOnly && Path.IsPathFullyQualified(value.Trim());
+    }
+
     public static bool LooksLikeGitHub(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))

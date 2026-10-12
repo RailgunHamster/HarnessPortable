@@ -13,15 +13,15 @@ public enum UpdateSourceSlot
 /// The two update feeds the app can pull from, held as a pair so switching
 /// between them never loses the other address.
 ///
-/// Unlike a phone, this machine can read the LAN share directly, so
-/// <see cref="Home"/> — not GitHub — is the default.
+/// New installs use the official GitHub feed. Existing LAN selections remain
+/// authoritative; both addresses are retained when the selection changes.
 /// </summary>
 public sealed class UpdateSelection
 {
     public const string Home = UpdateSourceFactory.DefaultServerUrl;
     public const string GitHub = UpdateSourceFactory.GitHubRepoUrl;
 
-    public UpdateSourceSlot Slot { get; init; } = UpdateSourceSlot.Home;
+    public UpdateSourceSlot Slot { get; init; } = UpdateSourceSlot.GitHub;
     public string HomeUrl { get; init; } = Home;
     public string GitHubUrl { get; init; } = GitHub;
 
@@ -74,7 +74,7 @@ public sealed class UpdateSelection
 
         return new UpdateSelection
         {
-            Slot = slot ?? UpdateSourceSlot.Home,
+            Slot = slot ?? UpdateSourceSlot.GitHub,
             HomeUrl = home,
             GitHubUrl = github,
         };

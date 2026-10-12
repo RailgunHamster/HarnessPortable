@@ -18,6 +18,8 @@ public sealed class AppSettingsStore
     private readonly string _path;
     private readonly object _lock = new();
 
+    public event Action? Changed;
+
     public AppSettingsStore(string? path = null)
     {
         _path = path ?? AppPaths.SettingsFile;
@@ -29,6 +31,7 @@ public sealed class AppSettingsStore
         {
             var settings = JsonFile.Read(_path, () => new AppSettings(), JsonOptions);
             settings.DirectAuthModes ??= [];
+            settings.Connections ??= [];
             return settings;
         }
     }
@@ -39,5 +42,6 @@ public sealed class AppSettingsStore
         {
             JsonFile.Write(_path, settings, JsonOptions);
         }
+        Changed?.Invoke();
     }
 }

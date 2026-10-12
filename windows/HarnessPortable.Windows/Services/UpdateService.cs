@@ -123,6 +123,12 @@ public sealed class UpdateService
         }
     }
 
+    public void ResetSourceResult()
+    {
+        if (Busy) return;
+        FinishCheck(null, "", null, false, "更新源已更改，请重新检查", Changelog.ReadEmbedded());
+    }
+
     /// <summary>Never write query strings (tokens) into the debug log.</summary>
     private static string MaskUrl(string url)
     {

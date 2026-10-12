@@ -46,6 +46,8 @@ public sealed class LayoutTabRef
     /// or when the page carried nothing to record.
     /// </summary>
     public LayoutWebState? Web { get; set; }
+    public bool Selected { get; set; }
+    public bool Active { get; set; }
 }
 
 /// <summary>

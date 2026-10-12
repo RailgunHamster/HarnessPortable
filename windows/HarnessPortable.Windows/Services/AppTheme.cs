@@ -28,6 +28,13 @@ public static class AppTheme
 
     private static ResourceDictionary? _tokens;
     private static bool _started;
+    private static string _appearance = "system";
+
+    public static void SetPreference(string preference)
+    {
+        _appearance = preference is "light" or "dark" ? preference : "system";
+        Apply(_appearance == "dark" || (_appearance == "system" && IsSystemDark()));
+    }
 
     /// <summary>True when the dark token set is active.</summary>
     public static bool IsDark { get; private set; }
@@ -59,7 +66,7 @@ public static class AppTheme
         }
 
         _started = true;
-        Apply(IsSystemDark());
+        SetPreference(new AppSettingsStore().Load().Appearance);
 
         try
         {
@@ -111,7 +118,7 @@ public static class AppTheme
             or UserPreferenceCategory.Color
             or UserPreferenceCategory.VisualStyle)
         {
-            Apply(IsSystemDark());
+            SetPreference(_appearance);
         }
     }
 

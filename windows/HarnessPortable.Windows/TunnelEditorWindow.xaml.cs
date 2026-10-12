@@ -27,6 +27,7 @@ public partial class TunnelEditorWindow : Window
     private string? _sshConfigPath;
 
     public EditorResult? Result { get; private set; }
+    public bool ConnectAfterSave { get; private set; }
 
     public TunnelEditorWindow(TunnelProfile? initial, string? sshConfigPath = null, string? storedAuthInput = null)
     {
@@ -223,6 +224,7 @@ public partial class TunnelEditorWindow : Window
 
         var password = string.IsNullOrEmpty(PasswordInput.Password) ? null : PasswordInput.Password;
         Result = new EditorResult(profile, password, _sshConfigPath, AuthInputBox.Text.Trim());
+        ConnectAfterSave = (sender as FrameworkElement)?.Tag as string == "connect";
         DialogResult = true;
     }
 

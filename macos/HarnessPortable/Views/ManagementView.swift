@@ -495,6 +495,7 @@ struct ProfileEditorView: View {
     let original: TunnelProfile
     let keychain: KeychainStore
     let onSave: (TunnelProfile) -> Void
+    let onConnect: ((TunnelProfile) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) var colorScheme
 
@@ -519,10 +520,11 @@ struct ProfileEditorView: View {
     @State private var removeStoredPassword = false
     @State private var keychainError: String?
 
-    init(profile: TunnelProfile, keychain: KeychainStore, onSave: @escaping (TunnelProfile) -> Void) {
+    init(profile: TunnelProfile, keychain: KeychainStore, onConnect: ((TunnelProfile) -> Void)? = nil, onSave: @escaping (TunnelProfile) -> Void) {
         original = profile
         self.keychain = keychain
         self.onSave = onSave
+        self.onConnect = onConnect
         _name = State(initialValue: profile.name)
         _sshHost = State(initialValue: profile.sshHost)
         _sshPort = State(initialValue: String(profile.sshPort))
@@ -671,6 +673,7 @@ struct ProfileEditorView: View {
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canSave)
                     .buttonStyle(DshPrimaryButtonStyle())
+                if onConnect != nil { Button("保存并连接") { save(connect: true) }.disabled(!canSave) }
             }
         }
         .padding(20)
@@ -752,7 +755,7 @@ struct ProfileEditorView: View {
         )
     }
 
-    private func save() {
+    private func save(connect: Bool = false) {
         guard canSave else { return }
         do {
             if removeStoredPassword {
@@ -768,7 +771,9 @@ struct ProfileEditorView: View {
             } else {
                 try keychain.setAuthInput(trimmedAuthInput, for: original.id)
             }
-            onSave(makeProfile())
+            let profile = makeProfile()
+            onSave(profile)
+            if connect { onConnect?(profile) }
             dismiss()
         } catch {
             keychainError = error.localizedDescription

@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:avalonDock="https://github.com/Dirkster99/AvalonDock"
+        xmlns:controls="clr-namespace:HarnessPortable.Windows.Controls"
         Title="Harness Portable"
         Icon="/Assets/HarnessPortable.png"
         Width="1200" Height="780"
@@ -194,12 +195,12 @@
                 BorderBrush="{DynamicResource DshBgLayer3}" BorderThickness="0,0,0,1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="布局预设" Foreground="{DynamicResource DshTextSecondary}" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="工作区预设" Foreground="{DynamicResource DshTextSecondary}" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
                     <ComboBox x:Name="LayoutPresetBox" Width="170"
                               Style="{StaticResource ModernComboBox}"
                               DisplayMemberPath="Name"
                               SelectionChanged="LayoutPresetBox_SelectionChanged"/>
-                    <Button Content="保存布局" Style="{StaticResource ModernToolbarButton}"
+                    <Button Content="保存预设" Style="{StaticResource ModernToolbarButton}"
                             Margin="6,0,0,0" Click="SaveLayout_Click"/>
                     <Button Content="删除" Style="{StaticResource ModernToolbarButton}"
                             Margin="6,0,0,0" Click="DeleteLayout_Click"/>
@@ -209,8 +210,10 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Harness Portable" FontSize="17" FontWeight="SemiBold"
                                Foreground="{DynamicResource DshTextPrimary}" VerticalAlignment="Center"/>
-                    <Button Content="连接中心" Style="{StaticResource ModernPrimaryButton}"
-                            Margin="12,0,0,0" Padding="12,6" Click="OpenManagement_Click"/>
+                    <Button x:Name="SidebarToggleButton" Content="☰ 连接库" Style="{StaticResource ModernToolbarButton}"
+                            Margin="12,0,0,0" Padding="12,6" Click="ToggleSidebar_Click"/>
+                    <Button Content="分屏" Style="{StaticResource ModernToolbarButton}" Margin="6,0,0,0" Click="SplitWorkspace_Click"/>
+                    <Button Content="设置" Style="{StaticResource ModernToolbarButton}" Margin="6,0,0,0" Click="OpenManagement_Click"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -227,6 +230,11 @@
         </StatusBar>
 
         <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="240"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border x:Name="SidebarBorder" BorderBrush="{DynamicResource DshBorderL1}" BorderThickness="0,0,1,0">
+                <controls:ConnectionSidebar x:Name="ConnectionLibraryView"/>
+            </Border>
+            <Grid Grid.Column="1">
             <avalonDock:DockingManager x:Name="DockManager"
                                        AllowMixedOrientation="True"
                                        Background="{DynamicResource DshBgLayer1}"
@@ -256,6 +264,12 @@
                     </ContextMenu>
                 </avalonDock:DockingManager.DocumentContextMenu>
             </avalonDock:DockingManager>
+
+            <StackPanel x:Name="WorkspaceEmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="440">
+                <TextBlock Text="打开一个服务开始使用" Style="{StaticResource DshSectionHeader}" HorizontalAlignment="Center"/>
+                <TextBlock Text="从连接库打开 SSH 隧道或直连网页，再用标签和分屏组织工作区。" Style="{StaticResource DshMuted}" Margin="0,12,0,20" TextAlignment="Center"/>
+                <Button Content="添加连接" Style="{StaticResource ModernPrimaryButton}" HorizontalAlignment="Center" Click="AddConnection_Click"/>
+            </StackPanel>
 
             <Canvas x:Name="TabDragOverlay" Visibility="Collapsed" IsHitTestVisible="False"
                     Panel.ZIndex="20">
@@ -295,6 +309,7 @@
                     </Grid>
                 </Border>
             </Canvas>
+            </Grid>
         </Grid>
     </DockPanel>
 </Window>

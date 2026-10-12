@@ -1,16 +1,21 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import Combine
 
 @MainActor
 struct WorkspaceView: View {
     @ObservedObject var services: AppServices
     @StateObject private var workspace: WorkspaceStore
     @StateObject private var webSessions = WebSessionStore()
+    @ObservedObject private var preferences: SettingsStore
+    @State private var lastSnapshotRoot: Data?
+    private let snapshots = WorkspaceSnapshotStore()
 
     @State private var isFullScreen = false
     @State private var passwordProfile: TunnelProfile?
     @State private var passwordRequestID = UUID()
+    @State private var passwordReconnectID: String?
     @State private var keychainError: String?
     @State private var directPromptPresented = false
     @State private var directURLInput = ""
@@ -27,6 +32,7 @@ struct WorkspaceView: View {
 
     init(services: AppServices) {
         self.services = services
+        _preferences = ObservedObject(wrappedValue: services.settings)
         _workspace = StateObject(wrappedValue: WorkspaceStore())
     }
 
@@ -37,6 +43,13 @@ struct WorkspaceView: View {
                 Divider()
             }
 
+            HStack(spacing: 0) {
+            if !isFullScreen && !preferences.value.connectionSidebarCollapsed {
+                ConnectionSidebarView(profiles: services.profiles, tunnels: services.tunnels, settings: services.settings,
+                    keychain: services.keychain, onConnect: connect, onReconnect: reconnect, onOpenDirect: openDirect,
+                    onDelete: deleteProfile, onDeleteDirect: deleteDirect, onSettings: { openWindow(id: "settings") })
+                Divider()
+            }
             WorkspaceNodeView(
                 workspace: workspace,
                 node: workspace.root,
@@ -50,6 +63,7 @@ struct WorkspaceView: View {
                 onDelete: deleteProfile
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
 
             if !isFullScreen {
                 Divider()
@@ -57,6 +71,7 @@ struct WorkspaceView: View {
             }
         }
         .background(dsh.bgBase)
+        .preferredColorScheme(preferences.value.appearance == "dark" ? .dark : preferences.value.appearance == "light" ? .light : nil)
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
             webSessions.directAuthMode = { url in
@@ -67,7 +82,9 @@ struct WorkspaceView: View {
                 startWorkspaceIfNeeded()
             }
         }
-        .onDisappear { removeKeyMonitor() }
+        .onDisappear { saveSnapshot(); removeKeyMonitor() }
+        .onReceive(workspace.objectWillChange.debounce(for: .milliseconds(900), scheduler: RunLoop.main)) { _ in saveSnapshot() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in saveSnapshot() }
         .onReceive(NotificationCenter.default.publisher(for: .openTunnelTabRequest)) { notification in
             guard let profileID = notification.object as? String,
                   let profile = services.profiles.findTunnel(id: profileID) else { return }
@@ -77,7 +94,7 @@ struct WorkspaceView: View {
             guard let url = notification.object as? String else { return }
             openDirect(url)
         }
-        .sheet(item: $passwordProfile, onDismiss: { passwordRequestID = UUID() }) { profile in
+        .sheet(item: $passwordProfile, onDismiss: { passwordRequestID = UUID(); passwordReconnectID = nil }) { profile in
             let requestID = passwordRequestID
             PasswordPromptView(profile: profile) { password in
                 guard passwordRequestID == requestID,
@@ -87,6 +104,7 @@ struct WorkspaceView: View {
                     try services.keychain.setPassword(password, for: profile.id)
                     guard passwordRequestID == requestID,
                           passwordProfile?.id == profile.id else { return false }
+                    if passwordReconnectID == profile.id { services.tunnels.stop(profile.id); passwordReconnectID = nil }
                     connect(profile)
                     return true
                 } catch {
@@ -126,11 +144,15 @@ struct WorkspaceView: View {
             Divider().frame(height: 18)
             Button {
                 NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: "management")
+                openWindow(id: "settings")
             } label: {
-                Label("连接中心", systemImage: "slider.horizontal.3")
+                Label("设置", systemImage: "slider.horizontal.3")
             }
             .buttonStyle(DshPrimaryButtonStyle())
+            Button {
+                services.settings.update { $0.connectionSidebarCollapsed.toggle() }
+            } label: { Image(systemName: "sidebar.left") }
+            .help("显示 / 收起连接库")
             Button {
                 directURLInput = ""
                 directPromptPresented = true
@@ -152,7 +174,7 @@ struct WorkspaceView: View {
             } label: {
                 Image(systemName: "square.and.arrow.down")
             }
-            .help("保存布局")
+            .help("保存预设")
             if selectedLayoutName != nil {
                 Button {
                     deleteSelectedLayout()
@@ -231,9 +253,8 @@ struct WorkspaceView: View {
         guard !didStart else { return }
         didStart = true
         if services.settings.value.restoreLastLayoutOnStartup,
-           !services.settings.value.lastLayoutName.isEmpty,
-           let layout = services.layouts.named(services.settings.value.lastLayoutName) {
-            selectedLayoutName = layout.name
+           let layout = snapshots.load() ?? services.layouts.named(services.settings.value.lastLayoutName) {
+            selectedLayoutName = layout.name == "上次工作区" ? nil : layout.name
             for item in workspace.allTabs() {
                 webSessions.remove(tabID: item.tab.id)
             }
@@ -243,7 +264,7 @@ struct WorkspaceView: View {
                 validDirectURLs: Set(services.profiles.directs)
             )
             seedWebStates(from: layout.root)
-            startTunnelsInWorkspace()
+            if services.settings.value.reconnectRestoredWorkspace { startTunnelsInWorkspace() }
         }
     }
 
@@ -258,6 +279,11 @@ struct WorkspaceView: View {
     private func requestPassword(for profile: TunnelProfile) {
         passwordRequestID = UUID()
         passwordProfile = profile
+    }
+
+    private func reconnect(_ profile: TunnelProfile) {
+        if canStartWithoutPrompt(profile) { services.tunnels.stop(profile.id); connect(profile) }
+        else { passwordReconnectID = profile.id; requestPassword(for: profile) }
     }
 
     private func canStartWithoutPrompt(_ profile: TunnelProfile) -> Bool {
@@ -293,6 +319,9 @@ struct WorkspaceView: View {
 
     private func stop(_ profileID: String) {
         services.tunnels.stop(profileID)
+    }
+
+    private func closeProfileTabs(_ profileID: String) {
         let workspace = workspace
         let webSessions = webSessions
         DispatchQueue.main.async {
@@ -303,13 +332,32 @@ struct WorkspaceView: View {
 
     private func deleteProfile(_ profile: TunnelProfile) {
         stop(profile.id)
+        closeProfileTabs(profile.id)
         services.keychain.deletePassword(for: profile.id)
         services.keychain.deleteAuthInput(for: profile.id)
         services.profiles.deleteTunnel(id: profile.id)
     }
 
     private func openDirect(_ url: String) {
-        workspace.openDirect(url)
+        if let existing = workspace.allTabs().first(where: { $0.tab.kind == .direct && $0.tab.url == url }) {
+            workspace.selectTab(existing.tab.id, in: existing.paneID)
+        } else { workspace.openDirect(url) }
+    }
+
+    private func deleteDirect(_ url: String) {
+        for item in workspace.allTabs() where item.tab.kind == .direct && item.tab.url == url {
+            workspace.closeTab(item.tab.id); webSessions.remove(tabID: item.tab.id)
+        }
+        services.profiles.deleteDirect(url)
+        services.settings.update { $0.directAuthModes.removeValue(forKey: url) }
+    }
+
+    private func saveSnapshot() {
+        guard didStart else { return }
+        let root = workspace.captureLayout { webSessions.capturedWebState(forTabID: $0) }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(root), data != lastSnapshotRoot else { return }
+        snapshots.save(WorkspaceLayout(name: "上次工作区", root: root)); lastSnapshotRoot = data
     }
 
     private func openDirectInput() {

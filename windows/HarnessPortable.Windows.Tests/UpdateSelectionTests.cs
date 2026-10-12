@@ -11,14 +11,14 @@ namespace HarnessPortable.Windows.Tests;
 public sealed class UpdateSelectionTests
 {
     [Fact]
-    public void FreshSettings_DefaultsToHomeShare_AndFillsBothSlots()
+    public void FreshSettings_DefaultsToOfficialGitHub_AndFillsBothSlots()
     {
         var selection = UpdateSelection.From(new AppSettings());
 
-        Assert.Equal(UpdateSourceSlot.Home, selection.Slot);
+        Assert.Equal(UpdateSourceSlot.GitHub, selection.Slot);
         Assert.Equal(UpdateSourceFactory.DefaultServerUrl, selection.Url(UpdateSourceSlot.Home));
         Assert.Equal(UpdateSourceFactory.GitHubRepoUrl, selection.Url(UpdateSourceSlot.GitHub));
-        Assert.Equal(UpdateSourceFactory.DefaultServerUrl, selection.Url());
+        Assert.Equal(UpdateSourceFactory.GitHubRepoUrl, selection.Url());
     }
 
     [Fact]
@@ -97,11 +97,11 @@ public sealed class UpdateSelectionTests
     }
 
     [Fact]
-    public void UnknownSelectedValue_FallsBackToHome()
+    public void UnknownSelectedValue_FallsBackToGitHub()
     {
         var selection = UpdateSelection.From(new AppSettings { UpdateSourceSelected = "nonsense" });
 
-        Assert.Equal(UpdateSourceSlot.Home, selection.Slot);
+        Assert.Equal(UpdateSourceSlot.GitHub, selection.Slot);
     }
 
     /// <summary>

@@ -13,6 +13,11 @@ public sealed class AppSettings
     /// <summary>Name of the last layout that was applied.</summary>
     public string LastLayoutName { get; set; } = "";
 
+    public bool ReconnectRestoredWorkspace { get; set; }
+    public bool ConnectionSidebarCollapsed { get; set; }
+    public string Appearance { get; set; } = "system";
+    public Dictionary<string, ConnectionPreference> Connections { get; set; } = [];
+
     /// <summary>Optional SSH config path override; empty means the current user's ~/.ssh/config.</summary>
     public string SshConfigPath { get; set; } = "";
 
@@ -38,4 +43,12 @@ public sealed class AppSettings
     /// (per-platform), not in the cross-platform profiles.json directs list.
     /// </summary>
     public Dictionary<string, string> DirectAuthModes { get; set; } = [];
+}
+
+public sealed class ConnectionPreference
+{
+    public bool Favorite { get; set; }
+    public string Group { get; set; } = "";
+    public string Name { get; set; } = "";
+    public DateTimeOffset? LastOpened { get; set; }
 }

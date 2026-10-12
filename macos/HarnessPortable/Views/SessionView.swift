@@ -30,6 +30,11 @@ final class WebSessionStore: ObservableObject {
         webViews[tabID]?.url?.absoluteString
     }
 
+    func capturedWebState(forTabID tabID: UUID) -> LayoutWebState? {
+        if let url = currentURL(forTabID: tabID) { return ViewStateUrls.extract(url) }
+        return initialWebStates[tabID]
+    }
+
     /// Records the preset's view state for a tab restored from a layout.
     func setInitialWebState(_ state: LayoutWebState?, forTabID tabID: UUID) {
         if let state {

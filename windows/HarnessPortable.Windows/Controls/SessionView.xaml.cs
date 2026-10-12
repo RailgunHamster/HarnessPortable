@@ -20,7 +20,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private readonly AppServices _services;
     private readonly bool _isTunnel;
-    private readonly TunnelProfile? _profile;
+    private TunnelProfile? _profile;
     private readonly string _url;
     private int _lastPort;
 
@@ -47,6 +47,8 @@ public partial class SessionView : System.Windows.Controls.UserControl
     public event Action<string>? TitleChanged;
     public event Action? FullScreenToggleRequested;
     public event Action? EscapeRequested;
+    public event Action? ReconnectRequested;
+    public event Action? WorkspaceStateChanged;
 
     public string? ProfileId => _profile?.Id;
     public bool IsTunnel => _isTunnel;
@@ -129,7 +131,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             AttachPopupOwner();
             PositionOverlay();
 
-            if (_initialized)
+            if (_initialized || (_isTunnel && _profile is not null && _services.Tunnels.GetState(_profile.Id).Status != TunnelStatus.Connected))
             {
                 return;
             }
@@ -378,6 +380,12 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         if (info.Status == TunnelStatus.Connected)
         {
+            _profile = _services.Profiles.FindTunnel(_profile.Id) ?? _profile;
+            if (!_initialized && IsLoaded)
+            {
+                _initialized = true;
+                _ = InitializeWebViewAsync();
+            }
             if (_browserFailed) { SetTitle($"● {_customLabel ?? _profile.DisplayName}"); return; }
             StatusOverlay.Visibility = Visibility.Collapsed;
             UpdateBrowserVisibility();
@@ -413,7 +421,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             _ => "正在连接…",
         };
         OverlayMessage.Text = info.Message ?? "";
-        OverlayReconnectButton.Visibility = info.Status is TunnelStatus.Failed or TunnelStatus.Retrying
+        OverlayReconnectButton.Visibility = info.Status is TunnelStatus.Failed or TunnelStatus.Retrying or TunnelStatus.Stopped
             ? Visibility.Visible
             : Visibility.Collapsed;
         OverlayReturnButton.Content = "关闭标签";
@@ -475,6 +483,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             WebView.GotFocus += (_, _) => FlickerLog.Log("webview", "GotFocus (" + LogTag + ")");
             WebView.LostFocus += (_, _) => FlickerLog.Log("webview", "LostFocus (" + LogTag + ")");
             core.NavigationStarting += (_, e) => FlickerLog.Log("webview-nav", "start " + MaskUrl(e.Uri) + " (" + LogTag + ")");
+            core.SourceChanged += (_, _) => WorkspaceStateChanged?.Invoke();
             core.NavigationCompleted += async (_, e) =>
             {
                 if (_shutdown || !ReferenceEquals(WebView, browser)) return;
@@ -484,7 +493,8 @@ public partial class SessionView : System.Windows.Controls.UserControl
             };
 
             WebView.PreviewKeyDown += OnWebViewPreviewKeyDown;
-            Navigate(await ResolveInitialUrlAsync());
+            if (!_isTunnel || _profile is not null && _services.Tunnels.GetState(_profile.Id).Status == TunnelStatus.Connected)
+                Navigate(await ResolveInitialUrlAsync());
         }
         catch (Exception ex)
         {
@@ -859,6 +869,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private void Reconnect_Click(object sender, RoutedEventArgs e)
     {
+        if (ReconnectRequested is not null) { ReconnectRequested.Invoke(); return; }
         if (_isTunnel && _profile is not null)
         {
             _services.Tunnels.Start(_profile.Id);

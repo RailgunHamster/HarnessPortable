@@ -93,456 +93,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-@Composable
-fun SettingsScreen(
-    tunnels: List<TunnelProfile>,
-    directs: List<String>,
-    runningTunnelId: String?,
-    onConnectTunnel: (TunnelProfile) -> Unit,
-    onAddTunnel: (TunnelProfile, String?, String?) -> Unit,
-    onUpdateTunnel: (TunnelProfile, String?, String?) -> Unit,
-    onDeleteTunnel: (TunnelProfile) -> Unit,
-    onConnectDirect: (String) -> Unit,
-    onAddDirect: (String) -> Unit,
-    onDeleteDirect: (String) -> Unit
-) {
-    val ctx = LocalContext.current
-    val activity = ctx as? Activity
-    val scope = rememberCoroutineScope()
-    val mainHandler = remember { Handler(Looper.getMainLooper()) }
-    var editorFor by remember { mutableStateOf<TunnelProfile?>(null) }
-    var showEditor by remember { mutableStateOf(false) }
-    var directInput by remember { mutableStateOf("") }
-    val initialSources = remember {
-        // Fold the pre-two-slot single setting into the new pair once, so an
-        // existing install keeps checking wherever the user had aimed it.
-        UpdateSourceStore.migrateLegacy(ctx, ApkUpdate.storedServer(ctx))
-        UpdateSourceStore.load(ctx)
-    }
-    var updateSources by remember { mutableStateOf(initialSources) }
-    var updateUrl by remember { mutableStateOf(initialSources.url()) }
-    var updateStatus by remember { mutableStateOf("尚未检查更新") }
-    var updateNotes by remember { mutableStateOf("") }
-    var updateBusy by remember { mutableStateOf(false) }
-    var updateProgress by remember { mutableStateOf(-1) }
-    var pendingFeed by remember { mutableStateOf<ApkFeed?>(null) }
-    val versionName = remember { ApkUpdate.currentVersionName(ctx) }
-    val versionCode = remember { ApkUpdate.currentVersionCode(ctx) }
-
-    /** Writes the edited URL into its slot, so switching sources keeps both. */
-    fun storeSources(): UpdateSources {
-        val next = when (updateSources.selected) {
-            UpdateSourceKind.GitHub -> updateSources.copy(github = updateUrl.trim())
-            UpdateSourceKind.File -> updateSources.copy(home = updateUrl.trim())
-        }
-        UpdateSourceStore.save(ctx, next)
-        updateSources = next
-        return next
-    }
-
-    fun checkUpdate() {
-        val sources = storeSources()
-        updateBusy = true
-        updateProgress = -1
-        updateStatus = "正在检查更新…"
-        pendingFeed = null
-        scope.launch {
-            try {
-                val feed = withContext(Dispatchers.IO) { ApkUpdate.fetchFeed(sources.url()) }
-                pendingFeed = feed
-                updateNotes = feed.notes
-                updateStatus = if (feed.versionCode > versionCode) {
-                    "发现新版本 ${feed.versionName}（当前 $versionName）"
-                } else {
-                    "当前版本 $versionName，已是最新"
-                }
-            } catch (e: Exception) {
-                updateStatus = "检查更新失败：${e.message}"
-            } finally {
-                updateBusy = false
-            }
-        }
-    }
-
-    fun installUpdate() {
-        val feed = pendingFeed ?: return
-        if (feed.versionCode <= versionCode) return
-        if (activity != null && !ApkUpdate.canInstallPackages(ctx)) {
-            updateStatus = "请允许本应用安装未知来源应用，然后再点立即安装"
-            ApkUpdate.requestInstallPermission(activity)
-            return
-        }
-        updateBusy = true
-        updateProgress = 0
-        updateStatus = "正在下载 ${feed.versionName}…"
-        scope.launch {
-            try {
-                val dest = ApkUpdate.updateFile(ctx)
-                withContext(Dispatchers.IO) {
-                    ApkUpdate.download(feed.apkUrl, dest) { p ->
-                        mainHandler.post { updateProgress = p }
-                    }
-                }
-                updateStatus = "正在打开系统安装界面…"
-                ApkUpdate.install(ctx, dest)
-            } catch (e: Exception) {
-                updateStatus = "下载/安装失败：${e.message}"
-            } finally {
-                updateBusy = false
-                updateProgress = -1
-            }
-        }
-    }
-
-    fun addDirect() {
-        val norm = normalizeUrl(directInput) ?: return
-        onAddDirect(norm)
-        directInput = ""
-    }
-
-    val dsh = LocalDsh.current
-    var section by rememberSaveable { mutableStateOf(0) }
-    val tunnelScroll = rememberLazyListState()
-    val directScroll = rememberLazyListState()
-    val settingsScroll = rememberLazyListState()
-    Scaffold(
-        containerColor = dsh.base,
-        topBar = {
-          Column {
-            Column(Modifier.fillMaxWidth().background(dsh.layer1)
-                .windowInsetsPadding(WindowInsets.displayCutout).padding(horizontal = 20.dp, vertical = 18.dp)) {
-                Text("连接中心", style = MaterialTheme.typography.headlineSmall, color = dsh.textPrimary)
-                Text("Harness Portable", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
-            }
-            TabRow(selectedTabIndex = section, containerColor = dsh.layer1, contentColor = dsh.accent) {
-                listOf("隧道", "直连", "设置").forEachIndexed { index, label ->
-                    Tab(selected = section == index, onClick = { section = index },
-                        text = { Text(label, maxLines = 1) },
-                        selectedContentColor = dsh.accent, unselectedContentColor = dsh.textSecondary)
-                }
-            }
-          }
-        }
-    ) { padding ->
-      Box(Modifier.fillMaxSize().padding(padding).imePadding(), contentAlignment = Alignment.TopCenter) {
-        LazyColumn(
-            state = when (section) { 0 -> tunnelScroll; 1 -> directScroll; else -> settingsScroll },
-            modifier = Modifier
-                .widthIn(max = 960.dp)
-                .fillMaxWidth().fillMaxHeight()
-                .background(dsh.base),
-            contentPadding = PaddingValues(20.dp, 18.dp, 20.dp, 28.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            if (section == 0) {
-            // ---------- SSH tunnels ----------
-            item {
-                SectionHeader(
-                    text = "SSH 隧道",
-                    trailing = "${tunnels.size}",
-                    action = {
-                        IconButton(onClick = { editorFor = null; showEditor = true }) {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = "添加隧道",
-                                tint = dsh.textSecondary
-                            )
-                        }
-                    }
-                )
-            }
-
-            if (tunnels.isEmpty()) {
-                item {
-                    ShellEmptyState(
-                        icon = Icons.Filled.Dns,
-                        title = "添加你的第一个隧道",
-                        message = "通过 SSH 安全访问远程网页，保存连接后即可快速打开。",
-                        actionLabel = "添加隧道",
-                        onAction = { editorFor = null; showEditor = true }
-                    )
-                }
-            }
-
-            items(tunnels, key = { it.id }) { p ->
-                TunnelRow(
-                    profile = p,
-                    running = p.id == runningTunnelId,
-                    onConnect = { onConnectTunnel(p) },
-                    onEdit = { editorFor = p; showEditor = true },
-                    onDelete = { onDeleteTunnel(p) }
-                )
-            }
-
-            }
-            if (section == 1) {
-            // ---------- direct URLs ----------
-            item {
-                SectionHeader(text = "直连", modifier = Modifier.padding(top = 12.dp))
-                LanMachineField(
-                    value = directInput,
-                    onValueChange = { directInput = it },
-                    label = "IP、机器名或完整 URL",
-                    placeholder = "192.168.0.104",
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Uri,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { addDirect() }),
-                    trailingAction = {
-                        IconButton(onClick = { addDirect() }) {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = "添加",
-                                tint = dsh.accent
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 6.dp)
-                )
-            }
-
-            if (directs.isEmpty()) {
-                item {
-                    Text(
-                        "也可直接添加 http(s) 地址，不经过 SSH 隧道访问。",
-                        color = dsh.textTertiary,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 2.dp)
-                    )
-                }
-            }
-
-            items(directs, key = { it }) { url ->
-                ServerRow(
-                    url = url,
-                    onConnect = { onConnectDirect(url) },
-                    onDelete = { onDeleteDirect(url) }
-                )
-            }
-
-            }
-            if (section == 2) {
-            item {
-                Column(
-                    modifier = Modifier
-                        .padding(top = 12.dp)
-                        .fillMaxWidth()
-                        .dshCard()
-                        .padding(16.dp)
-                ) {
-                    SectionLabel("后台保活")
-                    val exempt = BatteryExemption.isExempt(ctx)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 8.dp)
-                    ) {
-                        StatusDot(if (exempt) dsh.success else dsh.warning)
-                        Spacer(Modifier.size(8.dp))
-                        Text(
-                            if (exempt) "已忽略电池优化" else "未忽略电池优化",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = dsh.textPrimary
-                        )
-                    }
-                    Text(
-                        if (exempt)
-                            "已忽略电池优化，SSH 隧道可以在切到后台后继续运行。"
-                        else
-                            "未忽略电池优化。系统可能在切到后台后几分钟内杀掉隧道，" +
-                                "下次打开就会看到「隧道未连接」。",
-                        color = dsh.textTertiary,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 6.dp, bottom = 4.dp)
-                    )
-                    if (!exempt) {
-                        BrandButton(
-                            text = "允许后台运行",
-                            onClick = { BatteryExemption.request(ctx) },
-                            modifier = Modifier.padding(top = 10.dp)
-                        )
-                    }
-                }
-            }
-
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .dshCard()
-                        .padding(16.dp)
-                ) {
-                    SectionLabel("自动更新")
-                    Text(
-                        "当前版本 $versionName ($versionCode)",
-                        color = dsh.textTertiary,
-                        fontSize = 12.sp,
-                        fontFamily = DshMonoFontFamily,
-                        modifier = Modifier.padding(top = 6.dp, bottom = 10.dp)
-                    )
-                    OutlinedTextField(
-                        value = updateUrl,
-                        onValueChange = { updateUrl = it },
-                        label = {
-                            Text(
-                                if (updateSources.selected == UpdateSourceKind.GitHub)
-                                    "GitHub 仓库"
-                                else "家庭目录（局域网路径或 http 地址）"
-                            )
-                        },
-                        singleLine = true,
-                        shape = DshControlShape,
-                        textStyle = dsh.monoStyle(),
-                        colors = dshFieldColors(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        "使用：" + updateSources.selected.let {
-                            if (it == UpdateSourceKind.GitHub) "GitHub" else "家庭目录"
-                        },
-                        color = dsh.textTertiary,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                    Row(
-                        modifier = Modifier.padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        UpdateSourceKind.entries.forEach { kind ->
-                            if (kind == updateSources.selected) {
-                                Button(
-                                    onClick = {},
-                                    enabled = !updateBusy,
-                                    shape = DshControlShape,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = dsh.brandFill,
-                                        contentColor = dsh.brandText
-                                    )
-                                ) { Text(kind.label()) }
-                            } else {
-                                OutlinedButton(
-                                    onClick = {
-                                        // Keep what is typed against the source it
-                                        // belongs to, then swap the field over.
-                                        val kept = storeSources()
-                                        updateSources = kept.copy(selected = kind)
-                                        updateUrl = kept.url(kind)
-                                        UpdateSourceStore.save(ctx, updateSources)
-                                        updateStatus = "已切换到${kind.label()}"
-                                        pendingFeed = null
-                                    },
-                                    enabled = !updateBusy,
-                                    shape = DshControlShape,
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = dsh.textSecondary
-                                    )
-                                ) { Text(kind.label()) }
-                            }
-                        }
-                    }
-                    Text(
-                        "将请求：" + runCatching { updateSources.feedUrl() }.getOrDefault(""),
-                        color = dsh.textTertiary,
-                        fontSize = 11.sp,
-                        fontFamily = DshMonoFontFamily,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                    FlowRow(
-                        modifier = Modifier.padding(top = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                storeSources()
-                                updateStatus = "已保存更新地址"
-                            },
-                            enabled = !updateBusy,
-                            shape = DshControlShape,
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = dsh.textSecondary
-                            )
-                        ) { Text("保存") }
-                        BrandButton(
-                            text = "检查更新",
-                            onClick = { checkUpdate() },
-                            enabled = !updateBusy
-                        )
-                        BrandButton(
-                            text = "立即安装",
-                            onClick = { installUpdate() },
-                            enabled = !updateBusy && (pendingFeed?.versionCode ?: 0) > versionCode
-                        )
-                    }
-                    if (updateProgress >= 0) {
-                        LinearProgressIndicator(
-                            progress = { updateProgress / 100f },
-                            color = dsh.accent,
-                            trackColor = dsh.layer3,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 10.dp)
-                        )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 10.dp)
-                    ) {
-                        StatusDot(updateStatusColor(updateStatus, dsh))
-                        Spacer(Modifier.size(8.dp))
-                        Text(
-                            updateStatus,
-                            color = dsh.textSecondary,
-                            fontSize = 12.sp
-                        )
-                    }
-                    if (updateNotes.isNotBlank()) {
-                        Text(
-                            updateNotes,
-                            fontSize = 12.sp,
-                            color = dsh.textSecondary,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-                    Text(
-                        "两个地址都保留，切换不丢。家庭目录是局域网共享路径" +
-                            "（\\\\server-home\\public\\Software\\HarnessPortable-Releases），" +
-                            "手机读不了 UNC，要在手机上用它请填一个同目录的 http 地址。" +
-                            "手机默认走 GitHub。",
-                        color = dsh.textTertiary,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 10.dp)
-                    )
-                }
-            }
-            }
-        }
-    }
-
-      }
-    if (showEditor) {
-        // Stored value is read once per opened editor: editing a profile must
-        // not re-run keystore decryption on every recomposition.
-        val initialAuthInput = remember(editorFor) {
-            editorFor?.let { SecureStore.getAuthInput(ctx, it.id) }
-        }
-        TunnelEditorDialog(
-            initial = editorFor,
-            initialAuthInput = initialAuthInput,
-            onDismiss = { showEditor = false },
-            onSave = { profile, password, authInput ->
-                if (editorFor == null) onAddTunnel(profile, password, authInput)
-                else onUpdateTunnel(profile, password, authInput)
-                showEditor = false
-            }
-        )
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Token building blocks
 // ---------------------------------------------------------------------------
@@ -639,7 +189,7 @@ private fun BrandButton(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LanMachineField(
+internal fun LanMachineField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
@@ -885,11 +435,12 @@ private fun ServerRow(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun TunnelEditorDialog(
+internal fun TunnelEditorDialog(
     initial: TunnelProfile?,
     initialAuthInput: String?,
     onDismiss: () -> Unit,
-    onSave: (TunnelProfile, String?, String?) -> Unit
+    onSave: (TunnelProfile, String?, String?) -> Unit,
+    onConnectAfterSaveChanged: (Boolean) -> Unit = {}
 ) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var host by remember { mutableStateOf(initial?.sshHost ?: "") }
@@ -934,6 +485,43 @@ private fun TunnelEditorDialog(
             portOr(port, 0) in 1..65535 &&
             portOr(remotePort, 0) in 1..65535 &&
             portOr(localPort, 0) in 1..65535
+
+    fun saveProfile() {
+
+                    val id = initial?.id ?: java.util.UUID.randomUUID().toString()
+                    val storedIdentity = try {
+                        when {
+                            pendingIdentityUri != null ->
+                                SshIdentityFiles.import(ctx, id, pendingIdentityUri!!)
+                            identityFile.isBlank() -> {
+                                SshIdentityFiles.deleteManaged(ctx, id)
+                                ""
+                            }
+                            else -> identityFile.trim()
+                        }
+                    } catch (_: Exception) {
+                        initial?.identityFile ?: ""
+                    }
+                    onSave(
+                        TunnelProfile(
+                            id = id,
+                            name = name.trim().ifBlank { host.trim() },
+                            sshHost = host.trim(),
+                            sshPort = portOr(port, 22),
+                            user = user.trim(),
+                            remoteHost = remoteHost.trim(),
+                            remotePort = portOr(remotePort, 3080),
+                            localPort = portOr(localPort, 3080),
+                            authMode = authMode,
+                            identityFile = storedIdentity,
+                            systemdUnit = systemdUnit.trim().ifBlank { "dsh-web.service" },
+                            systemdScope = systemdScope,
+                            systemdLogPath = systemdLogPath.trim()
+                        ),
+                        pass.takeIf { it.isNotEmpty() },
+                        authInput.trim().takeIf { it.isNotEmpty() }
+                    )
+    }
 
     val dsh = LocalDsh.current
 
@@ -1160,44 +748,10 @@ private fun TunnelEditorDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = valid,
-                onClick = {
-                    val id = initial?.id ?: java.util.UUID.randomUUID().toString()
-                    val storedIdentity = try {
-                        when {
-                            pendingIdentityUri != null ->
-                                SshIdentityFiles.import(ctx, id, pendingIdentityUri!!)
-                            identityFile.isBlank() -> {
-                                SshIdentityFiles.deleteManaged(ctx, id)
-                                ""
-                            }
-                            else -> identityFile.trim()
-                        }
-                    } catch (_: Exception) {
-                        initial?.identityFile ?: ""
-                    }
-                    onSave(
-                        TunnelProfile(
-                            id = id,
-                            name = name.trim().ifBlank { host.trim() },
-                            sshHost = host.trim(),
-                            sshPort = portOr(port, 22),
-                            user = user.trim(),
-                            remoteHost = remoteHost.trim(),
-                            remotePort = portOr(remotePort, 3080),
-                            localPort = portOr(localPort, 3080),
-                            authMode = authMode,
-                            identityFile = storedIdentity,
-                            systemdUnit = systemdUnit.trim().ifBlank { "dsh-web.service" },
-                            systemdScope = systemdScope,
-                            systemdLogPath = systemdLogPath.trim()
-                        ),
-                        pass.takeIf { it.isNotEmpty() },
-                        authInput.trim().takeIf { it.isNotEmpty() }
-                    )
-                }
-            ) { Text("保存") }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(enabled = valid, onClick = { onConnectAfterSaveChanged(false); saveProfile() }) { Text("保存") }
+                TextButton(enabled = valid, onClick = { onConnectAfterSaveChanged(true); saveProfile() }) { Text("保存并连接") }
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {

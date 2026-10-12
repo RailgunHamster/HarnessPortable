@@ -30,6 +30,8 @@ public sealed class ProfileStore
     private readonly string _path;
     private readonly object _lock = new();
 
+    public event Action? Changed;
+
     public ProfileStore(string? path = null)
     {
         _path = path ?? AppPaths.ProfilesFile;
@@ -56,6 +58,7 @@ public sealed class ProfileStore
         {
             JsonFile.Write(_path, config, JsonOptions);
         }
+        Changed?.Invoke();
     }
 
     public List<TunnelProfile> LoadTunnels() => Load().Tunnels;

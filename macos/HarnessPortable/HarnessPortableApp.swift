@@ -44,6 +44,7 @@ struct HarnessPortableApp: App {
             WorkspaceView(services: services)
         }
         .commands {
+            HarnessSettingsCommands()
             CommandGroup(replacing: .appTermination) {
                 Button("退出 Harness Portable") {
                     services.shutdown()
@@ -56,8 +57,8 @@ struct HarnessPortableApp: App {
         // The management UI lives in its own window (2.6.8 parity): it stays
         // reachable from the toolbar and the menu bar even when the workspace
         // window is closed to the tray or misbehaving.
-        Window("管理 / 设置", id: "management") {
-            ManagementWindowView(services: services)
+        Window("设置 · Harness Portable", id: "settings") {
+            SettingsWindowView(settings: services.settings, profiles: services.profiles, updater: services.updater)
         }
         .windowResizability(.contentSize)
         .defaultSize(width: 960, height: 680)
@@ -83,9 +84,9 @@ private struct MenuBarView: View {
                 openWindow(id: "main")
             }
 
-            Button("管理 / 设置", systemImage: "slider.horizontal.3") {
+            Button("设置", systemImage: "slider.horizontal.3") {
                 NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: "management")
+                openWindow(id: "settings")
             }
 
             if !services.tunnels.activeStates.isEmpty {
@@ -116,7 +117,7 @@ private struct MenuBarView: View {
                 .foregroundStyle(dsh.textTertiary)
             Button("检测并更新", systemImage: "arrow.down.circle") {
                 NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: "management")
+                openWindow(id: "settings")
                 services.updater.check()
             }
             Button("退出 Harness Portable", systemImage: "power") {
@@ -126,5 +127,15 @@ private struct MenuBarView: View {
         }
         .padding(8)
         .background(dsh.bgBase)
+    }
+}
+
+@MainActor
+private struct HarnessSettingsCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+    var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("设置…") { openWindow(id: "settings") }.keyboardShortcut(",")
+        }
     }
 }

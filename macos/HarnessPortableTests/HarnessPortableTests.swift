@@ -241,7 +241,7 @@ final class HarnessPortableTests: XCTestCase {
         XCTAssertEqual(legacyHttp.updateSourceSelected, "github")
 
         let defaults = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
-        XCTAssertEqual(defaults.updateSourceSelected, "home")
+        XCTAssertEqual(defaults.updateSourceSelected, "github")
         XCTAssertTrue(defaults.updateGithubUrl.contains("github.com"))
     }
 

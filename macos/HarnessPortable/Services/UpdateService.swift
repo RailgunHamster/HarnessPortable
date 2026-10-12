@@ -45,6 +45,11 @@ final class UpdateService: NSObject, ObservableObject {
         self.settings = settings
     }
 
+    func resetSourceResult() {
+        switch phase { case .checking, .downloading: return; default: break }
+        feed = nil; notes = ""; phase = .idle
+    }
+
     nonisolated static let currentVersion: String = {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
     }()

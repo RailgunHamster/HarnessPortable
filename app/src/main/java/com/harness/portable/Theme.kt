@@ -258,7 +258,8 @@ internal val DshMonoFontFamily: FontFamily = FontFamily.Monospace
  */
 @Composable
 internal fun AppTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+    val appearance = rememberUiPreferences().appearance
+    val dark = when (appearance) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     val dsh = if (dark) DarkTokens else LightTokens
     CompositionLocalProvider(LocalDsh provides dsh) {
         MaterialTheme(

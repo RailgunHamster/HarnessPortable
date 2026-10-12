@@ -224,10 +224,20 @@ final class WorkspaceStore: ObservableObject {
     }
 
     func captureLayout(webState: ((UUID) -> LayoutWebState?)? = nil) -> LayoutNode {
-        guard let webState else { return root }
         var captured = root
-        attachWebState(&captured, webState)
+        captureSelections(&captured)
+        if let webState { attachWebState(&captured, webState) }
         return captured
+    }
+
+    private func captureSelections(_ node: inout LayoutNode) {
+        if node.kind == .pane {
+            for index in node.tabs.indices {
+                node.tabs[index].selected = selectedTabIDs[node.id] == node.tabs[index].id
+                node.tabs[index].active = node.id == activePaneID && node.tabs[index].selected
+            }
+        }
+        for index in node.children.indices { captureSelections(&node.children[index]) }
     }
 
     private func attachWebState(_ node: inout LayoutNode, _ webState: (UUID) -> LayoutWebState?) {
@@ -255,7 +265,7 @@ final class WorkspaceStore: ObservableObject {
         root = restored
         selectedTabIDs = [:]
         initializeSelections(root)
-        activePaneID = firstPaneID(root) ?? root.id
+        activePaneID = allTabs().first(where: { $0.tab.active })?.paneID ?? firstPaneID(root) ?? root.id
         refreshTabCount()
     }
 
@@ -425,7 +435,7 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func initializeSelections(_ node: LayoutNode) {
-        if node.kind == .pane, let first = node.tabs.first { selectedTabIDs[node.id] = first.id }
+        if node.kind == .pane, let selected = node.tabs.first(where: { $0.selected }) ?? node.tabs.first { selectedTabIDs[node.id] = selected.id }
         for child in node.children { initializeSelections(child) }
     }
 }

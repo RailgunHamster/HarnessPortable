@@ -27,10 +27,7 @@ public partial class MainWindow : Window
     }
 
     private readonly AppServices _services;
-    private readonly ManagementView _managementView;
     private readonly LayoutPresetStore _layoutPresets;
-
-    private ManagementWindow? _managementWindow;
 
     private readonly Dictionary<string, TunnelProfile> _pendingProfiles = [];
     private readonly Dictionary<string, List<LayoutDocument>> _tunnelDocsByProfile = [];
@@ -90,11 +87,6 @@ public partial class MainWindow : Window
         SizeChanged += (_, _) => FlickerLog.Log("window", "SizeChanged");
         LocationChanged += (_, _) => FlickerLog.Log("window", "LocationChanged");
 
-        _managementView = new ManagementView(_services);
-        _managementView.TunnelConnectRequested += ConnectTunnel;
-        _managementView.TunnelStopRequested += CloseTunnelDocs;
-        _managementView.DirectOpenRequested += OpenDirectSession;
-
         InitializeTabDragOverlayWindow();
         Deactivated += (_, _) => EndTabDrag();
         LostMouseCapture += (_, _) => { if (_tabDragActive && Mouse.Captured != this) EndTabDrag(); };
@@ -107,6 +99,7 @@ public partial class MainWindow : Window
         RefreshStatusBar();
         RefreshPresetBox(null);
         RestoreLastLayoutIfEnabled();
+        InitializeWorkspaceUx();
         Loaded += (_, _) =>
         {
             // Resolve the two-slot selection rather than the retired single
@@ -133,20 +126,7 @@ public partial class MainWindow : Window
     /// </summary>
     public void ShowManagementPanel()
     {
-        if (_managementWindow is null)
-        {
-            _managementWindow = new ManagementWindow(_managementView);
-            _managementWindow.Closed += (_, _) => _managementWindow = null;
-            _managementWindow.Show();
-            return;
-        }
-
-        if (_managementWindow.WindowState == WindowState.Minimized)
-        {
-            _managementWindow.WindowState = WindowState.Normal;
-        }
-
-        _managementWindow.Activate();
+        ShowSettings();
     }
 
     private void OpenManagement_Click(object sender, RoutedEventArgs e) => ShowManagementPanel();
@@ -230,6 +210,7 @@ public partial class MainWindow : Window
 
     private void RefreshStatusBar()
     {
+        WorkspaceEmptyState.Visibility = AllSessionDocs().Any() ? Visibility.Collapsed : Visibility.Visible;
         var active = _services.Tunnels.GetActiveStates().ToList();
         StopTunnelButton.Visibility = active.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -838,6 +819,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        _connectionLibrary?.MarkOpened(ConnectionLibrary.TunnelKey(profile.Id));
+
         var state = _services.Tunnels.GetState(profile.Id);
         if (state.Status == TunnelStatus.Connected)
         {
@@ -900,6 +883,13 @@ public partial class MainWindow : Window
 
     private void WireSessionView(SessionView view)
     {
+        view.WorkspaceStateChanged += ScheduleWorkspaceSnapshot;
+        view.ReconnectRequested += () =>
+        {
+            if (view.ProfileId is not { } id || _services.Profiles.FindTunnel(id) is not { } profile || !EnsurePassword(profile)) return;
+            _services.Tunnels.Stop(id);
+            _services.Tunnels.Start(id);
+        };
         view.AppFullScreenActive = _isFullScreen;
         view.CloseRequested += () => CloseDocByView(view);
         view.FullScreenToggleRequested += ToggleFullScreen;
@@ -1001,6 +991,12 @@ public partial class MainWindow : Window
     private void OpenDirectSession(string url)
     {
         BringToFront();
+        _connectionLibrary?.MarkOpened(ConnectionLibrary.DirectKey(url));
+        var existing = _directDocs.FirstOrDefault(d => (d.Content as SessionView)?.DirectUrl == url);
+        if (existing is not null)
+        {
+            existing.IsActive = true; existing.IsSelected = true; return;
+        }
         CreateDirectDoc(url, NextDirectSuffix(url), GetTargetPane(), activate: true);
     }
 
@@ -1089,6 +1085,7 @@ public partial class MainWindow : Window
         }
 
         _directDocs.Remove(doc);
+        RefreshStatusBar();
     }
 
     private void CloseTunnelDocs(string profileId)
@@ -1124,7 +1121,6 @@ public partial class MainWindow : Window
     {
         _pendingProfiles.Clear();
         _services.Tunnels.StopAll();
-        CloseAllSessionDocs();
         RefreshStatusBar();
     }
 
@@ -1492,12 +1488,13 @@ public partial class MainWindow : Window
     private void RestoreLastLayoutIfEnabled()
     {
         var settings = _services.Settings.Load();
-        if (!settings.RestoreLastLayoutOnStartup || string.IsNullOrWhiteSpace(settings.LastLayoutName))
+        if (!settings.RestoreLastLayoutOnStartup)
         {
             return;
         }
 
-        var preset = _layoutPresets.Load().FirstOrDefault(p =>
+        var snapshot = _workspaceSnapshots.Load();
+        var preset = snapshot ?? _layoutPresets.Load().FirstOrDefault(p =>
             string.Equals(p.Name, settings.LastLayoutName, StringComparison.OrdinalIgnoreCase));
         if (preset is null)
         {
@@ -1508,11 +1505,18 @@ public partial class MainWindow : Window
         LayoutPresetBox.SelectedItem = preset;
         _suppressPresetSelection = false;
 
-        ApplyLayoutPreset(preset);
+        _connectDuringRestore = settings.ReconnectRestoredWorkspace;
+        try { ApplyLayoutPreset(preset); }
+        finally { _connectDuringRestore = true; }
     }
 
     private void ApplyLayoutPreset(WorkspaceLayout layout)
     {
+        _restoredSelectedDocuments.Clear(); _restoredActiveDocument = null;
+        _restoreConnectionReadiness.Clear();
+        var restoredConfig = _services.Profiles.Load();
+        _restoreProfiles = restoredConfig.Tunnels.GroupBy(p => p.Id).ToDictionary(g => g.Key, g => g.First());
+        _restoreDirects = restoredConfig.Directs.ToHashSet(StringComparer.Ordinal);
         _pendingProfiles.Clear();
         CloseAllSessionDocs();
 
@@ -1530,10 +1534,11 @@ public partial class MainWindow : Window
         DockManager.Layout = new LayoutRoot { RootPanel = rootPanel };
 
         var appSettings = _services.Settings.Load();
-        appSettings.LastLayoutName = layout.Name;
+        if (layout.Name != WorkspaceSnapshotName) appSettings.LastLayoutName = layout.Name;
         _services.Settings.Save(appSettings);
 
-        var firstSession = AllSessionDocs().FirstOrDefault();
+        foreach (var doc in _restoredSelectedDocuments) doc.IsSelected = true;
+        var firstSession = _restoredActiveDocument ?? AllSessionDocs().FirstOrDefault();
         if (firstSession is not null)
         {
             firstSession.IsActive = true;
@@ -1541,6 +1546,8 @@ public partial class MainWindow : Window
         }
 
         RefreshStatusBar();
+        _restoredSelectedDocuments.Clear(); _restoredActiveDocument = null;
+        _restoreProfiles = null; _restoreDirects = null; _restoreConnectionReadiness.Clear();
     }
 
     private IEnumerable<LayoutDocument> AllSessionDocs()
@@ -1733,7 +1740,8 @@ public partial class MainWindow : Window
                     Kind = "tunnel",
                     ProfileId = profileId,
                     Label = view.CustomLabel,
-                    Web = ViewStateUrls.Extract(view.CurrentUrl),
+                    Web = view.CurrentUrl is null ? view.InitialWebState : ViewStateUrls.Extract(view.CurrentUrl),
+                    Selected = doc.IsSelected, Active = doc.IsActive,
                 }
                 : !view.IsTunnel && view.DirectUrl is { } url
                     ? new LayoutTabRef
@@ -1741,7 +1749,8 @@ public partial class MainWindow : Window
                         Kind = "direct",
                         Url = url,
                         Label = view.CustomLabel,
-                        Web = ViewStateUrls.Extract(view.CurrentUrl),
+                        Web = view.CurrentUrl is null ? view.InitialWebState : ViewStateUrls.Extract(view.CurrentUrl),
+                        Selected = doc.IsSelected, Active = doc.IsActive,
                     }
                     : null
             : null;
@@ -1801,29 +1810,34 @@ public partial class MainWindow : Window
 
         if (tab.Kind == "tunnel")
         {
-            var profile = tab.ProfileId is null ? null : _services.Profiles.FindTunnel(tab.ProfileId);
-            if (profile is null || !EnsurePassword(profile))
+            var profile = tab.ProfileId is null ? null : _restoreProfiles?.GetValueOrDefault(tab.ProfileId);
+            if (profile is null)
             {
                 return;
             }
 
             var state = _services.Tunnels.GetState(profile.Id);
+            var reconnect = CanConnectRestored(profile);
             var port = state.LocalPort > 0 ? state.LocalPort : profile.LocalPort;
             var doc = CreateTunnelDoc(profile, port, pane, activate: false, webState: tab.Web);
+            if (tab.Selected) _restoredSelectedDocuments.Add(doc);
+            if (tab.Active) _restoredActiveDocument = doc;
             if (tab.Label is { } label && doc.Content is SessionView tunnelView)
             {
                 _docSuffixes[doc] = "";
                 tunnelView.SetCustomLabel(label);
             }
 
-            if (state.Status is not (TunnelStatus.Connected or TunnelStatus.Connecting or TunnelStatus.Retrying))
+            if (reconnect && state.Status is not (TunnelStatus.Connected or TunnelStatus.Connecting or TunnelStatus.Retrying))
             {
                 _services.Tunnels.Start(profile.Id);
             }
         }
-        else if (tab.Kind == "direct" && tab.Url is { } url)
+        else if (tab.Kind == "direct" && tab.Url is { } url && _restoreDirects?.Contains(url) == true)
         {
             var doc = CreateDirectDoc(url, NextDirectSuffix(url), pane, activate: false, webState: tab.Web);
+            if (tab.Selected) _restoredSelectedDocuments.Add(doc);
+            if (tab.Active) _restoredActiveDocument = doc;
             if (tab.Label is { } label && doc.Content is SessionView directView)
             {
                 _docSuffixes[doc] = "";
@@ -1954,6 +1968,7 @@ public partial class MainWindow : Window
 
     private void SetSessionFullScreenState(bool fullScreen)
     {
+        ApplySidebarVisibility();
         foreach (var view in AllSessionDocs().Select(d => d.Content).OfType<SessionView>())
         {
             view.AppFullScreenActive = fullScreen;
@@ -1966,6 +1981,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
+        SaveWorkspaceSnapshot();
         base.OnClosing(e);
 
         if (System.Windows.Application.Current is App { IsExiting: true })

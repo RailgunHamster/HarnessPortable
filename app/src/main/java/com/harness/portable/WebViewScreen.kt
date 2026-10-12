@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Autorenew
@@ -56,6 +57,12 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -88,7 +95,12 @@ internal fun WebViewScreen(
     tunnelInfo: TunnelState.Info?,
     onToggleOrientation: () -> Unit,
     onChangeServer: () -> Unit,
-    onReconnect: () -> Unit
+    onReconnect: () -> Unit,
+    title: String = "",
+    visible: Boolean = true,
+    fullScreen: Boolean = false,
+    onOpenSettings: () -> Unit = {},
+    onDisconnect: () -> Unit = onChangeServer
 ) {
     val ctx = LocalContext.current
     val localDensity = LocalDensity.current
@@ -129,17 +141,18 @@ internal fun WebViewScreen(
     // Tunnel-awareness: reload when the URL changes (e.g. rebind on another
     // local port) and once the tunnel has come back after a drop.
     var loadedUrl by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(url) {
-        val w = webRef
-        if (w != null && loadedUrl != null && loadedUrl != url) w.loadUrl(url)
-        loadedUrl = url
-    }
-
     val tunnelUp = tunnelInfo == null || tunnelInfo.status == TunnelState.Status.CONNECTED
     var tunnelWasDown by remember { mutableStateOf(false) }
-    LaunchedEffect(tunnelUp) {
-        if (tunnelUp && tunnelWasDown) webRef?.reload()
-        tunnelWasDown = !tunnelUp
+    LaunchedEffect(url, tunnelUp, visible) {
+        if (!tunnelUp) { tunnelWasDown = true; return@LaunchedEffect }
+        if (!visible) return@LaunchedEffect
+        val browser = webRef ?: return@LaunchedEffect
+        if (loadedUrl != url) { browser.loadUrl(url); loadedUrl = url; tunnelWasDown = false }
+        else if (tunnelWasDown) { browser.reload(); tunnelWasDown = false }
+    }
+    DisposableEffect(visible) {
+        if (visible) webRef?.onResume() else webRef?.onPause()
+        onDispose { }
     }
 
     // dsh-web style services print a one-time token URL on the server; the
@@ -180,9 +193,19 @@ internal fun WebViewScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().then(if (fullScreen) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing))) {
+        if (!fullScreen) Row(Modifier.fillMaxWidth().background(dsh.layer1).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onChangeServer) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回连接列表，保持连接", tint = dsh.textPrimary) }
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, color = dsh.textPrimary)
+                Text(if (tunnelMode) "SSH" else "直连网页", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+            }
+            IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, "设置", tint = dsh.textPrimary) }
+        }
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
+                    if ((ctx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.d("HarnessUi", "WebView created")
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -233,16 +256,28 @@ internal fun WebViewScreen(
                             }
                         }
                     }
-                    loadUrl(url)
-                }.also { webRef = it }
+                    if (tunnelUp) loadUrl(url)
+                }.also { webRef = it; if (tunnelUp) loadedUrl = url }
             },
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding()
+            modifier = Modifier.weight(1f).fillMaxWidth().imePadding(),
+            update = { browser -> browser.visibility = if (visible) android.view.View.VISIBLE else android.view.View.INVISIBLE },
+            onReset = null,
+            onRelease = { browser ->
+                fileChooser.complete(null); webRef = null
+                browser.stopLoading(); browser.webChromeClient = null; browser.destroy()
+                if ((ctx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.d("HarnessUi", "WebView released")
+            }
         )
+        if (!fullScreen) Row(Modifier.fillMaxWidth().background(dsh.layer1).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { webRef?.reload() }) { Text("刷新") }
+            TextButton(onClick = onToggleOrientation) { Text("旋转") }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onDisconnect) { Text("断开连接", color = dsh.danger) }
+        }
+        }
 
         // Tunnel status overlay: covers the dead WebView while disconnected.
-        if (!tunnelUp) {
+        if (!tunnelUp && visible) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -340,7 +375,7 @@ internal fun WebViewScreen(
         }
 
         // Auth-required paste dialog (manual fallback for token-gated pages).
-        if (showAuthPrompt) {
+    if (showAuthPrompt && visible) {
             AlertDialog(
                 onDismissRequest = { showAuthPrompt = false },
                 title = { Text("网页要求重新认证", fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
@@ -384,154 +419,23 @@ internal fun WebViewScreen(
             )
         }
 
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val maxX = (maxWidth - ballSizeDp).value
-            val maxY = (maxHeight - ballSizeDp).value
-            val currentX = when {
-                ballX.isNaN() || ballX < 0 || ballX > maxX -> (maxX - marginDp.value)
-                else -> ballX
+        if (visible && fullScreen) Box(Modifier.align(Alignment.TopEnd).padding(12.dp)) {
+            SmallFloatingActionButton(onClick = { controlsExpanded = !controlsExpanded }, containerColor = dsh.accent, contentColor = dsh.brandText) {
+                Icon(Icons.Filled.MoreVert, "服务菜单")
             }
-            val currentY = when {
-                ballY.isNaN() || ballY < 0 || ballY > maxY -> marginDp.value
-                else -> ballY
-            }
-
-            // Expand downward if there's room, otherwise upward
-            val spaceBelow = maxHeight.value - currentY - ballSizeDp.value
-            val expandDown = spaceBelow >= actionsHeightDp.value + 6f
-            val actionsY = if (expandDown) {
-                currentY + ballSizeDp.value + 6f
-            } else {
-                currentY - actionsHeightDp.value - 6f
-            }
-
-            // Toggle button (draggable)
-            Box(
-                modifier = Modifier
-                    .offset {
-                        IntOffset(
-                            (currentX * localDensity.density).roundToInt(),
-                            (currentY * localDensity.density).roundToInt()
-                        )
-                    }
-                    .pointerInput(maxX, maxY, localDensity.density) {
-                        detectDragGestures(
-                            onDragStart = { dragging = true },
-                            onDragEnd = {
-                                dragging = false
-                                prefs.edit()
-                                    .putFloat("ball_x_dp", ballX)
-                                    .putFloat("ball_y_dp", ballY)
-                                    .apply()
-                            },
-                            onDragCancel = { dragging = false },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                val dx = dragAmount.x / localDensity.density
-                                val dy = dragAmount.y / localDensity.density
-                                val baseX = if (ballX.isNaN()) currentX else ballX
-                                val baseY = if (ballY.isNaN()) currentY else ballY
-                                ballX = (baseX + dx).coerceIn(0f, maxX)
-                                ballY = (baseY + dy).coerceIn(0f, maxY)
-                            }
-                        )
-                    }
-            ) {
-                ActionBall(
-                    onClick = { controlsExpanded = !controlsExpanded },
-                    containerColor = dsh.accent,
-                    contentColor = dsh.brandText,
-                    modifier = Modifier
-                        .size(ballSizeDp)
-                        .alpha(if (dragging) 1f else 0.85f)
-                ) {
-                    Icon(
-                        if (controlsExpanded) Icons.Filled.Close else Icons.Filled.MoreVert,
-                        contentDescription = if (controlsExpanded) "收起" else "菜单",
-                        tint = dsh.brandText,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            // Actions column, positioned above or below the toggle
-            AnimatedVisibility(
-                visible = controlsExpanded,
-                modifier = Modifier.offset {
-                    IntOffset(
-                        (currentX * localDensity.density).roundToInt(),
-                        (actionsY * localDensity.density).roundToInt()
-                    )
-                },
-                enter = fadeIn() + scaleIn(initialScale = 0.7f),
-                exit = fadeOut() + scaleOut(targetScale = 0.7f)
-            ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    horizontalAlignment = Alignment.End
-                ) {
-                    ActionBall(
-                        onClick = { webRef?.reload() },
-                        containerColor = dsh.accent,
-                        contentColor = dsh.brandText,
-                        modifier = Modifier.size(ballSizeDp).alpha(0.95f)
-                    ) {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = "刷新",
-                            tint = dsh.brandText,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    ActionBall(
-                        onClick = onToggleOrientation,
-                        containerColor = dsh.accent,
-                        contentColor = dsh.brandText,
-                        modifier = Modifier.size(ballSizeDp).alpha(0.95f)
-                    ) {
-                        Icon(
-                            orientation.icon(),
-                            contentDescription = "方向: ${orientation.storage}",
-                            tint = dsh.brandText,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    ActionBall(
-                        onClick = onChangeServer,
-                        containerColor = if (tunnelMode) dsh.danger else dsh.accent,
-                        contentColor = dsh.brandText,
-                        modifier = Modifier.size(ballSizeDp).alpha(0.95f)
-                    ) {
-                        Icon(
-                            if (tunnelMode) Icons.Filled.LinkOff else Icons.Filled.Dns,
-                            contentDescription =
-                                if (tunnelMode) "断开并返回" else "服务器",
-                            tint = dsh.brandText,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    if (tunnelMode) {
-                        ActionBall(
-                            onClick = onReconnect,
-                            containerColor = dsh.accent,
-                            contentColor = dsh.brandText,
-                            modifier = Modifier.size(ballSizeDp).alpha(0.95f)
-                        ) {
-                            Icon(
-                                Icons.Filled.Autorenew,
-                                contentDescription = "重连隧道",
-                                tint = dsh.brandText,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-                }
+            DropdownMenu(expanded = controlsExpanded, onDismissRequest = { controlsExpanded = false }) {
+                DropdownMenuItem(text = { Text("刷新网页") }, onClick = { controlsExpanded = false; webRef?.reload() })
+                DropdownMenuItem(text = { Text("旋转屏幕") }, onClick = { controlsExpanded = false; onToggleOrientation() })
+                DropdownMenuItem(text = { Text("返回连接列表（保持连接）") }, onClick = { controlsExpanded = false; onChangeServer() })
+                DropdownMenuItem(text = { Text("设置") }, onClick = { controlsExpanded = false; onOpenSettings() })
+                if (tunnelMode) DropdownMenuItem(text = { Text("重新连接") }, onClick = { controlsExpanded = false; onReconnect() })
+                DropdownMenuItem(text = { Text("断开连接", color = dsh.danger) }, onClick = { controlsExpanded = false; onDisconnect() })
             }
         }
     }
 
-    BackHandler(enabled = canGoBack) {
-        webRef?.goBack()
+    BackHandler(enabled = visible) {
+        if (canGoBack) webRef?.goBack() else onChangeServer()
     }
 }
 

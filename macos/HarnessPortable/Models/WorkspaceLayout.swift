@@ -73,6 +73,8 @@ struct WorkspaceTab: Identifiable, Codable, Hashable {
     /// Per-tab dsh web view state captured when the layout was saved. Null when
     /// the `dsh-view-state` plugin is not installed or the page carried nothing.
     var web: LayoutWebState?
+    var selected: Bool = false
+    var active: Bool = false
 
     init(
         id: UUID = UUID(),
@@ -90,7 +92,7 @@ struct WorkspaceTab: Identifiable, Codable, Hashable {
         self.web = web
     }
 
-    private enum CodingKeys: String, CodingKey { case kind, profileID, url, label, web }
+    private enum CodingKeys: String, CodingKey { case kind, profileID, url, label, web, selected, active }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -100,6 +102,8 @@ struct WorkspaceTab: Identifiable, Codable, Hashable {
         url = try container.decodeIfPresent(String.self, forKey: .url)
         label = try container.decodeIfPresent(String.self, forKey: .label)
         web = try container.decodeIfPresent(LayoutWebState.self, forKey: .web)
+        selected = try container.decodeIfPresent(Bool.self, forKey: .selected) ?? false
+        active = try container.decodeIfPresent(Bool.self, forKey: .active) ?? false
     }
 }
 
