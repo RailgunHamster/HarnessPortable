@@ -361,8 +361,12 @@ public partial class MainWindow : Window
         };
     }
 
-    /// <summary>Covers the main window exactly, so canvas coordinates equal
-    /// screen-mapped window coordinates.</summary>
+    /// <summary>Covers the main window's client area exactly, so canvas
+    /// coordinates equal screen-mapped window coordinates. Derived from the
+    /// client rect in device pixels, not from Window.Left/Top/Width/Height:
+    /// those hold restore bounds while maximized and exclude the frame, which
+    /// left the cover half a window off and clipped the drop UI to one side.
+    /// </summary>
     private void SyncTabDragOverlayBounds()
     {
         if (_tabDragOverlayWindow is null)
@@ -370,10 +374,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        _tabDragOverlayWindow.Left = Left;
-        _tabDragOverlayWindow.Top = Top;
-        _tabDragOverlayWindow.Width = Width;
-        _tabDragOverlayWindow.Height = Height;
+        var transform = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformFromDevice
+            ?? System.Windows.Media.Matrix.Identity;
+        var topLeft = WpfPoint.Multiply(PointToScreen(new WpfPoint(0, 0)), transform);
+
+        _tabDragOverlayWindow.Left = topLeft.X;
+        _tabDragOverlayWindow.Top = topLeft.Y;
+        _tabDragOverlayWindow.Width = ActualWidth;
+        _tabDragOverlayWindow.Height = ActualHeight;
     }
 
     private void BeginTabDrag(WpfPoint point)

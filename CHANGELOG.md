@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.6.26
+
+- Windows：修复分屏后**在左半边窗格拖动时投放 UI 只显示一半**：覆盖窗口此前按 `Window.Left/Top/Width/Height` 对齐——窗口**最大化**时这些属性存的是还原位置（且不含边框），覆盖层因此与实际客户区错位、投放 UI 被裁掉一半。现在改用客户区屏幕物理坐标经 DPI 换算定位，最大化/多 DPI 显示器下都精确贴合。
+
 ## 2.6.25
 
 - Windows：修复 2.6.24 拖动仍崩溃的新栈：`CaptureMouse()` 会**同步**再派发一次 mouse-move（`MouseDevice.Synchronize` 重入），那一刻覆盖窗口还没 `Show()`、Canvas 未连接 PresentationSource，`PointFromScreen` 抛 "此 Visual 未连接到 PresentationSource"。
