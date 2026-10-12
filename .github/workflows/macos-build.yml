@@ -1,0 +1,62 @@
+name: Verify and package macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Git tag or commit to build
+        required: true
+        default: v2.6.27
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd macos
+          xcodegen generate
+      - name: Run macOS tests
+        working-directory: macos
+        run: |
+          set -o pipefail
+          xcodebuild -project HarnessPortable.xcodeproj -scheme HarnessPortable \
+            -configuration Debug -destination 'platform=macOS' \
+            -derivedDataPath build test 2>&1 | tee test.log
+      - name: Build universal release
+        working-directory: macos
+        run: |
+          set -o pipefail
+          xcodebuild -project HarnessPortable.xcodeproj -scheme HarnessPortable \
+            -configuration Release -destination 'platform=macOS' \
+            -derivedDataPath build ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
+            build 2>&1 | tee release.log
+      - name: Package DMG
+        working-directory: macos
+        run: |
+          set -euo pipefail
+          VERSION=$(cat ../VERSION | tr -d '\r\n')
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          APP=build/Build/Products/Release/HarnessPortable.app
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP"
+          mkdir -p dmgroot output
+          cp -R "$APP" dmgroot/
+          ln -s /Applications dmgroot/Applications
+          hdiutil create -volname 'Harness Portable' -srcfolder dmgroot \
+            -ov -format UDZO "output/HarnessPortable-$VERSION.dmg"
+          shasum -a 256 "output/HarnessPortable-$VERSION.dmg" > output/sha256.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-package
+          path: macos/output/
+          if-no-files-found: error
