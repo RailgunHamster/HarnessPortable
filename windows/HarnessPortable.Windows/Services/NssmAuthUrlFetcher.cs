@@ -26,6 +26,16 @@ public static partial class NssmAuthUrlFetcher
     /// PowerShell run on the server. Exit codes: 0 = verified URL on stdout,
     /// 3 = no matching service/log line, 4 = token rejected (stale).
     /// Delivered via -EncodedCommand to sidestep cmd/PowerShell quoting.
+    ///
+    /// Deliberately never calls nssm.exe: `nssm get` opens LSA policy, which
+    /// is denied for the UAC-filtered token of an interactively launched app
+    /// (SSH sessions get the elevated token, which is why the same script
+    /// passed there and died with exit=1 in the app). Everything nssm get
+    /// would report lives in the service's Parameters registry key, readable
+    /// by non-admins. And native stderr must never surface as a PowerShell
+    /// ErrorRecord — with $ErrorActionPreference = "Stop" a single redirected
+    /// stderr line (nssm diagnostics, curl errors) terminates the script —
+    /// so the curl probe temporarily relaxes the preference.
     /// </summary>
     public static string BuildScript() => """
 $ErrorActionPreference = "Stop"
@@ -34,17 +44,18 @@ if (-not $env:PSModulePath -or $env:PSModulePath -notmatch "WindowsPowerShell") 
   $env:PSModulePath = "${env:ProgramFiles}\WindowsPowerShell\Modules;${env:SystemRoot}\System32\WindowsPowerShell\v1.0\Modules"
 }
 foreach ($c in (Get-CimInstance Win32_Service | Where-Object { $_.State -eq "Running" -and $_.PathName -match "nssm\.exe" })) {
-  $exe = [regex]::Match($c.PathName, "^""?(.+?nssm\.exe)").Groups[1].Value
-  if (-not $exe) { continue }
-  $app = & $exe get $c.Name Application 2>$null
-  $params = & $exe get $c.Name AppParameters 2>$null
-  if ("$app $params" -notmatch "dsh") { continue }
-  $log = & $exe get $c.Name AppStdout 2>$null
+  $key = "HKLM:\SYSTEM\CurrentControlSet\Services\$($c.Name)\Parameters"
+  if (-not (Test-Path $key)) { continue }
+  $item = Get-ItemProperty -Path $key -ErrorAction SilentlyContinue
+  if (-not $item -or "$($item.Application) $($item.AppParameters)" -notmatch "dsh") { continue }
+  $log = $item.AppStdout
   if (-not $log) { continue }
   $m = Select-String -Path "$log" -Pattern "dsh web: (http\S+)" | Select-Object -Last 1
   if (-not $m) { continue }
   $u = $m.Matches[0].Groups[1].Value
-  $code = & curl.exe -s -o NUL -w "%{http_code}" --max-time 3 $u
+  $ErrorActionPreference = "Continue"
+  $code = & curl.exe -s -o NUL -w "%{http_code}" --max-time 3 $u 2>$null
+  $ErrorActionPreference = "Stop"
   if ("$code" -eq "303") { Write-Output $u; exit 0 }
   exit 4
 }

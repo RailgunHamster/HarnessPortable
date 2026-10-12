@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.22
+
+- Windows：**根除直连「NSSM 自动」在普通（非管理员）会话下的 exit=1**。2.6.21 的日志锁定了真凶：`nssm.exe : LsaOpenPolicy(): 拒绝访问`——`nssm get` 内部要开 LSA 策略，交互启动的应用拿到的是 UAC 过滤令牌，这一步被拒；而 SSH 会话拿到的是完整管理员令牌，所以同一脚本手工/远程跑都好、应用里跑就死（exit=1 的 terminating error 还会吞掉后续所有逻辑）。
+  - 发现脚本不再调用 `nssm.exe`：它读的 Application / AppParameters / AppStdout 本来就在 `HKLM\SYSTEM\CurrentControlSet\Services\<服务>\Parameters` 注册表键里，**普通用户可读**，无 LSA、无权限问题。本机直连与隧道（经 SSH）两种模式共用此脚本，一并受益。
+  - 同时给 curl 探测临时放宽 `$ErrorActionPreference`：`Stop` 下任何一条重定向的原生 stderr 都会终止脚本，2.6.21 里 nssm 的诊断信息就是这样把脚本杀掉的。
+
 ## 2.6.21
 
 - Windows：排查并加固直连「NSSM 自动」在本机的取 token 失败（railgunhamster 实测 `local nssm fetch exit=1`——同一脚本在同一用户下手工/SSH 执行都成功，只有应用拉起的子进程失败）：
