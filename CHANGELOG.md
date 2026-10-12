@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.19
+
+- Windows：更新源从单地址框升级为**「家庭目录 + GitHub」两个槽位加一个下拉选择**（对齐 macOS 2.6.14、spec/config-schema.md 的双槽位约定）。
+  - 管理页「自动更新」区块顶部是下拉选择（`家庭目录` / `GitHub`），下面一个地址框显示**当前选中槽位**的地址，改哪个就存哪个——两个地址都保留，切换不丢，不用再「背」一个 GitHub 地址：GitHub 槽位默认就是本仓库地址，选上即可直接用。
+  - 旧单字段 `UpdateServerUrl` 首次升级自动折进对应槽位（GitHub 地址进 GitHub 槽、UNC/http 进家庭槽），选择也随之跟过去，用户原来填的地址不丢；该字段此后只作镜像，供旧版本回读。
+  - 新字段：`UpdateHomeUrl` / `UpdateGitHubUrl` / `UpdateSourceSelected`（`home` / `github`），默认选 `home`。
+
 ## 2.6.18
 
 - Windows：在管理窗口点「连接」（隧道或直连）后**自动把主窗口弹到前台**。
