@@ -52,6 +52,29 @@ internal static class NativeMethods
 
     private const uint GaParent = 1;
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+    private static extern int GetWindowLongWindow(IntPtr window, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+    private static extern int SetWindowLongWindow(IntPtr window, int index, int value);
+
+    internal const int GWL_EXSTYLE = -20;
+    internal const int WS_EX_LAYERED = 0x00080000;
+    internal const int WS_EX_TRANSPARENT = 0x00000020;
+    internal const int WS_EX_NOACTIVATE = 0x08000000;
+    internal const int WS_EX_TOOLWINDOW = 0x00000080;
+
+    /// <summary>
+    /// Reads a window's extended style flags. Window longs are pointer-sized
+    /// on 64-bit, but style values fit an int and the W entry points clamp.
+    /// </summary>
+    internal static int GetWindowLong(IntPtr window, int index) =>
+        GetWindowLongWindow(window, index);
+
+    /// <summary>Writes a window's extended style flags, returning the old value.</summary>
+    internal static int SetWindowLong(IntPtr window, int index, int value) =>
+        SetWindowLongWindow(window, index, value);
+
     /// <summary>
     /// True when the Win32 focused window of the foreground thread lies
     /// inside the given window tree — for a WebView2 host HWND this means

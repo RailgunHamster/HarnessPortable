@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.23
+
+- Windows：修复**拖拽标签分屏时看不到任何投放 UI**（只剩顶部一行提示文字）。
+  - 根因是 airspace：拖拽覆盖层（目标窗格高亮 + 方向选择卡片）原来画在主窗口里的一个 WPF Canvas 上，而窗格内容是 WebView2（`HwndHost`）——Win32 子窗口永远绘制在重叠的 WPF 内容**之上**，覆盖层恰好在网页区域上方时全部被浏览器盖住，只有位于工具栏区域的提示文字可见。
+  - 覆盖层移进一个**独立的透明子窗口**（无边框、`WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`）：layered 窗口画在 HwndHost 之上，鼠标消息完全穿透、绝不抢焦点，拖拽期间实时贴合主窗口位置/尺寸。这与 AvalonDock 自家 OverlayWindow 用的是同一手法。
+
 ## 2.6.22
 
 - Windows：**根除直连「NSSM 自动」在普通（非管理员）会话下的 exit=1**。2.6.21 的日志锁定了真凶：`nssm.exe : LsaOpenPolicy(): 拒绝访问`——`nssm get` 内部要开 LSA 策略，交互启动的应用拿到的是 UAC 过滤令牌，这一步被拒；而 SSH 会话拿到的是完整管理员令牌，所以同一脚本手工/远程跑都好、应用里跑就死（exit=1 的 terminating error 还会吞掉后续所有逻辑）。

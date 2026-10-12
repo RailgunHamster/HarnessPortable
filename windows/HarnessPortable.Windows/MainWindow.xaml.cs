@@ -55,6 +55,16 @@ public partial class MainWindow : Window
     private Rect _tabDragTargetRect;
     private DropZone _tabDragZone;
 
+    /// <summary>
+    /// The drag overlay lives in its own transparent child window, not as a
+    /// sibling Canvas in the main window: the panes host WebView2 (HwndHost),
+    /// whose airspace always paints over overlapping WPF content, so an
+    /// in-window overlay is invisible exactly where it matters — over the
+    /// page. A borderless layered owned window draws above the HwndHost while
+    /// WS_EX_TRANSPARENT keeps every mouse message flowing to the main window.
+    /// </summary>
+    private Window? _tabDragOverlayWindow;
+
     private bool _trayHintShown;
     private bool _isFullScreen;
     private WindowStyle _normalWindowStyle;
@@ -89,6 +99,8 @@ public partial class MainWindow : Window
         _managementView.TunnelConnectRequested += ConnectTunnel;
         _managementView.TunnelStopRequested += CloseTunnelDocs;
         _managementView.DirectOpenRequested += OpenDirectSession;
+
+        InitializeTabDragOverlayWindow();
 
         InitializeDockLayout();
         DockManager.ActiveContentChanged += DockLayout_ActiveContentChanged;
@@ -313,10 +325,60 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void InitializeTabDragOverlayWindow()
+    {
+        // Reparenting the XAML Canvas into this window removes it from the
+        // main Grid; all named element references keep working unchanged.
+        _tabDragOverlayWindow = new Window
+        {
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true,
+            Background = System.Windows.Media.Brushes.Transparent,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            ResizeMode = ResizeMode.NoResize,
+            Content = TabDragOverlay,
+        };
+
+        // Pure drawing surface: never take focus, never eat a mouse message.
+        _tabDragOverlayWindow.SourceInitialized += (_, _) =>
+        {
+            var handle = new WindowInteropHelper(_tabDragOverlayWindow).Handle;
+            var style = NativeMethods.GetWindowLong(handle, NativeMethods.GWL_EXSTYLE);
+            NativeMethods.SetWindowLong(handle, NativeMethods.GWL_EXSTYLE,
+                style | NativeMethods.WS_EX_LAYERED |
+                NativeMethods.WS_EX_TRANSPARENT |
+                NativeMethods.WS_EX_NOACTIVATE |
+                NativeMethods.WS_EX_TOOLWINDOW);
+        };
+    }
+
+    /// <summary>Covers the main window exactly, so canvas coordinates equal
+    /// screen-mapped window coordinates.</summary>
+    private void SyncTabDragOverlayBounds()
+    {
+        if (_tabDragOverlayWindow is null)
+        {
+            return;
+        }
+
+        _tabDragOverlayWindow.Left = Left;
+        _tabDragOverlayWindow.Top = Top;
+        _tabDragOverlayWindow.Width = Width;
+        _tabDragOverlayWindow.Height = Height;
+    }
+
     private void BeginTabDrag(WpfPoint point)
     {
         _tabDragActive = true;
         CaptureMouse();
+        SyncTabDragOverlayBounds();
+        if (_tabDragOverlayWindow is not null && _tabDragOverlayWindow.Owner is null)
+        {
+            _tabDragOverlayWindow.Owner = this;
+        }
+
+        _tabDragOverlayWindow?.Show();
         TabDragOverlay.Visibility = Visibility.Visible;
         DragHintCard.Visibility = Visibility.Visible;
         UpdateTabDragOverlay(point);
@@ -333,6 +395,7 @@ public partial class MainWindow : Window
         _tabDragActive = false;
         _tabDragTargetPane = null;
         _tabDragTargetRect = Rect.Empty;
+        _tabDragOverlayWindow?.Hide();
         TabDragOverlay.Visibility = Visibility.Collapsed;
         DragTargetHighlight.Visibility = Visibility.Collapsed;
         DropZoneCard.Visibility = Visibility.Collapsed;
@@ -359,8 +422,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var topLeft = paneControl.TranslatePoint(new WpfPoint(0, 0), TabDragOverlay);
-        var targetRect = new Rect(topLeft, paneControl.RenderSize);
+        // Keep the cover glued on in case the window moved or resized mid-drag.
+        SyncTabDragOverlayBounds();
+
+        // Screen-based mapping: the overlay canvas now lives in another
+        // window, so TranslatePoint has no common visual ancestor to walk.
+        var paneTopLeft = TabDragOverlay.PointFromScreen(paneControl.PointToScreen(new WpfPoint(0, 0)));
+        var targetRect = new Rect(paneTopLeft, paneControl.RenderSize);
         _tabDragTargetRect = targetRect;
 
         Canvas.SetLeft(DragTargetHighlight, targetRect.Left);
