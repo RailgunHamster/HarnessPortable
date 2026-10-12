@@ -7,49 +7,53 @@
         <wv2:WebView2 x:Name="WebView"/>
 
         <Border x:Name="StatusOverlay" Background="{DynamicResource DshScrim}" Visibility="Collapsed">
-            <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="28,24"
-                    MaxWidth="440" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <ScrollViewer MaxWidth="440" Margin="8" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="16">
                 <StackPanel>
                     <TextBlock x:Name="OverlayTitle" FontSize="16" FontWeight="SemiBold"
                                Foreground="{DynamicResource DshTextPrimary}" TextWrapping="Wrap" HorizontalAlignment="Center"/>
                     <TextBlock x:Name="OverlayMessage" FontSize="12" Foreground="{DynamicResource DshTextSecondary}"
                                TextWrapping="Wrap" Margin="0,8,0,0" HorizontalAlignment="Center"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
-                        <Button x:Name="OverlayReconnectButton" Content="重连" Width="88" Margin="0,0,8,0"
+                    <WrapPanel HorizontalAlignment="Center" Margin="0,14,0,0">
+                        <Button x:Name="OverlayReconnectButton" Content="重连" Padding="8,6" Margin="0,0,8,6"
                                 Style="{StaticResource ModernPrimaryButton}"
                                 Click="OverlayReconnect_Click"/>
-                        <Button x:Name="OverlayReturnButton" Content="关闭标签" Width="88"
+                        <Button x:Name="OverlayReturnButton" Content="关闭" Padding="8,6" ToolTip="关闭当前标签"
                                 Style="{StaticResource ModernButton}"
                                 Click="OverlayReturn_Click"/>
-                    </StackPanel>
+                    </WrapPanel>
                 </StackPanel>
             </Border>
+          </ScrollViewer>
         </Border>
 
         <Border x:Name="AuthOverlay" Background="{DynamicResource DshScrim}" Visibility="Collapsed">
-            <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="28,24"
-                    MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <ScrollViewer MaxWidth="480" Margin="8" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="16">
                 <StackPanel>
                     <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}"
-                               Text="网页要求重新认证" HorizontalAlignment="Center"/>
+                               Text="网页要求重新认证" TextWrapping="Wrap" HorizontalAlignment="Center"/>
                     <TextBlock FontSize="12" Foreground="{DynamicResource DshTextSecondary}" TextWrapping="Wrap"
                                Margin="0,8,0,0" HorizontalAlignment="Center"
-                               Text="服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。请在服务器上复制 dsh web 打印的完整 URL —— 或只复制 token 本身 —— 粘贴到下面，将直接在内置浏览器中完成认证，无需再用外部浏览器打开。"/>
+                               Text="粘贴服务器上 dsh web 输出的完整登录 URL，或直接粘贴 token。将在当前网页内完成认证。"/>
                     <TextBox x:Name="AuthUrlBox" FontSize="13" Margin="0,12,0,0"
                                  Style="{StaticResource ModernTextBox}"
                                  KeyDown="AuthUrlBox_KeyDown" TextChanged="AuthUrlBox_TextChanged"/>
                     <TextBlock x:Name="AuthHint" FontSize="11" Foreground="{DynamicResource DshDangerText}" Margin="0,6,0,0"
                                TextWrapping="Wrap" Visibility="Collapsed"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
-                        <Button Content="打开" Width="88" Margin="0,0,8,0"
+                    <WrapPanel HorizontalAlignment="Center" Margin="0,14,0,0">
+                        <Button Content="登录" Padding="8,6" Margin="0,0,8,6"
                                     Style="{StaticResource ModernPrimaryButton}"
                                     Click="AuthOpen_Click"/>
-                        <Button Content="取消" Width="88"
+                        <Button Content="取消" Padding="8,6"
                                     Style="{StaticResource ModernButton}"
                                     Click="AuthCancel_Click"/>
-                    </StackPanel>
+                    </WrapPanel>
                 </StackPanel>
             </Border>
+          </ScrollViewer>
         </Border>
 
         <Canvas x:Name="OverlayCanvas" ClipToBounds="False">

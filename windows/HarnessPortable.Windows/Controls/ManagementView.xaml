@@ -9,7 +9,7 @@
          the Windows app-mode setting without a restart. -->
 
     <UserControl.Resources>
-        <!-- Scoped: the light windows keep the stock scrollbars. -->
+        <!-- Keep long lists and update notes consistent with the shell palette. -->
         <Style TargetType="ScrollBar" BasedOn="{StaticResource DshScrollBar}"/>
 
         <Style x:Key="DshRowButton" TargetType="Button" BasedOn="{StaticResource DshButton}">
@@ -35,11 +35,21 @@
                             Style="{StaticResource DshPrimaryButton}" Padding="14,7"
                             Click="AddTunnel_Click"/>
                 </StackPanel>
-                <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="48" Height="48" CornerRadius="14" Margin="0,0,14,0"
+                            Background="{DynamicResource DshAccentSoft}">
+                        <Viewbox Width="24" Height="24">
+                            <Path Data="M2,7 L12,2 L22,7 L12,12 Z M2,12 L12,17 L22,12 M2,17 L12,22 L22,17"
+                                  Stroke="{DynamicResource DshAccent}" StrokeThickness="2"
+                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Viewbox>
+                    </Border>
+                  <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="连接中心" FontSize="24" FontWeight="SemiBold"
                                Foreground="{DynamicResource DshTextPrimary}"/>
                     <TextBlock Text="管理隧道与直连，快速进入工作区"
                                Style="{StaticResource DshMuted}" Margin="0,3,0,0"/>
+                  </StackPanel>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -264,7 +274,7 @@
                                  Style="{StaticResource DshMonoTextBox}"/>
 
                         <TextBlock Style="{StaticResource DshLabel}" Margin="0,12,0,0"
-                                   Text="安装包与便携 zip 都会自动更新。便携版请解压后运行根目录的 Harness Portable.exe。开发运行和旧版单文件 exe 不能在线更新。配置保存在 %APPDATA%\HarnessPortable，不会写入程序目录。"/>
+                                   Text="支持安装版与便携版自动更新。连接和布局保存在当前用户目录，不会被更新覆盖。"/>
                     </StackPanel>
                 </Border>
 

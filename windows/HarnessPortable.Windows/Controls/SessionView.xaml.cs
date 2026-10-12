@@ -461,7 +461,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
                 _coreReady = false;
                 OverlayTitle.Text = "浏览器连接中断";
                 OverlayMessage.Text = "点击恢复网页重新打开当前标签。";
-                OverlayReconnectButton.Content = "恢复网页";
+                OverlayReconnectButton.Content = "恢复";
                 OverlayReconnectButton.Visibility = Visibility.Visible;
                 StatusOverlay.Visibility = Visibility.Visible;
                 UpdateBrowserVisibility();

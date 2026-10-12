@@ -62,7 +62,7 @@ enum Dsh {
     }
 
     static func textTertiary(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFF92A1BA) : hex(0xFF65718A)
+        scheme == .dark ? hex(0xFF92A1BA) : hex(0xFF5E6B83)
     }
 
     // MARK: - Brand

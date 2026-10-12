@@ -489,4 +489,49 @@
             </DockPanel>
         </ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style TargetType="ComboBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource DshTextPrimary}"/>
+        <Setter Property="Padding" Value="10,8"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem">
+            <Border x:Name="Item" CornerRadius="7" Padding="{TemplateBinding Padding}" Background="Transparent">
+                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Item" Property="Background" Value="{DynamicResource DshBgLayer2}"/></Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter TargetName="Item" Property="Background" Value="{DynamicResource DshAccentSoft}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource DshAccent}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style TargetType="ContextMenu">
+        <Setter Property="Background" Value="{DynamicResource DshBgLayer1}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DshTextPrimary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DshBorderL2}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="FontFamily" Value="{DynamicResource DshUiFont}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="1" CornerRadius="12" Padding="6">
+                <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/>
+            </Border>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{DynamicResource DshTextPrimary}"/>
+        <Setter Property="Padding" Value="10,7"/>
+    </Style>
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="{DynamicResource DshBgLayer1}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DshTextPrimary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DshBorderL2}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource DshUiFont}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="MaxWidth" Value="460"/>
+    </Style>
 </ResourceDictionary>

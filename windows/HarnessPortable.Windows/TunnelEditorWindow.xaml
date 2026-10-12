@@ -15,6 +15,7 @@
 
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
+                <TextBlock Text="连接到服务器" Style="{StaticResource ModernGroupHeader}" Margin="0,0,0,14"/>
                 <TextBlock Text="名称（可选）" Margin="0,0,0,4" Style="{StaticResource ModernMutedText}"/>
                 <TextBox x:Name="NameBox" Style="{StaticResource ModernTextBox}"/>
 

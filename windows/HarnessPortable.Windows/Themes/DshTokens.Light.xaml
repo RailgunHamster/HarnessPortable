@@ -11,7 +11,7 @@
     <SolidColorBrush x:Key="DshBorderL3" Color="#B8C6DA" po:Freeze="True"/>
     <SolidColorBrush x:Key="DshTextPrimary" Color="#172239" po:Freeze="True"/>
     <SolidColorBrush x:Key="DshTextSecondary" Color="#526078" po:Freeze="True"/>
-    <SolidColorBrush x:Key="DshTextTertiary" Color="#65718A" po:Freeze="True"/>
+    <SolidColorBrush x:Key="DshTextTertiary" Color="#5E6B83" po:Freeze="True"/>
     <SolidColorBrush x:Key="DshBrandFill" Color="#365EDC" po:Freeze="True"/>
     <SolidColorBrush x:Key="DshBrandFillHover" Color="#2B50C7" po:Freeze="True"/>
     <SolidColorBrush x:Key="DshBrandFillPressed" Color="#2343AA" po:Freeze="True"/>

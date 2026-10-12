@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -215,16 +216,16 @@ fun SettingsScreen(
                 Text("Harness Portable", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
             }
             TabRow(selectedTabIndex = section, containerColor = dsh.layer1, contentColor = dsh.accent) {
-                listOf("SSH 隧道", "直连地址", "设置").forEachIndexed { index, label ->
+                listOf("隧道", "直连", "设置").forEachIndexed { index, label ->
                     Tab(selected = section == index, onClick = { section = index },
-                        text = { Text(label, maxLines = 2) },
+                        text = { Text(label, maxLines = 1) },
                         selectedContentColor = dsh.accent, unselectedContentColor = dsh.textSecondary)
                 }
             }
           }
         }
     ) { padding ->
-      Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
+      Box(Modifier.fillMaxSize().padding(padding).imePadding(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
             state = when (section) { 0 -> tunnelScroll; 1 -> directScroll; else -> settingsScroll },
             modifier = Modifier
