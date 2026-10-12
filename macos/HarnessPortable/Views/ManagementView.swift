@@ -17,14 +17,42 @@ struct ManagementView: View {
 
     @State private var editingProfile: TunnelProfile?
     @State private var directInput = ""
+    @State private var section = 0
 
     @Environment(\.colorScheme) var colorScheme
 
     private var dsh: DshPalette { Dsh.palette(colorScheme) }
 
     var body: some View {
+      VStack(spacing: 0) {
+        HStack(spacing: 14) {
+            Image(systemName: "square.stack.3d.up.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(dsh.accent)
+                .frame(width: 48, height: 48)
+                .background(dsh.accentSoft, in: RoundedRectangle(cornerRadius: 14))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("连接中心").font(.system(size: 24, weight: .semibold)).foregroundStyle(dsh.textPrimary)
+                Text("管理隧道与直连，快速进入工作区").font(.callout).foregroundStyle(dsh.textSecondary)
+            }
+            Spacer()
+            Text("Harness Portable").font(Dsh.mono(11)).foregroundStyle(dsh.textTertiary)
+        }
+        .padding(24)
+        .background(dsh.bgLayer1)
+        Picker("管理分区", selection: $section) {
+            Text("SSH 隧道").tag(0)
+            Text("直连地址").tag(1)
+            Text("设置与更新").tag(2)
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 480)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 18) {
+              if section == 0 {
                 sectionHeader("SSH 隧道", systemImage: "point.3.connected.trianglepath.dotted") {
                     Button {
                         editingProfile = TunnelProfile()
@@ -35,9 +63,7 @@ struct ManagementView: View {
                 }
 
                 if profiles.tunnels.isEmpty {
-                    Text("还没有保存的隧道")
-                        .foregroundStyle(dsh.textSecondary)
-                        .padding(.vertical, 8)
+                    DshEmptyState(title: "添加你的第一个隧道", message: "通过 SSH 安全访问远程网页，保存连接后即可快速打开。", systemImage: "network")
                 } else {
                     VStack(spacing: 0) {
                         ForEach(profiles.tunnels) { profile in
@@ -48,6 +74,8 @@ struct ManagementView: View {
                     .dshCard()
                 }
 
+              }
+              if section == 1 {
                 sectionHeader("直连地址", systemImage: "globe") {
                     HStack(spacing: 6) {
                         TextField("主机或 URL", text: $directInput)
@@ -66,9 +94,7 @@ struct ManagementView: View {
                 }
 
                 if profiles.directs.isEmpty {
-                    Text("还没有保存的直连地址")
-                        .foregroundStyle(dsh.textSecondary)
-                        .padding(.vertical, 8)
+                    DshEmptyState(title: "直接打开网页", message: "输入主机名或 HTTP / HTTPS 地址，无需建立 SSH 隧道。", systemImage: "globe")
                 } else {
                     VStack(spacing: 0) {
                         ForEach(profiles.directs, id: \.self) { url in
@@ -114,6 +140,8 @@ struct ManagementView: View {
                     .dshCard()
                 }
 
+              }
+              if section == 2 {
                 sectionHeader("设置", systemImage: "gearshape")
                 VStack(alignment: .leading, spacing: 12) {
                     Picker("关闭主窗口", selection: closeBehaviorBinding) {
@@ -206,10 +234,15 @@ struct ManagementView: View {
                 }
                 .padding(14)
                 .dshCard()
+              }
             }
-            .padding(20)
-            .frame(maxWidth: 900, alignment: .leading)
+            .padding(24)
+            .frame(maxWidth: 960, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
+      }
+        .tint(dsh.accent)
+        .buttonStyle(DshSecondaryButtonStyle())
         .background(dsh.bgBase)
         .sheet(item: $editingProfile) { profile in
             ProfileEditorView(profile: profile, keychain: keychain) { saved in
@@ -222,8 +255,13 @@ struct ManagementView: View {
     @ViewBuilder
     private func tunnelRow(_ profile: TunnelProfile) -> some View {
         let state = tunnels.state(for: profile.id)
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 14) {
+            Image(systemName: "network")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(dsh.accent)
+                .frame(width: 38, height: 38)
+                .background(dsh.accentSoft, in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 5) {
                 Text(profile.displayName)
                     .font(.headline)
                     .foregroundStyle(dsh.textPrimary)
@@ -290,8 +328,8 @@ struct ManagementView: View {
             }
             .help("删除")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
     }
 
     private func isHostKeyFailure(_ message: String?) -> Bool {
@@ -326,8 +364,11 @@ struct ManagementView: View {
             DshStatusDot(color: color)
             Text(title)
                 .font(.caption)
-                .foregroundStyle(dsh.textSecondary)
+                .foregroundStyle(color)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.12), in: Capsule())
     }
 
     private func sectionHeader(_ title: String, systemImage: String) -> some View {
@@ -351,9 +392,8 @@ struct ManagementView: View {
 
     private func sectionTitle(_ title: String, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .textCase(.uppercase)
-            .foregroundStyle(dsh.textTertiary)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(dsh.textPrimary)
     }
 
     private var closeBehaviorBinding: Binding<String> {

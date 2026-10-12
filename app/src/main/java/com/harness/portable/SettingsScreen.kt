@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -29,6 +32,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.ui.text.style.TextOverflow
 import android.app.Activity
 import android.os.Handler
 import android.os.Looper
@@ -52,6 +61,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -60,6 +71,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,7 +88,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     tunnels: List<TunnelProfile>,
@@ -185,32 +197,46 @@ fun SettingsScreen(
     }
 
     val dsh = LocalDsh.current
+    var section by rememberSaveable { mutableStateOf(0) }
+    val tunnelScroll = rememberLazyListState()
+    val directScroll = rememberLazyListState()
+    val settingsScroll = rememberLazyListState()
     Scaffold(
         containerColor = dsh.base,
         topBar = {
+          Column {
             TopAppBar(
                 title = {
-                    Text(
-                        "Harness Portable",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp
-                    )
+                    Column {
+                        Text("连接中心", style = MaterialTheme.typography.headlineSmall)
+                        Text("Harness Portable", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = dsh.base,
+                    containerColor = dsh.layer1,
                     titleContentColor = dsh.textPrimary
                 )
             )
+            TabRow(selectedTabIndex = section, containerColor = dsh.layer1, contentColor = dsh.accent) {
+                listOf("SSH 隧道", "直连地址", "设置").forEachIndexed { index, label ->
+                    Tab(selected = section == index, onClick = { section = index },
+                        text = { Text(label, maxLines = 2) },
+                        selectedContentColor = dsh.accent, unselectedContentColor = dsh.textSecondary)
+                }
+            }
+          }
         }
     ) { padding ->
         LazyColumn(
+            state = when (section) { 0 -> tunnelScroll; 1 -> directScroll; else -> settingsScroll },
             modifier = Modifier
                 .fillMaxSize()
                 .background(dsh.base)
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp),
+            contentPadding = PaddingValues(20.dp, 18.dp, 20.dp, 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            if (section == 0) {
             // ---------- SSH tunnels ----------
             item {
                 SectionHeader(
@@ -230,12 +256,12 @@ fun SettingsScreen(
 
             if (tunnels.isEmpty()) {
                 item {
-                    Text(
-                        "还没有隧道。点右上角 + 添加：填服务器 IP / 域名 / NetBIOS 名、" +
-                                "SSH 端口、用户名（如 administrator），转发到 127.0.0.1:3080。",
-                        color = dsh.textTertiary,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 2.dp)
+                    ShellEmptyState(
+                        icon = Icons.Filled.Dns,
+                        title = "添加你的第一个隧道",
+                        message = "通过 SSH 安全访问远程网页，保存连接后即可快速打开。",
+                        actionLabel = "添加隧道",
+                        onAction = { editorFor = null; showEditor = true }
                     )
                 }
             }
@@ -250,6 +276,8 @@ fun SettingsScreen(
                 )
             }
 
+            }
+            if (section == 1) {
             // ---------- direct URLs ----------
             item {
                 SectionHeader(text = "直连", modifier = Modifier.padding(top = 12.dp))
@@ -297,6 +325,8 @@ fun SettingsScreen(
                 )
             }
 
+            }
+            if (section == 2) {
             item {
                 Column(
                     modifier = Modifier
@@ -422,9 +452,10 @@ fun SettingsScreen(
                         fontFamily = DshMonoFontFamily,
                         modifier = Modifier.padding(top = 8.dp)
                     )
-                    Row(
+                    FlowRow(
                         modifier = Modifier.padding(top = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         OutlinedButton(
                             onClick = {
@@ -489,6 +520,7 @@ fun SettingsScreen(
                     )
                 }
             }
+            }
         }
     }
 
@@ -520,10 +552,10 @@ fun SettingsScreen(
 private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
-        color = LocalDsh.current.textTertiary,
-        fontSize = 12.sp,
+        color = LocalDsh.current.textPrimary,
+        fontSize = 16.sp,
         fontWeight = FontWeight.SemiBold,
-        letterSpacing = 0.6.sp,
+        letterSpacing = 0.sp,
         modifier = modifier
     )
 }
@@ -776,26 +808,20 @@ private fun TunnelRow(
             .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        ShellIcon(Icons.Filled.Dns)
+        Spacer(Modifier.size(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     profile.name.ifBlank { profile.sshHost },
                     fontWeight = FontWeight.Medium,
                     fontSize = 15.sp,
-                    color = dsh.textPrimary
+                    color = dsh.textPrimary,
+                    modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
                 if (running) {
                     Spacer(Modifier.size(8.dp))
-                    Box(
-                        modifier = Modifier.size(7.dp).background(dsh.accent, CircleShape)
-                    )
-                    Spacer(Modifier.size(5.dp))
-                    Text(
-                        "已连接",
-                        color = dsh.accent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    ShellStatusPill("已连接", dsh.success)
                 }
             }
             Text(
@@ -813,12 +839,7 @@ private fun TunnelRow(
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
-        IconButton(onClick = onEdit) {
-            Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = dsh.textTertiary)
-        }
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Filled.Delete, contentDescription = "删除", tint = dsh.danger)
-        }
+        RowActions(onEdit = onEdit, onDelete = onDelete)
     }
 }
 
@@ -838,6 +859,8 @@ private fun ServerRow(
             .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        ShellIcon(Icons.Filled.Language)
+        Spacer(Modifier.size(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 hostOf(url),
@@ -853,13 +876,7 @@ private fun ServerRow(
                 color = dsh.textTertiary
             )
         }
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Filled.Delete,
-                contentDescription = "删除",
-                tint = dsh.danger
-            )
-        }
+        RowActions(onDelete = onDelete)
     }
 }
 

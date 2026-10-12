@@ -512,18 +512,15 @@ public partial class MainWindow : Window
 
     private void UpdateDropZoneVisual(DropZone zone)
     {
-        var normal = new System.Windows.Media.SolidColorBrush(
-            System.Windows.Media.Color.FromRgb(0xFF, 0xFF, 0xFF));
-        var active = new System.Windows.Media.SolidColorBrush(
-            System.Windows.Media.Color.FromRgb(0xD9, 0xE2, 0xFF));
-        var center = new System.Windows.Media.SolidColorBrush(
-            System.Windows.Media.Color.FromRgb(0x4D, 0x6B, 0xFE));
+        var normal = (System.Windows.Media.Brush)FindResource("DshBgLayer2");
+        var active = (System.Windows.Media.Brush)FindResource("DshAccentSoft");
+        var center = (System.Windows.Media.Brush)FindResource("DshBrandFill");
 
         DropUpButton.Background = zone == DropZone.Up ? active : normal;
         DropLeftButton.Background = zone == DropZone.Left ? active : normal;
         DropRightButton.Background = zone == DropZone.Right ? active : normal;
         DropDownButton.Background = zone == DropZone.Down ? active : normal;
-        DropCenterButton.Background = zone == DropZone.Center ? center : normal;
+        DropCenterButton.Background = center;
     }
 
     private LayoutDocumentPane? FindPaneAt(WpfPoint windowPoint)

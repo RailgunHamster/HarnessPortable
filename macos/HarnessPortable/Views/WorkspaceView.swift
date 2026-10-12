@@ -119,16 +119,18 @@ struct WorkspaceView: View {
 
     private var toolbar: some View {
         HStack(spacing: 10) {
+            Image(systemName: "square.stack.3d.up.fill").foregroundStyle(dsh.accent)
             Text("Harness Portable")
-                .font(.headline)
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(dsh.textPrimary)
             Divider().frame(height: 18)
             Button {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "management")
             } label: {
-                Label("管理 / 设置", systemImage: "slider.horizontal.3")
+                Label("连接中心", systemImage: "slider.horizontal.3")
             }
+            .buttonStyle(DshPrimaryButtonStyle())
             Button {
                 directURLInput = ""
                 directPromptPresented = true
@@ -167,9 +169,10 @@ struct WorkspaceView: View {
             }
             .help(isFullScreen ? "退出全屏" : "全屏")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .background(dsh.bgBase)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .buttonStyle(DshSecondaryButtonStyle())
+        .background(dsh.bgLayer1)
     }
 
     private var statusBar: some View {
@@ -567,14 +570,14 @@ private struct WorkspacePaneView: View {
                 Spacer(minLength: 0)
                 edgeDrop(direction: .right)
             }
-            .padding(.top, 36)
+            .padding(.top, 44)
             .padding(.bottom, 36)
             VStack(spacing: 0) {
                 edgeDrop(direction: .up)
                 Spacer(minLength: 0)
                 edgeDrop(direction: .down)
             }
-            .padding(.top, 36)
+            .padding(.top, 44)
             .padding(.bottom, 36)
 
             VStack(spacing: 0) {
@@ -607,7 +610,7 @@ private struct WorkspacePaneView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
         }
-        .frame(minHeight: 34, maxHeight: 36)
+        .frame(minHeight: 42, maxHeight: 44)
         .background(dsh.bgLayer2)
         .contentShape(Rectangle())
         .zIndex(2)
@@ -645,7 +648,7 @@ private struct WorkspacePaneView: View {
         let selected = selectedTab?.id == tab.id
         return HStack(spacing: 5) {
             Text(title(for: tab))
-                .foregroundStyle(selected ? dsh.textPrimary : dsh.textSecondary)
+                .foregroundStyle(selected ? dsh.accent : dsh.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
             if tab.kind != .management {
@@ -653,16 +656,17 @@ private struct WorkspacePaneView: View {
                     closeTab(tab.id)
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
+                        .frame(width: 20, height: 20)
                 }
                 .buttonStyle(.plain)
                 .help("关闭标签")
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(selected ? dsh.accent.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: Dsh.radiusControl))
-        .overlay(RoundedRectangle(cornerRadius: Dsh.radiusControl).stroke(selected ? dsh.accent.opacity(0.55) : dsh.borderL1, lineWidth: Dsh.borderWidth))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(selected ? dsh.accentSoft : Color.clear, in: RoundedRectangle(cornerRadius: Dsh.radiusControl))
+        .overlay(RoundedRectangle(cornerRadius: Dsh.radiusControl).stroke(selected ? dsh.accent : Color.clear, lineWidth: Dsh.borderWidth))
         .contentShape(Rectangle())
         .onTapGesture { workspace.selectTab(tab.id, in: paneID) }
         .zIndex(3)

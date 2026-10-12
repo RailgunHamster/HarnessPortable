@@ -29,6 +29,7 @@ public static class AppTheme
 
     /// <summary>True when the dark token set is active.</summary>
     public static bool IsDark { get; private set; }
+    public static event Action? Changed;
 
     public static void Start()
     {
@@ -78,6 +79,7 @@ public static class AppTheme
         merged.Insert(0, next);
         _tokens = next;
         IsDark = dark;
+        Changed?.Invoke();
         FlickerLog.Log("theme", dark ? "dark tokens applied" : "light tokens applied");
     }
 

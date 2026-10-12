@@ -440,7 +440,7 @@ internal fun WebViewScreen(
                 ActionBall(
                     onClick = { controlsExpanded = !controlsExpanded },
                     containerColor = dsh.accent,
-                    contentColor = Color.White,
+                    contentColor = dsh.brandText,
                     modifier = Modifier
                         .size(ballSizeDp)
                         .alpha(if (dragging) 1f else 0.85f)
@@ -448,7 +448,7 @@ internal fun WebViewScreen(
                     Icon(
                         if (controlsExpanded) Icons.Filled.Close else Icons.Filled.MoreVert,
                         contentDescription = if (controlsExpanded) "收起" else "菜单",
-                        tint = Color.White,
+                        tint = dsh.brandText,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -473,40 +473,40 @@ internal fun WebViewScreen(
                     ActionBall(
                         onClick = { webRef?.reload() },
                         containerColor = dsh.accent,
-                        contentColor = Color.White,
-                        modifier = Modifier.size(ballSizeDp).alpha(0.85f)
+                        contentColor = dsh.brandText,
+                        modifier = Modifier.size(ballSizeDp).alpha(0.95f)
                     ) {
                         Icon(
                             Icons.Filled.Refresh,
                             contentDescription = "刷新",
-                            tint = Color.White,
+                            tint = dsh.brandText,
                             modifier = Modifier.size(22.dp)
                         )
                     }
                     ActionBall(
                         onClick = onToggleOrientation,
                         containerColor = dsh.accent,
-                        contentColor = Color.White,
-                        modifier = Modifier.size(ballSizeDp).alpha(0.85f)
+                        contentColor = dsh.brandText,
+                        modifier = Modifier.size(ballSizeDp).alpha(0.95f)
                     ) {
                         Icon(
                             orientation.icon(),
                             contentDescription = "方向: ${orientation.storage}",
-                            tint = Color.White,
+                            tint = dsh.brandText,
                             modifier = Modifier.size(22.dp)
                         )
                     }
                     ActionBall(
                         onClick = onChangeServer,
                         containerColor = if (tunnelMode) dsh.danger else dsh.accent,
-                        contentColor = Color.White,
-                        modifier = Modifier.size(ballSizeDp).alpha(0.85f)
+                        contentColor = dsh.brandText,
+                        modifier = Modifier.size(ballSizeDp).alpha(0.95f)
                     ) {
                         Icon(
                             if (tunnelMode) Icons.Filled.LinkOff else Icons.Filled.Dns,
                             contentDescription =
                                 if (tunnelMode) "断开并返回" else "服务器",
-                            tint = Color.White,
+                            tint = dsh.brandText,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -514,13 +514,13 @@ internal fun WebViewScreen(
                         ActionBall(
                             onClick = onReconnect,
                             containerColor = dsh.accent,
-                            contentColor = Color.White,
-                            modifier = Modifier.size(ballSizeDp).alpha(0.85f)
+                            contentColor = dsh.brandText,
+                            modifier = Modifier.size(ballSizeDp).alpha(0.95f)
                         ) {
                             Icon(
                                 Icons.Filled.Autorenew,
                                 contentDescription = "重连隧道",
-                                tint = Color.White,
+                                tint = dsh.brandText,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -549,7 +549,7 @@ private fun ActionBall(
 ) {
     SmallFloatingActionButton(
         onClick = onClick,
-        shape = CircleShape,
+        shape = DshControlShape,
         containerColor = containerColor,
         contentColor = contentColor,
         elevation = FloatingActionButtonDefaults.elevation(
@@ -565,7 +565,7 @@ private fun ActionBall(
                 else LocalDsh.current.borderL1,
                 containerColor
             ),
-            CircleShape
+            DshControlShape
         )
     ) {
         Box(contentAlignment = Alignment.Center) { content() }

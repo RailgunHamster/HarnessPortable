@@ -2,17 +2,17 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-             FontFamily="Segoe UI, Microsoft YaHei UI">
+             FontFamily="{DynamicResource DshUiFont}">
     <Grid x:Name="BrowserGrid">
         <wv2:WebView2 x:Name="WebView"/>
 
-        <Border x:Name="StatusOverlay" Background="#99000000" Visibility="Collapsed">
-            <Border Background="#FFFFFF" CornerRadius="14" Padding="22,18"
+        <Border x:Name="StatusOverlay" Background="{DynamicResource DshScrim}" Visibility="Collapsed">
+            <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="28,24"
                     MaxWidth="440" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <StackPanel>
                     <TextBlock x:Name="OverlayTitle" FontSize="16" FontWeight="SemiBold"
-                               Foreground="#111827" TextWrapping="Wrap" HorizontalAlignment="Center"/>
-                    <TextBlock x:Name="OverlayMessage" FontSize="12" Foreground="#6B7280"
+                               Foreground="{DynamicResource DshTextPrimary}" TextWrapping="Wrap" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="OverlayMessage" FontSize="12" Foreground="{DynamicResource DshTextSecondary}"
                                TextWrapping="Wrap" Margin="0,8,0,0" HorizontalAlignment="Center"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
                         <Button x:Name="OverlayReconnectButton" Content="重连" Width="88" Margin="0,0,8,0"
@@ -26,19 +26,19 @@
             </Border>
         </Border>
 
-        <Border x:Name="AuthOverlay" Background="#99000000" Visibility="Collapsed">
-            <Border Background="#FFFFFF" CornerRadius="14" Padding="22,18"
+        <Border x:Name="AuthOverlay" Background="{DynamicResource DshScrim}" Visibility="Collapsed">
+            <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="28,24"
                     MaxWidth="480" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <StackPanel>
-                    <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="#111827"
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}"
                                Text="网页要求重新认证" HorizontalAlignment="Center"/>
-                    <TextBlock FontSize="12" Foreground="#6B7280" TextWrapping="Wrap"
+                    <TextBlock FontSize="12" Foreground="{DynamicResource DshTextSecondary}" TextWrapping="Wrap"
                                Margin="0,8,0,0" HorizontalAlignment="Center"
                                Text="服务端要求先用带令牌的 URL 打开一次（例如 dsh 更新后）。请在服务器上复制 dsh web 打印的完整 URL —— 或只复制 token 本身 —— 粘贴到下面，将直接在内置浏览器中完成认证，无需再用外部浏览器打开。"/>
                     <TextBox x:Name="AuthUrlBox" FontSize="13" Margin="0,12,0,0"
                                  Style="{StaticResource ModernTextBox}"
                                  KeyDown="AuthUrlBox_KeyDown" TextChanged="AuthUrlBox_TextChanged"/>
-                    <TextBlock x:Name="AuthHint" FontSize="11" Foreground="#DC2626" Margin="0,6,0,0"
+                    <TextBlock x:Name="AuthHint" FontSize="11" Foreground="{DynamicResource DshDangerText}" Margin="0,6,0,0"
                                TextWrapping="Wrap" Visibility="Collapsed"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
                         <Button Content="打开" Width="88" Margin="0,0,8,0"
@@ -56,15 +56,15 @@
             <Popup x:Name="FloatBallPopup" PlacementTarget="{Binding ElementName=OverlayCanvas}"
                    Placement="Relative" AllowsTransparency="True" StaysOpen="True" Focusable="False">
             <Border x:Name="FloatBall"
-                    Width="48" Height="48"
-                    Background="#3B82F6" CornerRadius="10"
+                    Width="44" Height="44"
+                    Background="{DynamicResource DshAccent}" CornerRadius="14"
                     IsHitTestVisible="True"
                     Cursor="Hand"
-                    Opacity="0.85"
+                    Opacity="0.95"
                     MouseLeftButtonDown="FloatBall_MouseLeftButtonDown"
                     MouseMove="FloatBall_MouseMove"
                     MouseLeftButtonUp="FloatBall_MouseLeftButtonUp">
-                <TextBlock x:Name="FloatBallText" Text="☰" Foreground="White" FontSize="20"
+                <TextBlock x:Name="FloatBallText" Text="☰" Foreground="{DynamicResource DshBrandText}" FontSize="20"
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             </Popup>

@@ -48,15 +48,6 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         public event PropertyChangedEventHandler? PropertyChanged;
     }
 
-    // DSH status colours (static-green-500 / deepseek-450-ish / static-red-500):
-    // identical on both token sets, so they survive a theme switch.
-    private static readonly System.Windows.Media.Brush GreenBrush =
-        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0xC5, 0x5E));
-    private static readonly System.Windows.Media.Brush BlueBrush =
-        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x56, 0x86, 0xFE));
-    private static readonly System.Windows.Media.Brush RedBrush =
-        new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44));
-
     private readonly AppServices _services;
     private readonly ObservableCollection<TunnelListItem> _tunnelItems = [];
     private readonly ObservableCollection<DirectListItem> _directItems = [];
@@ -77,19 +68,23 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         DirectList.ItemsSource = _directItems;
         DirectInput.ItemsSource = _lanMachines;
 
-        _services.Tunnels.StateChanged += OnTunnelStateChanged;
-
         // The panel lives in its own window now, so it is unloaded whenever that
         // window closes and loaded again when it is reopened: hook and unhook
         // symmetrically, and refresh what the ctor cannot keep current.
         Loaded += (_, _) =>
         {
+            _services.Tunnels.StateChanged -= OnTunnelStateChanged;
+            _services.Tunnels.StateChanged += OnTunnelStateChanged;
+            AppTheme.Changed -= RefreshLists;
+            AppTheme.Changed += RefreshLists;
             HookUpdateEvents(true);
             RefreshLists();
             RefreshUpdatePanel();
         };
         Unloaded += (_, _) =>
         {
+            _services.Tunnels.StateChanged -= OnTunnelStateChanged;
+            AppTheme.Changed -= RefreshLists;
             _discoveryCts?.Cancel();
             HookUpdateEvents(false);
         };
@@ -153,9 +148,9 @@ public partial class ManagementView : System.Windows.Controls.UserControl
                 },
                 StatusBrush = state.Status switch
                 {
-                    TunnelStatus.Connected => GreenBrush,
-                    TunnelStatus.Failed => RedBrush,
-                    _ => BlueBrush,
+                    TunnelStatus.Connected => (System.Windows.Media.Brush)FindResource("DshGreen"),
+                    TunnelStatus.Failed => (System.Windows.Media.Brush)FindResource("DshRed"),
+                    _ => (System.Windows.Media.Brush)FindResource("DshAccent"),
                 },
                 StatusVisibility = state.Status is TunnelStatus.Connected or TunnelStatus.Connecting
                     or TunnelStatus.Retrying or TunnelStatus.Failed
@@ -293,6 +288,7 @@ public partial class ManagementView : System.Windows.Controls.UserControl
 
     private async void HeaderUpdate_Click(object sender, RoutedEventArgs e)
     {
+        ManagementTabs.SelectedIndex = 2;
         if (_services.Updates.CanApply)
         {
             ApplyUpdate_Click(sender, e);

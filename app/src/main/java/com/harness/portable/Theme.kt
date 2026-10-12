@@ -5,6 +5,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
+import androidx.compose.material3.Shapes
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -19,15 +22,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * DeepSeek Harness design tokens.
- *
- * These values are copied verbatim from DSH's own design system
- * (`dsh-client-ui-theme`) so the Android shell and the web console it hosts
- * share one visual language. Anything Material3 has no slot for (layered
- * surfaces, tertiary text, the three border ranks, the mono family) travels
- * alongside the scheme through [LocalDsh].
- */
+/** Shared native shell palette, resolved once for each system appearance. */
 internal data class DshColors(
     // Layered backgrounds. `base` is the page, `layer1` the card, `layer2` a
     // nested surface / input, `layer3` the deepest step.
@@ -59,6 +54,7 @@ internal data class DshColors(
 
     // Semantic.
     val accent: Color,
+    val accentSoft: Color,
     val success: Color,
     val danger: Color,
     val warning: Color,
@@ -74,7 +70,7 @@ internal data class DshColors(
 
     /** Opaque border ink as it appears when laid over [over]. */
     fun borderOver(border: Color, over: Color): Color =
-        border.over(over, border.alpha * border.alpha)
+        border.over(over)
 
     /** Border that has first been allowed to fall on a page background. */
     fun borderOnBase(border: Color, on: Color): Color =
@@ -94,77 +90,70 @@ private fun Color.over(base: Color, alphaScale: Float = alpha): Color {
 }
 
 private val LightTokens = DshColors(
-    base = Color(0xFFFFFFFF),
+    base = Color(0xFFF3F5F9),
     layer1 = Color(0xFFFFFFFF),
-    layer2 = Color(0xFFF5F6F7),
-    layer3 = Color(0xFFEBEEF2),
-    borderL1 = Color(0x0A000000),
+    layer2 = Color(0xFFEDF1F7),
+    layer3 = Color(0xFFE3E9F2),
+    borderL1 = Color(0xFFDFE5EF),
     borderL1On = Color(0xFFFFFFFF),
-    borderL2 = Color(0x1A000000),
+    borderL2 = Color(0xFFCFD8E6),
     borderL2On = Color(0xFFFFFFFF),
-    borderL3 = Color(0x1F000000),
+    borderL3 = Color(0xFFB8C6DA),
     borderL3On = Color(0xFFFFFFFF),
-    textPrimary = Color(0xFF0F1115),
-    textSecondary = Color(0xFF61666B),
-    textTertiary = Color(0xFF81858C),
-    brandFill = Color(0xFF0F1115),
-    brandHover = Color(0xFF2C2C2E),
-    brandPressed = Color(0xFF43454A),
+    textPrimary = Color(0xFF172239),
+    textSecondary = Color(0xFF526078),
+    textTertiary = Color(0xFF65718A),
+    brandFill = Color(0xFF365EDC),
+    brandHover = Color(0xFF2B50C7),
+    brandPressed = Color(0xFF2343AA),
     brandText = Color(0xFFFFFFFF),
-    accent = Color(0xFF4176E6),
-    success = Color(0xFF22C55E),
-    danger = Color(0xFFEC1313),
-    warning = Color(0xFFF7AD31),
+    accentSoft = Color(0xFFE9EEFF),
+    accent = Color(0xFF365EDC),
+    success = Color(0xFF15805F),
+    danger = Color(0xFFC9364B),
+    warning = Color(0xFF97680A),
     inputBg = Color(0xFFFFFFFF),
-    inputBorder = Color(0x1A000000),
+    inputBorder = Color(0xFFCFD8E6),
     scrim = Color(0x99000000),
     isDark = false
 )
 
 private val DarkTokens = DshColors(
-    base = Color(0xFF151517),
-    layer1 = Color(0xFF232324),
-    layer2 = Color(0xFF2C2C2E),
-    layer3 = Color(0xFF353638),
-    borderL1 = Color(0x0FFFFFFF),
+    base = Color(0xFF101722),
+    layer1 = Color(0xFF182231),
+    layer2 = Color(0xFF202D40),
+    layer3 = Color(0xFF2B3A50),
+    borderL1 = Color(0xFF2B3A50),
     borderL1On = Color(0xFF000000),
-    borderL2 = Color(0x1FFFFFFF),
+    borderL2 = Color(0xFF35455D),
     borderL2On = Color(0xFF000000),
-    borderL3 = Color(0x29FFFFFF),
+    borderL3 = Color(0xFF536783),
     borderL3On = Color(0xFF000000),
-    textPrimary = Color(0xFFF9FAFB),
-    textSecondary = Color(0xFFCFD3D6),
-    textTertiary = Color(0xFFADB2B8),
-    brandFill = Color(0xFFF9FAFB),
-    brandHover = Color(0xFFE1E5EE),
-    brandPressed = Color(0xFFCFD3D6),
-    brandText = Color(0xFF0F1115),
-    accent = Color(0xFF5686FE),
-    success = Color(0xFF22C55E),
-    danger = Color(0xFFF25A5A),
-    warning = Color(0xFFF7AD31),
-    inputBg = Color(0xFF232324),
-    inputBorder = Color(0x1FFFFFFF),
+    textPrimary = Color(0xFFEDF2FB),
+    textSecondary = Color(0xFFA7B5CC),
+    textTertiary = Color(0xFF92A1BA),
+    brandFill = Color(0xFF8EAFFF),
+    brandHover = Color(0xFFABC3FF),
+    brandPressed = Color(0xFF759AEE),
+    brandText = Color(0xFF101722),
+    accentSoft = Color(0xFF263858),
+    accent = Color(0xFF8EAFFF),
+    success = Color(0xFF4BD2A0),
+    danger = Color(0xFFFF8C9E),
+    warning = Color(0xFFF2C66D),
+    inputBg = Color(0xFF182231),
+    inputBorder = Color(0xFF35455D),
     scrim = Color(0xCC000000),
     isDark = true
 )
 
-/**
- * Material3 has no role for `layer1`/`layer2`/`layer3`, tertiary text, the
- * border ranks or the mono family, so the fields Material3 *does* own are
- * mapped here and the rest is exposed through [LocalDsh].
- *
- * Note the deliberate inversion: `primary` is the *brand fill* (near-black in
- * light mode, near-white in dark mode), which is exactly how DSH paints its
- * primary button. `onSurface` stays the text rank, so components that read it
- * keep readable text.
- */
+/** Material roles use the same surfaces and accent as the desktop shells. */
 private fun DshColors.toColorScheme() = if (isDark) {
     darkColorScheme(
         primary = brandFill,
         onPrimary = brandText,
-        primaryContainer = brandHover,
-        onPrimaryContainer = brandText,
+        primaryContainer = accentSoft,
+        onPrimaryContainer = accent,
         inversePrimary = accent,
         secondary = textSecondary,
         onSecondary = base,
@@ -176,7 +165,7 @@ private fun DshColors.toColorScheme() = if (isDark) {
         onTertiaryContainer = textPrimary,
         background = base,
         onBackground = textPrimary,
-        surface = base,
+        surface = layer1,
         onSurface = textPrimary,
         surfaceVariant = layer2,
         onSurfaceVariant = textSecondary,
@@ -194,16 +183,16 @@ private fun DshColors.toColorScheme() = if (isDark) {
         onError = Color(0xFFFFFFFF),
         errorContainer = layer3,
         onErrorContainer = danger,
-        outline = Color(0xFF4A4C50),
-        outlineVariant = Color(0xFF353638),
+        outline = inputBorder,
+        outlineVariant = borderL1,
         scrim = Color(0xFF000000)
     )
 } else {
     lightColorScheme(
         primary = brandFill,
         onPrimary = brandText,
-        primaryContainer = brandHover,
-        onPrimaryContainer = brandText,
+        primaryContainer = accentSoft,
+        onPrimaryContainer = accent,
         inversePrimary = accent,
         secondary = textSecondary,
         onSecondary = base,
@@ -215,7 +204,7 @@ private fun DshColors.toColorScheme() = if (isDark) {
         onTertiaryContainer = textPrimary,
         background = base,
         onBackground = textPrimary,
-        surface = base,
+        surface = layer1,
         onSurface = textPrimary,
         surfaceVariant = layer2,
         onSurfaceVariant = textSecondary,
@@ -233,11 +222,26 @@ private fun DshColors.toColorScheme() = if (isDark) {
         onError = Color(0xFFFFFFFF),
         errorContainer = layer3,
         onErrorContainer = danger,
-        outline = Color(0xFF81858C),
-        outlineVariant = Color(0xFFEBEEF2),
+        outline = inputBorder,
+        outlineVariant = borderL1,
         scrim = Color(0xFF000000)
     )
 }
+
+private val LightScheme = LightTokens.toColorScheme()
+private val DarkScheme = DarkTokens.toColorScheme()
+private val ShellTypography = Typography(
+    headlineSmall = TextStyle(fontSize = 24.sp, lineHeight = 32.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+    titleLarge = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+    titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
+    bodySmall = TextStyle(fontSize = 12.sp, lineHeight = 18.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+)
+private val ShellShapes = Shapes(
+    small = RoundedCornerShape(10.dp), medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(20.dp)
+)
 
 /**
  * Read the DSH tokens from any composable: `val dsh = LocalDsh.current`.
@@ -254,18 +258,21 @@ internal val DshMonoFontFamily: FontFamily = FontFamily.Monospace
  */
 @Composable
 internal fun AppTheme(content: @Composable () -> Unit) {
-    val dsh = if (isSystemInDarkTheme()) DarkTokens else LightTokens
+    val dark = isSystemInDarkTheme()
+    val dsh = if (dark) DarkTokens else LightTokens
     CompositionLocalProvider(LocalDsh provides dsh) {
         MaterialTheme(
-            colorScheme = dsh.toColorScheme(),
+            colorScheme = if (dark) DarkScheme else LightScheme,
+            typography = ShellTypography,
+            shapes = ShellShapes,
             content = content
         )
     }
 }
 
-/** Shared corner radii: sheets/cards 12dp, controls 8dp. */
-internal val DshCardShape = RoundedCornerShape(12.dp)
-internal val DshControlShape = RoundedCornerShape(8.dp)
+/** Shared corner radii: sheets/cards 16dp, controls 10dp. */
+internal val DshCardShape = RoundedCornerShape(16.dp)
+internal val DshControlShape = RoundedCornerShape(10.dp)
 
 /** Field colours taken from the token set instead of Material's surface roles. */
 @Composable
@@ -293,7 +300,7 @@ internal fun DshColors.monoStyle(size: Int = 14): TextStyle = TextStyle(
     color = textPrimary
 )
 
-/** Card/sheet body: layer-1 fill, 1dp rank-1 border, 12dp radius, no elevation. */
+/** Card/sheet body: layer-1 fill, 1dp rank-1 border, 16dp radius, no elevation. */
 @Composable
 internal fun Modifier.dshCard(
     color: Color = LocalDsh.current.layer1,
@@ -303,6 +310,7 @@ internal fun Modifier.dshCard(
     val dsh = LocalDsh.current
     val stroke = borderColor ?: dsh.borderOver(dsh.borderL1, color)
     return this
+        .clip(shape)
         .background(color, shape)
         .border(1.dp, stroke, shape)
 }

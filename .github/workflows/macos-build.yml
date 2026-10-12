@@ -26,6 +26,8 @@ jobs:
           cd macos
           xcodegen generate
       - name: Run macOS tests
+        env:
+          HP_UI_PREVIEW_DIR: ${{ runner.temp }}/ui-previews
         working-directory: macos
         run: |
           set -o pipefail
@@ -55,6 +57,12 @@ jobs:
           hdiutil create -volname 'Harness Portable' -srcfolder dmgroot \
             -ov -format UDZO "output/HarnessPortable-$VERSION.dmg"
           shasum -a 256 "output/HarnessPortable-$VERSION.dmg" > output/sha256.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ui-previews
+          path: ${{ runner.temp }}/ui-previews/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v7
         with:
           name: macos-package

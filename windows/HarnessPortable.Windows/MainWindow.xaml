@@ -7,8 +7,8 @@
         Width="1200" Height="780"
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen"
-        Background="#FFFFFF"
-        FontFamily="Segoe UI, Microsoft YaHei UI"
+        Background="{DynamicResource DshBgLayer1}"
+        FontFamily="{DynamicResource DshUiFont}"
         PreviewKeyDown="Window_PreviewKeyDown"
         PreviewMouseMove="Window_PreviewMouseMove"
         PreviewMouseLeftButtonUp="Window_PreviewMouseLeftButtonUp">
@@ -16,7 +16,7 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <Style x:Key="ModernDocumentPaneControlStyle" TargetType="{x:Type avalonDock:LayoutDocumentPaneControl}">
-            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Background" Value="{DynamicResource DshBgLayer1}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type avalonDock:LayoutDocumentPaneControl}">
@@ -34,7 +34,7 @@
                             <Border x:Name="ContentPanel"
                                     Grid.Row="1"
                                     Background="{TemplateBinding Background}"
-                                    BorderBrush="#EBEEF2"
+                                    BorderBrush="{DynamicResource DshBgLayer3}"
                                     BorderThickness="1,0,0,0"
                                     KeyboardNavigation.DirectionalNavigation="Contained"
                                     KeyboardNavigation.TabIndex="2"
@@ -97,8 +97,8 @@
         </Style>
 
         <Style x:Key="ModernDocumentTabItemStyle" TargetType="{x:Type avalonDock:LayoutDocumentTabItem}">
-            <Setter Property="Background" Value="#FFFFFF"/>
-            <Setter Property="Foreground" Value="#61666B"/>
+            <Setter Property="Background" Value="{DynamicResource DshBgLayer1}"/>
+            <Setter Property="Foreground" Value="{DynamicResource DshTextSecondary}"/>
             <Setter Property="Padding" Value="8,3"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -108,7 +108,7 @@
                             DropDownContextMenuDataContext="{Binding LayoutItem, RelativeSource={RelativeSource TemplatedParent}}">
                             <Border x:Name="TabBorder"
                                     Background="{TemplateBinding Background}"
-                                    BorderBrush="#D9DDE3"
+                                    BorderBrush="{DynamicResource DshBorderL2}"
                                     BorderThickness="1"
                                     CornerRadius="8"
                                     Padding="{TemplateBinding Padding}"
@@ -125,14 +125,14 @@
                                         ContentTemplateSelector="{Binding DocumentHeaderTemplateSelector, Mode=OneWay, RelativeSource={RelativeSource AncestorType={x:Type avalonDock:DockingManager}, Mode=FindAncestor}}"/>
                                     <Button x:Name="CloseButton"
                                             Grid.Column="1"
-                                            Width="16" Height="16"
+                                            Width="20" Height="20"
                                             Margin="5,0,0,0"
                                             Padding="0"
                                             Command="{Binding LayoutItem.CloseCommand, RelativeSource={RelativeSource TemplatedParent}}"
                                             Focusable="False"
                                             Cursor="Hand"
                                             ToolTip="关闭标签"
-                                            Visibility="Collapsed">
+                                            Visibility="Hidden">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border x:Name="Bd" Background="Transparent" CornerRadius="8"
@@ -146,8 +146,8 @@
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="Bd" Property="Background" Value="#FDE8E8"/>
-                                                        <Setter TargetName="CloseGlyph" Property="Stroke" Value="#EC1313"/>
+                                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DshDangerFillHover}"/>
+                                                        <Setter TargetName="CloseGlyph" Property="Stroke" Value="{DynamicResource DshDangerText}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -158,17 +158,17 @@
                         </avalonDock:DropDownControlArea>
                         <ControlTemplate.Triggers>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="#EBEEF2"/>
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#C6CBD3"/>
-                                <Setter Property="Foreground" Value="#0F1115"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource DshAccentSoft}"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource DshAccent}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource DshTextPrimary}"/>
                             </DataTrigger>
                             <MultiDataTrigger>
                                 <MultiDataTrigger.Conditions>
                                     <Condition Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource TemplatedParent}}" Value="True"/>
                                     <Condition Binding="{Binding IsSelected}" Value="False"/>
                                 </MultiDataTrigger.Conditions>
-                                <Setter TargetName="TabBorder" Property="Background" Value="#F1F3F5"/>
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#C6CBD3"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource DshBgLayer2}"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource DshBorderL3}"/>
                             </MultiDataTrigger>
                             <MultiDataTrigger>
                                 <MultiDataTrigger.Conditions>
@@ -190,34 +190,34 @@
     </Window.Resources>
 
     <DockPanel>
-        <Border x:Name="ChromeBar" DockPanel.Dock="Top" Background="#F9FAFB" Padding="14,8"
-                BorderBrush="#EBEEF2" BorderThickness="0,0,0,1">
+        <Border x:Name="ChromeBar" DockPanel.Dock="Top" Background="{DynamicResource DshBgBase}" Padding="18,12"
+                BorderBrush="{DynamicResource DshBgLayer3}" BorderThickness="0,0,0,1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="布局预设" Foreground="#6B7280" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="布局预设" Foreground="{DynamicResource DshTextSecondary}" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
                     <ComboBox x:Name="LayoutPresetBox" Width="170"
                               Style="{StaticResource ModernComboBox}"
                               DisplayMemberPath="Name"
                               SelectionChanged="LayoutPresetBox_SelectionChanged"/>
-                    <Button Content="保存当前布局" Style="{StaticResource ModernToolbarButton}"
+                    <Button Content="保存布局" Style="{StaticResource ModernToolbarButton}"
                             Margin="6,0,0,0" Click="SaveLayout_Click"/>
                     <Button Content="删除" Style="{StaticResource ModernToolbarButton}"
                             Margin="6,0,0,0" Click="DeleteLayout_Click"/>
-                    <TextBlock Text="F11 全屏 · 拖动标签到其他窗格分屏 · 右键标签更多操作" Foreground="#9CA3AF"
+                    <TextBlock Text="F11 全屏" Foreground="{DynamicResource DshTextTertiary}"
                                FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Harness Portable" FontSize="16" FontWeight="SemiBold"
-                               Foreground="#111827" VerticalAlignment="Center"/>
-                    <Button Content="管理 / 设置" Style="{StaticResource ModernPrimaryButton}"
+                    <TextBlock Text="Harness Portable" FontSize="17" FontWeight="SemiBold"
+                               Foreground="{DynamicResource DshTextPrimary}" VerticalAlignment="Center"/>
+                    <Button Content="连接中心" Style="{StaticResource ModernPrimaryButton}"
                             Margin="12,0,0,0" Padding="12,6" Click="OpenManagement_Click"/>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <StatusBar x:Name="ChromeStatus" DockPanel.Dock="Bottom" Background="#F9FAFB" BorderBrush="#EBEEF2" BorderThickness="0,1,0,0">
+        <StatusBar Padding="12,5" x:Name="ChromeStatus" DockPanel.Dock="Bottom" Background="{DynamicResource DshBgBase}" BorderBrush="{DynamicResource DshBgLayer3}" BorderThickness="0,1,0,0">
             <StatusBarItem>
-                <TextBlock x:Name="StatusText" Text="就绪" Foreground="#374151"/>
+                <TextBlock x:Name="StatusText" Text="就绪" Foreground="{DynamicResource DshTextSecondary}"/>
             </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right">
                 <Button x:Name="StopTunnelButton" Content="停止全部隧道"
@@ -229,7 +229,7 @@
         <Grid>
             <avalonDock:DockingManager x:Name="DockManager"
                                        AllowMixedOrientation="True"
-                                       Background="#FFFFFF"
+                                       Background="{DynamicResource DshBgLayer1}"
                                        DocumentPaneControlStyle="{StaticResource ModernDocumentPaneControlStyle}">
                 <avalonDock:DockingManager.Theme>
                     <avalonDock:GenericTheme/>
@@ -260,16 +260,16 @@
             <Canvas x:Name="TabDragOverlay" Visibility="Collapsed" IsHitTestVisible="False"
                     Panel.ZIndex="20">
                 <Border x:Name="DragTargetHighlight"
-                        Background="#164D6BFE" BorderBrush="#4D6BFE" BorderThickness="2"
+                        Background="{DynamicResource DshAccentWash}" BorderBrush="{DynamicResource DshAccent}" BorderThickness="2"
                         CornerRadius="10" Visibility="Collapsed"/>
-                <Border x:Name="DragHintCard" Background="#F7F9FF" BorderBrush="#C7D2FE"
+                <Border x:Name="DragHintCard" Background="{DynamicResource DshBgLayer1}" BorderBrush="{DynamicResource DshBorderL2}"
                         BorderThickness="1" CornerRadius="8" Padding="12,7"
                         HorizontalAlignment="Center" VerticalAlignment="Top">
                     <TextBlock x:Name="DragHintText" Text="拖到目标区域后释放"
-                               Foreground="#334155" FontSize="12" TextWrapping="Wrap"/>
+                               Foreground="{DynamicResource DshTextSecondary}" FontSize="12" TextWrapping="Wrap"/>
                 </Border>
                 <Border x:Name="DropZoneCard" Width="238" Height="174"
-                        Background="#F8FAFF" BorderBrush="#A5B4FC" BorderThickness="1"
+                        Background="{DynamicResource DshBgLayer1}" BorderBrush="{DynamicResource DshAccent}" BorderThickness="1"
                         CornerRadius="12" Padding="10" Visibility="Collapsed">
                     <Grid>
                         <Grid.RowDefinitions>

@@ -22,7 +22,7 @@
                 Background="{DynamicResource DshBgLayer1}"
                 BorderBrush="{DynamicResource DshBorderL1}"
                 BorderThickness="0,0,0,1"
-                Padding="20,16">
+                Padding="24,22">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="HeaderUpdateButton" Content="检查更新"
@@ -33,18 +33,19 @@
                             Click="AddTunnel_Click"/>
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="管理" FontSize="17" FontWeight="SemiBold"
+                    <TextBlock Text="连接中心" FontSize="24" FontWeight="SemiBold"
                                Foreground="{DynamicResource DshTextPrimary}"/>
-                    <TextBlock Text="SSH 本地端口转发 · 内嵌浏览器 · 自动更新"
+                    <TextBlock Text="管理隧道与直连，快速进入工作区"
                                Style="{StaticResource DshMuted}" Margin="0,3,0,0"/>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,16,20,24">
-            <StackPanel MaxWidth="940" HorizontalAlignment="Center">
+        <TabControl x:Name="ManagementTabs" Style="{StaticResource DshTabs}">
+            <TabItem Header="SSH 隧道">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,22,24,28">
+                    <StackPanel MaxWidth="940" HorizontalAlignment="Stretch">
 
-                <!-- ===================== SSH 隧道 ===================== -->
                 <Grid Margin="0,0,0,10">
                     <TextBlock Text="SSH 隧道" Style="{StaticResource DshSectionHeader}"/>
                     <Border Style="{StaticResource DshPill}" HorizontalAlignment="Right">
@@ -53,8 +54,14 @@
                     </Border>
                 </Grid>
 
-                <TextBlock x:Name="EmptyTunnelsHint" Style="{StaticResource DshMuted}" Margin="0,0,0,10"
-                           Text="还没有隧道。点右上角「添加隧道」：填服务器 IP / 域名 / NetBIOS 名、SSH 端口、用户名，转发到 127.0.0.1:3080。"/>
+                <Border x:Name="EmptyTunnelsHint" Style="{StaticResource DshCard}" Padding="28">
+                    <StackPanel HorizontalAlignment="Center" MaxWidth="460">
+                        <TextBlock Text="↗" Foreground="{DynamicResource DshAccent}" FontSize="32" HorizontalAlignment="Center"/>
+                        <TextBlock Text="添加你的第一个隧道" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}" HorizontalAlignment="Center" Margin="0,12,0,8"/>
+                        <TextBlock Text="通过 SSH 安全访问远程网页。添加服务器、用户名和转发端口即可开始。" Style="{StaticResource DshMuted}" TextAlignment="Center"/>
+                        <Button Content="＋ 添加隧道" Style="{StaticResource DshPrimaryButton}" HorizontalAlignment="Center" Margin="0,18,0,0" Click="AddTunnel_Click"/>
+                    </StackPanel>
+                </Border>
 
                 <ItemsControl x:Name="TunnelList">
                     <ItemsControl.ItemTemplate>
@@ -70,7 +77,7 @@
                                             <Ellipse Width="7" Height="7" Fill="{Binding StatusBrush}"
                                                      VerticalAlignment="Center"
                                                      Visibility="{Binding StatusVisibility}"/>
-                                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                            <TextBlock Text="{Binding Name}" FontSize="15" MaxWidth="300" TextTrimming="CharacterEllipsis" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource DshTextPrimary}"
                                                        Margin="7,0,0,0" VerticalAlignment="Center"/>
                                             <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}"
@@ -99,9 +106,16 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <Border Style="{StaticResource DshDivider}"/>
 
-                <!-- ===================== 直连 ===================== -->
+
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="直连地址">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,22,24,28">
+                    <StackPanel MaxWidth="940" HorizontalAlignment="Stretch">
+
                 <TextBlock Text="直连" Style="{StaticResource DshSectionHeader}" Margin="0,0,0,10"/>
                 <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
@@ -172,9 +186,16 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <Border Style="{StaticResource DshDivider}"/>
 
-                <!-- ===================== 设置 ===================== -->
+
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="设置与更新">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,22,24,28">
+                    <StackPanel MaxWidth="940" HorizontalAlignment="Stretch">
+
                 <TextBlock Text="设置" Style="{StaticResource DshSectionHeader}" Margin="0,0,0,10"/>
 
                 <Border Style="{StaticResource DshCard}">
@@ -243,7 +264,10 @@
                                    Text="安装包与便携 zip 都会自动更新。便携版请解压后运行根目录的 Harness Portable.exe。开发运行和旧版单文件 exe 不能在线更新。配置保存在 %APPDATA%\HarnessPortable，不会写入程序目录。"/>
                     </StackPanel>
                 </Border>
-            </StackPanel>
-        </ScrollViewer>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
     </DockPanel>
 </UserControl>

@@ -414,7 +414,7 @@ struct SessionView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .help("刷新")
-                .buttonStyle(.borderless)
+                .buttonStyle(DshSecondaryButtonStyle())
 
                 Button {
                     onClose()
@@ -422,10 +422,10 @@ struct SessionView: View {
                     Image(systemName: "xmark")
                 }
                 .help("关闭标签")
-                .buttonStyle(.borderless)
+                .buttonStyle(DshSecondaryButtonStyle())
             }
             .padding(8)
-            .background(dsh.bgLayer2, in: RoundedRectangle(cornerRadius: Dsh.radiusControl))
+            .background(dsh.bgLayer1, in: RoundedRectangle(cornerRadius: Dsh.radiusCard))
             .overlay(
                 RoundedRectangle(cornerRadius: Dsh.radiusControl)
                     .stroke(dsh.borderL1, lineWidth: Dsh.borderWidth)

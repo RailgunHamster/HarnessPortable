@@ -1,19 +1,14 @@
 import SwiftUI
 
-/// Design tokens copied from the DeepSeek Harness client theme
-/// (`dsh-client-ui-theme`).
-///
-/// Every colour is resolved from an explicit `ColorScheme`, so the views need
-/// no AppKit dynamic colours, follow the system appearance automatically, and
-/// cannot fail at runtime.
+/// Shared shell tokens. System appearance uses flat native surfaces and crisp borders.
 enum Dsh {
 
     // MARK: - Shapes
 
     /// Corner radius for cards, sheets and other surfaces.
-    static let radiusCard: CGFloat = 12
+    static let radiusCard: CGFloat = 16
     /// Corner radius for controls (buttons, fields, chips).
-    static let radiusControl: CGFloat = 8
+    static let radiusControl: CGFloat = 10
     /// Hairline border width used instead of shadows.
     static let borderWidth: CGFloat = 1
 
@@ -27,93 +22,97 @@ enum Dsh {
     // MARK: - Backgrounds
 
     static func bgBase(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFF151517) : hex(0xFFFFFFFF)
+        scheme == .dark ? hex(0xFF101722) : hex(0xFFF3F5F9)
     }
 
     static func bgLayer1(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFF232324) : hex(0xFFFFFFFF)
+        scheme == .dark ? hex(0xFF182231) : hex(0xFFFFFFFF)
     }
 
     static func bgLayer2(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFF2C2C2E) : hex(0xFFF5F6F7)
+        scheme == .dark ? hex(0xFF202D40) : hex(0xFFEDF1F7)
     }
 
     static func bgLayer3(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFF353638) : hex(0xFFEBEEF2)
+        scheme == .dark ? hex(0xFF2B3A50) : hex(0xFFE3E9F2)
     }
 
     // MARK: - Borders
 
     static func borderL1(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0x0FFFFFFF) : hex(0x0A000000)
+        scheme == .dark ? hex(0xFF2B3A50) : hex(0xFFDFE5EF)
     }
 
     static func borderL2(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0x1FFFFFFF) : hex(0x1A000000)
+        scheme == .dark ? hex(0xFF35455D) : hex(0xFFCFD8E6)
     }
 
     static func borderL3(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0x29FFFFFF) : hex(0x1F000000)
+        scheme == .dark ? hex(0xFF536783) : hex(0xFFB8C6DA)
     }
 
     // MARK: - Text
 
     static func textPrimary(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFFF9FAFB) : hex(0xFF0F1115)
+        scheme == .dark ? hex(0xFFEDF2FB) : hex(0xFF172239)
     }
 
     static func textSecondary(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFFCFD3D6) : hex(0xFF61666B)
+        scheme == .dark ? hex(0xFFA7B5CC) : hex(0xFF526078)
     }
 
     static func textTertiary(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFFADB2B8) : hex(0xFF81858C)
+        scheme == .dark ? hex(0xFF92A1BA) : hex(0xFF65718A)
     }
 
     // MARK: - Brand
 
     static func brandFill(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFFF9FAFB) : hex(0xFF0F1115)
+        scheme == .dark ? hex(0xFF8EAFFF) : hex(0xFF365EDC)
     }
 
     static func brandFillHover(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFFE1E5EE) : hex(0xFF2C2C2E)
+        scheme == .dark ? hex(0xFFABC3FF) : hex(0xFF2B50C7)
     }
 
     static func brandFillPressed(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFFCFD3D6) : hex(0xFF43454A)
+        scheme == .dark ? hex(0xFF759AEE) : hex(0xFF2343AA)
     }
 
     static func brandText(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFF0F1115) : hex(0xFFFFFFFF)
+        scheme == .dark ? hex(0xFF101722) : hex(0xFFFFFFFF)
     }
 
     // MARK: - Accents
 
     static func accent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFF5686FE) : hex(0xFF4176E6)
+        scheme == .dark ? hex(0xFF8EAFFF) : hex(0xFF365EDC)
+    }
+
+    static func accentSoft(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? hex(0xFF263858) : hex(0xFFE9EEFF)
     }
 
     static func success(_ scheme: ColorScheme) -> Color {
-        hex(0xFF22C55E)
+        scheme == .dark ? hex(0xFF4BD2A0) : hex(0xFF15805F)
     }
 
     static func danger(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFFF25A5A) : hex(0xFFEC1313)
+        scheme == .dark ? hex(0xFFFF8C9E) : hex(0xFFC9364B)
     }
 
     static func warning(_ scheme: ColorScheme) -> Color {
-        hex(0xFFF7AD31)
+        scheme == .dark ? hex(0xFFF2C66D) : hex(0xFF97680A)
     }
 
     // MARK: - Inputs
 
     static func inputBackground(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0xFF232324) : hex(0xFFFFFFFF)
+        scheme == .dark ? hex(0xFF182231) : hex(0xFFFFFFFF)
     }
 
     static func inputBorder(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? hex(0x1FFFFFFF) : hex(0x1A000000)
+        scheme == .dark ? hex(0xFF35455D) : hex(0xFFCFD8E6)
     }
 
     // MARK: - Convenience
@@ -166,6 +165,7 @@ struct DshPalette {
     var brandText: Color { Dsh.brandText(scheme) }
 
     var accent: Color { Dsh.accent(scheme) }
+    var accentSoft: Color { Dsh.accentSoft(scheme) }
     var success: Color { Dsh.success(scheme) }
     var danger: Color { Dsh.danger(scheme) }
     var warning: Color { Dsh.warning(scheme) }
@@ -180,7 +180,7 @@ struct DshPalette {
 
 // MARK: - Card surface
 
-/// Layer-1 surface with a 1pt border and a 12pt radius (no shadow).
+/// Layer-1 surface with a 1pt border and a 16pt radius (no shadow).
 struct DshCardModifier: ViewModifier {
     var radius: CGFloat = Dsh.radiusCard
     @Environment(\.colorScheme) var colorScheme
@@ -197,15 +197,15 @@ struct DshCardModifier: ViewModifier {
 
 // MARK: - Input surface
 
-/// Input background + 1pt input border + 8pt radius.
+/// Input background + 1pt input border + 10pt radius.
 struct DshInputModifier: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
 
     func body(content: Content) -> some View {
         content
             .textFieldStyle(.plain)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(
                 Dsh.inputBackground(colorScheme),
                 in: RoundedRectangle(cornerRadius: Dsh.radiusControl)
@@ -249,7 +249,7 @@ private struct DshPrimaryButtonBody<Label: View>: View {
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(textColor)
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .background(fill, in: RoundedRectangle(cornerRadius: Dsh.radiusControl))
             .contentShape(RoundedRectangle(cornerRadius: Dsh.radiusControl))
             .onHover { isHovering = isEnabled && $0 }
@@ -270,10 +270,60 @@ struct DshStatusDot: View {
     }
 }
 
+struct DshSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        DshSecondaryButtonBody(label: configuration.label, isPressed: configuration.isPressed)
+    }
+}
+
+private struct DshSecondaryButtonBody<Label: View>: View {
+    let label: Label
+    let isPressed: Bool
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.isEnabled) var isEnabled
+    @State private var hovering = false
+
+    var body: some View {
+        label
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(isEnabled ? Dsh.textPrimary(colorScheme) : Dsh.textTertiary(colorScheme))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(isPressed || hovering ? Dsh.bgLayer3(colorScheme) : Dsh.bgLayer2(colorScheme),
+                        in: RoundedRectangle(cornerRadius: Dsh.radiusControl))
+            .contentShape(RoundedRectangle(cornerRadius: Dsh.radiusControl))
+            .opacity(isEnabled ? 1 : 0.5)
+            .onHover { hovering = isEnabled && $0 }
+    }
+}
+
+struct DshEmptyState: View {
+    let title: String
+    let message: String
+    let systemImage: String
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(Dsh.accent(colorScheme))
+                .frame(width: 56, height: 56)
+                .background(Dsh.accentSoft(colorScheme), in: RoundedRectangle(cornerRadius: 16))
+            Text(title).font(.system(size: 18, weight: .semibold)).foregroundStyle(Dsh.textPrimary(colorScheme))
+            Text(message).font(.callout).foregroundStyle(Dsh.textSecondary(colorScheme))
+                .multilineTextAlignment(.center)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity)
+        .dshCard()
+    }
+}
+
 // MARK: - View helpers
 
 extension View {
-    /// Layer-1 card surface: 1pt l1 border, 12pt radius, no shadow.
+    /// Layer-1 card surface: 1pt l1 border, 16pt radius, no shadow.
     func dshCard(radius: CGFloat = Dsh.radiusCard) -> some View {
         modifier(DshCardModifier(radius: radius))
     }
