@@ -237,14 +237,21 @@ public partial class ManagementView : System.Windows.Controls.UserControl
             return;
         }
 
-        // Keep what was typed against the slot it was typed for, then show
-        // the slot being switched to.
-        var selection = LoadUpdateSelection();
+        // The address box still shows the slot we are LEAVING — file its text
+        // there. Reading it after the switch (2.6.19–2.6.23) wrote the old
+        // slot's address into the newly picked slot, so switching appeared to
+        // do nothing at all.
+        var stored = UpdateSelection.From(_services.Settings.Load());
+        var typed = UpdateServerBox.Text.Trim();
+        var leavingTag = (e.RemovedItems.Cast<ComboBoxItem>().FirstOrDefault()?.Tag as string)?.Trim();
+        var selection = UpdateSelection.MergeTyped(stored, leavingTag, typed);
+
         var settings = _services.Settings.Load();
         selection.Store(settings);
         _services.Settings.Save(settings);
 
         _suppressSettings = true;
+        UpdateSourceBox.SelectedIndex = selection.Slot == UpdateSourceSlot.GitHub ? 1 : 0;
         UpdateServerBox.Text = selection.Url();
         _suppressSettings = false;
     }

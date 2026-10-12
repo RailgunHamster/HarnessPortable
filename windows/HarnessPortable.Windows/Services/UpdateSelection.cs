@@ -80,6 +80,28 @@ public sealed class UpdateSelection
         };
     }
 
+    /// <summary>
+    /// Applies the address the user just typed to the slot the picker was on
+    /// before it moved (<paramref name="leavingTag"/>: "home" / "github" /
+    /// null when unknown), and selects the slot the picker now shows. The
+    /// address box text always belongs to the slot being left, not the one
+    /// being entered.
+    /// </summary>
+    public static UpdateSelection MergeTyped(
+        UpdateSelection stored, string? leavingTag, string typed)
+    {
+        leavingTag = leavingTag?.Trim().ToLowerInvariant();
+        var slot = ParseSlot(leavingTag) ?? stored.Slot;
+        var other = slot == UpdateSourceSlot.GitHub ? UpdateSourceSlot.Home : UpdateSourceSlot.GitHub;
+
+        return new UpdateSelection
+        {
+            Slot = other,
+            HomeUrl = slot == UpdateSourceSlot.Home ? typed : stored.HomeUrl,
+            GitHubUrl = slot == UpdateSourceSlot.GitHub ? typed : stored.GitHubUrl,
+        };
+    }
+
     /// <summary>Writes the pair back, keeping the fresh fields authoritative.</summary>
     public void Store(AppSettings settings)
     {

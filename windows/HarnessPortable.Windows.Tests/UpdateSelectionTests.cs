@@ -103,4 +103,35 @@ public sealed class UpdateSelectionTests
 
         Assert.Equal(UpdateSourceSlot.Home, selection.Slot);
     }
+
+    /// <summary>
+    /// Regression for 2.6.19–2.6.23: switching the picker read the address
+    /// box AFTER the switch, so the leaving slot's address was written into
+    /// the slot being entered and the box appeared to never change.
+    /// </summary>
+    [Fact]
+    public void MergeTyped_FilesAddressWithSlotBeingLeft()
+    {
+        var stored = new UpdateSelection
+        {
+            Slot = UpdateSourceSlot.Home,
+            HomeUrl = @"\\server-home\public\Software\HarnessPortable-Releases",
+            GitHubUrl = "https://github.com/RailgunHamster/HarnessPortable",
+        };
+
+        // Leaving "home" with the UNC still in the box → select github, keep UNC in home.
+        var switched = UpdateSelection.MergeTyped(
+            stored, "home", @"\\server-home\public\Software\HarnessPortable-Releases");
+        Assert.Equal(UpdateSourceSlot.GitHub, switched.Slot);
+        Assert.Equal(@"\\server-home\public\Software\HarnessPortable-Releases", switched.HomeUrl);
+        Assert.Equal("https://github.com/RailgunHamster/HarnessPortable", switched.GitHubUrl);
+        Assert.Equal("https://github.com/RailgunHamster/HarnessPortable", switched.Url());
+
+        // Leaving "github" with a custom repo in the box → select home, keep repo in github.
+        var back = UpdateSelection.MergeTyped(switched, "github", "https://github.com/someone/Fork");
+        Assert.Equal(UpdateSourceSlot.Home, back.Slot);
+        Assert.Equal("https://github.com/someone/Fork", back.GitHubUrl);
+        Assert.Equal(@"\\server-home\public\Software\HarnessPortable-Releases", back.HomeUrl);
+        Assert.Equal(@"\\server-home\public\Software\HarnessPortable-Releases", back.Url());
+    }
 }

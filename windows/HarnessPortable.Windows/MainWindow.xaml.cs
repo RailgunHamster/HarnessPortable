@@ -327,8 +327,16 @@ public partial class MainWindow : Window
 
     private void InitializeTabDragOverlayWindow()
     {
-        // Reparenting the XAML Canvas into this window removes it from the
-        // main Grid; all named element references keep working unchanged.
+        // Detach the canvas from the main Grid first: WPF never auto-removes
+        // a child from a Panel's Children, and a still-parented canvas makes
+        // the overlay window's Show() throw "the specified child is already a
+        // child of another Visual" (crash.log, 2.6.23).
+        if (TabDragOverlay.Parent is System.Windows.Controls.Panel parentPanel)
+        {
+            parentPanel.Children.Remove(TabDragOverlay);
+        }
+
+        // All named element references keep working unchanged.
         _tabDragOverlayWindow = new Window
         {
             WindowStyle = WindowStyle.None,
