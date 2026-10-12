@@ -1,5 +1,7 @@
 using System.Windows;
 using Microsoft.Win32;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 
 namespace HarnessPortable.Windows.Services;
 
@@ -30,6 +32,24 @@ public static class AppTheme
     /// <summary>True when the dark token set is active.</summary>
     public static bool IsDark { get; private set; }
     public static event Action? Changed;
+
+    public static void Track(Window window)
+    {
+        void Refresh() {
+            var handle = new WindowInteropHelper(window).Handle;
+            if (handle == IntPtr.Zero) return;
+            var enabled = IsDark ? 1 : 0;
+            try { DwmSetWindowAttribute(handle, 20, ref enabled, sizeof(int)); }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+        }
+        window.SourceInitialized += (_, _) => Refresh();
+        Changed += Refresh;
+        window.Closed += (_, _) => Changed -= Refresh;
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
     public static void Start()
     {
@@ -66,6 +86,8 @@ public static class AppTheme
             app.Dispatcher.BeginInvoke(() => Apply(dark));
             return;
         }
+
+        if (_tokens is not null && IsDark == dark) return;
 
         var next = new ResourceDictionary { Source = new Uri(dark ? DarkTokens : LightTokens, UriKind.Absolute) };
         var merged = app.Resources.MergedDictionaries;

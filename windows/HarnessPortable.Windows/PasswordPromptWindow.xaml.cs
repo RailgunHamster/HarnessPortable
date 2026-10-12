@@ -10,6 +10,7 @@ public partial class PasswordPromptWindow : Window
     public PasswordPromptWindow(TunnelProfile profile)
     {
         InitializeComponent();
+        HarnessPortable.Windows.Services.AppTheme.Track(this);
         ProfileSummary.Text = $"{profile.User}@{profile.SshHost}:{profile.SshPort}";
         Loaded += (_, _) => PasswordInput.Focus();
     }

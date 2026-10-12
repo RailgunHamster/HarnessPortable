@@ -21,10 +21,27 @@ jobs:
           ref: ${{ inputs.source_ref }}
           persist-credentials: false
       - name: Generate Xcode project
+        env:
+          HP_UI_PREVIEW_DIR: ${{ runner.temp }}/ui-previews
         run: |
           brew install xcodegen
           cd macos
           xcodegen generate
+          python3 - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          path = 'HarnessPortable.xcodeproj/xcshareddata/xcschemes/HarnessPortable.xcscheme'
+          tree = ET.parse(path)
+          for name in ['TestAction', 'LaunchAction']:
+              action = tree.getroot().find(name)
+              if action is None:
+                  continue
+              if name == 'TestAction':
+                  action.set('shouldUseLaunchSchemeArgsEnv', 'NO')
+              variables = ET.SubElement(action, 'EnvironmentVariables')
+              for key, value in [('CI', 'true'), ('HP_UI_PREVIEW_DIR', os.environ['HP_UI_PREVIEW_DIR'])]:
+                  ET.SubElement(variables, 'EnvironmentVariable', key=key, value=value, isEnabled='YES')
+          tree.write(path, encoding='utf-8', xml_declaration=True)
+          PY
       - name: Run macOS tests
         env:
           HP_UI_PREVIEW_DIR: ${{ runner.temp }}/ui-previews

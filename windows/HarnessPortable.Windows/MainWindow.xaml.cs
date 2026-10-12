@@ -75,6 +75,7 @@ public partial class MainWindow : Window
         _services = services;
         _layoutPresets = new LayoutPresetStore();
         InitializeComponent();
+        AppTheme.Track(this);
 
         // Flicker diagnostics: system-wide focus events + this window's
         // focus/geometry transitions land in %APPDATA%\HarnessPortable\flicker.log.

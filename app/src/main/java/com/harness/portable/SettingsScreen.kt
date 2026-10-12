@@ -15,11 +15,15 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
@@ -205,18 +209,11 @@ fun SettingsScreen(
         containerColor = dsh.base,
         topBar = {
           Column {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("连接中心", style = MaterialTheme.typography.headlineSmall)
-                        Text("Harness Portable", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = dsh.layer1,
-                    titleContentColor = dsh.textPrimary
-                )
-            )
+            Column(Modifier.fillMaxWidth().background(dsh.layer1)
+                .windowInsetsPadding(WindowInsets.displayCutout).padding(horizontal = 20.dp, vertical = 18.dp)) {
+                Text("连接中心", style = MaterialTheme.typography.headlineSmall, color = dsh.textPrimary)
+                Text("Harness Portable", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+            }
             TabRow(selectedTabIndex = section, containerColor = dsh.layer1, contentColor = dsh.accent) {
                 listOf("SSH 隧道", "直连地址", "设置").forEachIndexed { index, label ->
                     Tab(selected = section == index, onClick = { section = index },
@@ -227,12 +224,13 @@ fun SettingsScreen(
           }
         }
     ) { padding ->
+      Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
             state = when (section) { 0 -> tunnelScroll; 1 -> directScroll; else -> settingsScroll },
             modifier = Modifier
-                .fillMaxSize()
-                .background(dsh.base)
-                .padding(padding),
+                .widthIn(max = 960.dp)
+                .fillMaxWidth().fillMaxHeight()
+                .background(dsh.base),
             contentPadding = PaddingValues(20.dp, 18.dp, 20.dp, 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -524,6 +522,7 @@ fun SettingsScreen(
         }
     }
 
+      }
     if (showEditor) {
         // Stored value is read once per opened editor: editing a profile must
         // not re-run keystore decryption on every recomposition.

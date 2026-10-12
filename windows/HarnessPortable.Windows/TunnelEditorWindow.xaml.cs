@@ -33,6 +33,7 @@ public partial class TunnelEditorWindow : Window
         _initial = initial;
         _sshConfigPath = string.IsNullOrWhiteSpace(sshConfigPath) ? null : sshConfigPath;
         InitializeComponent();
+        AppTheme.Track(this);
         AuthInputBox.Text = storedAuthInput?.Trim() ?? "";
         HostBox.ItemsSource = _hostSuggestions;
         UpdateSshConfigPathText(SshConfigReader.ResolvePath(_sshConfigPath));

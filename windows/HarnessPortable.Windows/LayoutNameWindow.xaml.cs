@@ -9,6 +9,7 @@ public partial class LayoutNameWindow : Window
     public LayoutNameWindow(string? initialName = null)
     {
         InitializeComponent();
+        HarnessPortable.Windows.Services.AppTheme.Track(this);
         NameBox.Text = initialName ?? $"布局 {DateTime.Now:MM-dd HH:mm}";
         Loaded += (_, _) => NameBox.Focus();
         NameBox.SelectAll();

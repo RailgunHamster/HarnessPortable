@@ -18,6 +18,7 @@ public partial class ManagementWindow : Window
     public ManagementWindow(ManagementView view)
     {
         InitializeComponent();
+        HarnessPortable.Windows.Services.AppTheme.Track(this);
         ApplyIcon();
         Host.Content = view;
     }

@@ -15,6 +15,9 @@
         <Style x:Key="DshRowButton" TargetType="Button" BasedOn="{StaticResource DshButton}">
             <Setter Property="Padding" Value="10,5"/>
         </Style>
+        <Style x:Key="DshRowPrimaryButton" TargetType="Button" BasedOn="{StaticResource DshPrimaryButton}">
+            <Setter Property="Padding" Value="10,5"/>
+        </Style>
     </UserControl.Resources>
 
     <DockPanel>
@@ -90,7 +93,7 @@
                                                    Margin="0,3,0,0"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Button Style="{StaticResource DshRowButton}" Content="连接"
+                                        <Button Style="{StaticResource DshRowPrimaryButton}" Content="连接"
                                                 Tag="{Binding}" Click="TunnelConnect_Click"/>
                                         <Button Style="{StaticResource DshRowButton}" Content="停止"
                                                 Tag="{Binding}" Click="TunnelStop_Click"
@@ -175,7 +178,7 @@
                                         <Button Style="{StaticResource DshRowButton}" Content="{Binding AuthLabel}"
                                                 Tag="{Binding}" Click="DirectAuthToggle_Click"
                                                 ToolTip="认证模式：点击切换。「NSSM 自动」用于 dsh web 就跑在本机（NSSM 托管）的直连地址——打开标签时自动读本机 NSSM 日志取最新 token 并自动登录；失败或日志缺失则原样打开，仍可走页面上的粘贴框兜底。"/>
-                                        <Button Style="{StaticResource DshRowButton}" Content="连接"
+                                        <Button Style="{StaticResource DshRowPrimaryButton}" Content="连接"
                                                 Tag="{Binding}" Click="DirectConnect_Click"/>
                                         <Button Style="{StaticResource DshDangerButton}" Content="删除"
                                                 Padding="10,5" Tag="{Binding}" Click="DirectDelete_Click"/>
