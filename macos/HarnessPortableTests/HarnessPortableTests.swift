@@ -331,6 +331,25 @@ final class HarnessPortableTests: XCTestCase {
         XCTAssertEqual(reader.password(for: account), "secret")
     }
 
+    func testLocalAuthNeverSendsTokensToOtherHostsOrPorts() {
+        let log = "dsh web: http://127.0.0.1:3080/?token=synthetic"
+        XCTAssertNil(LocalDshAuth.authTarget(destination: "http://unrelated.invalid:3080", logText: log))
+        XCTAssertNil(LocalDshAuth.authTarget(destination: "http://localhost:4096", logText: log))
+        XCTAssertNotNil(LocalDshAuth.authTarget(destination: "http://localhost:3080", logText: log))
+    }
+
+    func testCorruptTrustStoreDoesNotAcceptAChangedKey() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = directory.appendingPathComponent("known_hosts.json")
+        let store = KnownHostsStore(path: path)
+        XCTAssertEqual(store.check(host: "test.invalid", port: 22, keyType: "ssh-ed25519", keyBase64: "AQID"), .trustedNew)
+        try Data("{truncated".utf8).write(to: path)
+        XCTAssertEqual(store.check(host: "test.invalid", port: 22, keyType: "ssh-ed25519", keyBase64: "BAUG"), .unavailable)
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "{truncated")
+    }
+
     @MainActor
     func testClosingTunnelTabsRemovesAllSessions() {
         let workspace = WorkspaceStore()

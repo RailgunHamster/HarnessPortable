@@ -1,6 +1,8 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Net;
+using System.Net.Sockets;
 using HarnessPortable.Windows.Models;
 
 namespace HarnessPortable.Windows.Services;
@@ -37,27 +39,14 @@ public sealed class ProfileStore
     {
         lock (_lock)
         {
-            if (!File.Exists(_path))
-            {
-                return new Config();
-            }
-
-            try
-            {
-                var json = File.ReadAllText(_path);
-                var config = JsonSerializer.Deserialize<Config>(json, JsonOptions) ?? new Config();
-                config.Tunnels = config.Tunnels
-                    .Where(p => p != null && !string.IsNullOrWhiteSpace(p.SshHost))
-                    .ToList();
-                config.Directs = config.Directs
-                    .Where(u => !string.IsNullOrWhiteSpace(u))
-                    .ToList();
-                return config;
-            }
-            catch
-            {
-                return new Config();
-            }
+            var config = JsonFile.Read(_path, () => new Config(), JsonOptions);
+            config.Tunnels = (config.Tunnels ?? [])
+                .Where(p => p != null && !string.IsNullOrWhiteSpace(p.SshHost))
+                .ToList();
+            config.Directs = (config.Directs ?? [])
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .ToList();
+            return config;
         }
     }
 
@@ -65,15 +54,7 @@ public sealed class ProfileStore
     {
         lock (_lock)
         {
-            var directory = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            var tmp = _path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(config, JsonOptions));
-            File.Move(tmp, _path, overwrite: true);
+            JsonFile.Write(_path, config, JsonOptions);
         }
     }
 
@@ -119,15 +100,23 @@ public sealed class ProfileStore
             return null;
         }
 
-        if (s.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            s.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
-            s.Contains("://"))
+        if (!s.Contains("://"))
         {
-            return s;
+            var separator = s.IndexOfAny(['/', '?', '#']);
+            var authority = separator >= 0 ? s[..separator] : s;
+            var remainder = separator >= 0 ? s[separator..] : "";
+            if (!authority.StartsWith('[') && IPAddress.TryParse(authority, out var address) && address.AddressFamily == AddressFamily.InterNetworkV6)
+                authority = $"[{authority}]:4096";
+            else if (authority.StartsWith('[') && authority.EndsWith(']'))
+                authority += ":4096";
+            else if (!authority.Contains(':'))
+                authority += ":4096";
+            s = $"http://{authority}{remainder}";
         }
-
-        var withPort = s.Contains(':') ? s : $"{s}:4096";
-        return $"http://{withPort}";
+        return Uri.TryCreate(s, UriKind.Absolute, out var uri)
+            && uri.Scheme is "http" or "https"
+            && !string.IsNullOrWhiteSpace(uri.Host)
+            && uri.Port is >= 1 and <= 65535 ? s : null;
     }
 
     public static string HostOf(string url)

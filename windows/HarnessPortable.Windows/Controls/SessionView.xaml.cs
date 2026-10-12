@@ -9,6 +9,7 @@ using HarnessPortable.Windows.Models;
 using HarnessPortable.Windows.Services;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using System.Diagnostics;
 
 namespace HarnessPortable.Windows.Controls;
 
@@ -36,6 +37,11 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private string? _customLabel;
     private ulong _authCheckedNavId;
     private string? _lastAuthNav;
+    private Window? _popupOwner;
+    private Process? _browserProcess;
+    private bool _browserFailed;
+    private bool _recoveringBrowser;
+    private bool _ballPositioned;
 
     public event Action? CloseRequested;
     public event Action<string>? TitleChanged;
@@ -120,6 +126,8 @@ public partial class SessionView : System.Windows.Controls.UserControl
         Loaded += async (_, _) =>
         {
             LogHostState("Loaded");
+            AttachPopupOwner();
+            PositionOverlay();
 
             if (_initialized)
             {
@@ -134,7 +142,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
         // The WebView2 is an HwndHost: every re-host destroys and recreates its
         // child window, which flashes. Recording Loaded/Unloaded plus the HWND
         // is what tells a re-host storm apart from a purely visual flicker.
-        Unloaded += (_, _) => LogHostState("Unloaded");
+        Unloaded += (_, _) => { LogHostState("Unloaded"); DetachPopupOwner(); };
+        IsVisibleChanged += (_, _) => UpdatePopupVisibility();
+        FloatBall.LostMouseCapture += (_, _) => _ballDragging = false;
 
         SizeChanged += (_, _) => PositionOverlay();
     }
@@ -189,6 +199,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
 
         _shutdown = true;
+        DetachPopupOwner();
 
         if (_isTunnel)
         {
@@ -206,45 +217,32 @@ public partial class SessionView : System.Windows.Controls.UserControl
     }
 
     /// <summary>
-    /// How long <see cref="WebView2.Dispose"/> may block the UI thread before
-    /// the dispatcher is released. A wedged WebView2 browser process makes
-    /// Dispose block indefinitely, and because it runs on the UI thread that
-    /// freezes the entire window with no way out but Task Manager.
+    /// After this budget the watchdog ends the captured browser process to
+    /// release a blocked Dispose call. Other tabs offer browser recovery.
     /// </summary>
     private static readonly TimeSpan DisposalBudget = TimeSpan.FromSeconds(5);
 
     private void ScheduleWebViewDisposal()
     {
-        var operation = WebView.Dispatcher.InvokeAsync(
-            () =>
-            {
-                try
-                {
-                    WebView.Dispose();
-                }
-                catch
-                {
-                    // Ignore.
-                }
-            },
-            DispatcherPriority.ApplicationIdle);
+        ScheduleBrowserDisposal(WebView, _browserProcess);
+    }
 
-        // Release the dispatcher if Dispose never returns. A wedged Dispose is
-        // already Executing and blocking the UI thread, so anything short of
-        // Completed has to be aborted. This is the only way out of a blocked
-        // UI thread from the outside; the browser process is torn down with
-        // the app either way, so giving up on a stuck Dispose costs nothing
-        // user-visible.
-        _ = Task.Run(async () =>
+    private static void ScheduleBrowserDisposal(WebView2 browser, Process? process)
+    {
+        browser.Dispatcher.InvokeAsync(() => GuardedDisposal.Run(() =>
         {
-            await Task.Delay(DisposalBudget).ConfigureAwait(false);
-
-            if (operation.Status != DispatcherOperationStatus.Completed)
+            try { browser.Dispose(); }
+            catch (Exception ex) { FlickerLog.Log("webview", "dispose failed: " + ex.GetType().Name); }
+        }, () =>
+        {
+            // Abort cannot stop an executing dispatcher operation. Ending the
+            // captured app-owned browser process releases its blocked COM call.
+            if (process is not null && !process.HasExited)
             {
-                FlickerLog.Log("webview", "dispose exceeded the budget; releasing the UI thread");
-                operation.Abort();
+                FlickerLog.Log("webview", "dispose exceeded the budget; recovering the app browser process");
+                process.Kill(entireProcessTree: true);
             }
-        });
+        }, DisposalBudget), DispatcherPriority.ApplicationIdle);
     }
 
     private void OnTunnelStateChanged(TunnelInfo info)
@@ -309,7 +307,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         // While the auth prompt is up, the TextBox must keep focus; pulling
         // it back into the page would cancel pasting/IME mid-entry.
-        if (AuthOverlay.Visibility == Visibility.Visible)
+        if (AuthOverlay.Visibility == Visibility.Visible || StatusOverlay.Visibility == Visibility.Visible)
         {
             return;
         }
@@ -353,7 +351,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
     }
 
-    private string LogTag => _isTunnel ? "tunnel:" + (_profile?.Id ?? "?") : "direct:" + _url;
+    private string LogTag => _isTunnel ? "tunnel:" + (_profile?.Id ?? "?") : "direct:" + DiagnosticUrls.Redact(_url);
 
     public void SetCustomLabel(string label)
     {
@@ -380,7 +378,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         if (info.Status == TunnelStatus.Connected)
         {
+            if (_browserFailed) { SetTitle($"● {_customLabel ?? _profile.DisplayName}"); return; }
             StatusOverlay.Visibility = Visibility.Collapsed;
+            UpdateBrowserVisibility();
             var restored = _tunnelWasDown;
             _tunnelWasDown = false;
 
@@ -418,6 +418,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             : Visibility.Collapsed;
         OverlayReturnButton.Content = "关闭标签";
         StatusOverlay.Visibility = Visibility.Visible;
+        UpdateBrowserVisibility();
 
         SetTitle(info.Status switch
         {
@@ -436,19 +437,35 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private async Task InitializeWebViewAsync()
     {
+        var browser = WebView;
         try
         {
-            WebView.CreationProperties = new CoreWebView2CreationProperties
+            browser.CreationProperties = new CoreWebView2CreationProperties
             {
                 UserDataFolder = Path.Combine(AppPaths.DataDirectory, "WebView2"),
             };
 
-            await WebView.EnsureCoreWebView2Async();
+            await browser.EnsureCoreWebView2Async();
+            if (_shutdown || !ReferenceEquals(WebView, browser)) return;
             _coreReady = true;
             WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
 
             var core = WebView.CoreWebView2;
+            _browserProcess = Process.GetProcessById(checked((int)core.BrowserProcessId));
+            _ = _browserProcess.SafeHandle; // Pin this process identity; never target a reused PID.
+            core.ProcessFailed += (_, e) =>
+            {
+                if (_shutdown || !ReferenceEquals(WebView, browser) || e.ProcessFailedKind is not (CoreWebView2ProcessFailedKind.BrowserProcessExited or CoreWebView2ProcessFailedKind.RenderProcessExited)) return;
+                _browserFailed = true;
+                _coreReady = false;
+                OverlayTitle.Text = "浏览器连接中断";
+                OverlayMessage.Text = "点击恢复网页重新打开当前标签。";
+                OverlayReconnectButton.Content = "恢复网页";
+                OverlayReconnectButton.Visibility = Visibility.Visible;
+                StatusOverlay.Visibility = Visibility.Visible;
+                UpdateBrowserVisibility();
+            };
             // Focus here is only ever *observed*: the WebView2 is an HwndHost,
             // so it also takes focus while the pane tears it down and re-hosts
             // it (every tab switch). Reacting to that by activating its document
@@ -457,9 +474,10 @@ public partial class SessionView : System.Windows.Controls.UserControl
             // active on a real selection change.
             WebView.GotFocus += (_, _) => FlickerLog.Log("webview", "GotFocus (" + LogTag + ")");
             WebView.LostFocus += (_, _) => FlickerLog.Log("webview", "LostFocus (" + LogTag + ")");
-            core.NavigationStarting += (_, e) => FlickerLog.Log("webview-nav", "start " + e.Uri + " (" + LogTag + ")");
+            core.NavigationStarting += (_, e) => FlickerLog.Log("webview-nav", "start " + MaskUrl(e.Uri) + " (" + LogTag + ")");
             core.NavigationCompleted += async (_, e) =>
             {
+                if (_shutdown || !ReferenceEquals(WebView, browser)) return;
                 FlickerLog.Log("webview-nav", "complete navId=" + e.NavigationId + " ok=" + e.IsSuccess + " (" + LogTag + ")");
                 await CheckAuthRequiredAsync(e.NavigationId);
                 await ReapplyWebStateSoonAsync();
@@ -470,11 +488,13 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
         catch (Exception ex)
         {
+            if (_shutdown || !ReferenceEquals(WebView, browser)) return;
             OverlayTitle.Text = "浏览器初始化失败";
             OverlayMessage.Text = ex.Message;
             OverlayReconnectButton.Visibility = Visibility.Collapsed;
             OverlayReturnButton.Content = "关闭标签";
             StatusOverlay.Visibility = Visibility.Visible;
+            UpdateBrowserVisibility();
         }
     }
 
@@ -534,8 +554,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
             return _url;
         }
 
-        var resolved = await HostResolver.ResolveUrlAsync(_url);
-        var destination = resolved ?? _url;
+        // The URL hostname is part of TLS and HTTP identity. Let the browser
+        // resolve it rather than changing the origin to a resolved IP.
+        var destination = _url;
 
         try
         {
@@ -545,7 +566,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
                 var authenticated = await LocalNssmAuth.TryBuildAuthTargetAsync(destination, CancellationToken.None);
                 if (authenticated is not null)
                 {
-                    FlickerLog.Log("webview-auth", "local nssm auth applied (direct:" + _url + ")");
+                    FlickerLog.Log("webview-auth", "local nssm auth applied (" + LogTag + ")");
                     return authenticated;
                 }
             }
@@ -565,8 +586,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         if (_isTunnel && url.StartsWith("http://127.0.0.1:"))
         {
-            var portPart = url.Split(':')[2];
-            _lastPort = int.Parse(portPart.Split('/')[0]);
+            _lastPort = new Uri(url).Port;
         }
 
         if (_coreReady)
@@ -646,8 +666,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     /// <summary>Never write token query strings into the debug log.</summary>
     private static string MaskUrl(string url)
     {
-        var at = url.IndexOf('?');
-        return at >= 0 ? url[..at] + "?…" : url;
+        return DiagnosticUrls.Redact(url);
     }
 
     /// <summary>
@@ -714,6 +733,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     {
         AuthHint.Visibility = Visibility.Collapsed;
         AuthOverlay.Visibility = Visibility.Visible;
+        UpdateBrowserVisibility();
         Dispatcher.BeginInvoke(DispatcherPriority.Input, () => AuthUrlBox.Focus());
     }
 
@@ -758,12 +778,12 @@ public partial class SessionView : System.Windows.Controls.UserControl
             return null;
         }
 
-        return _isTunnel
-            ? $"http://127.0.0.1:{_lastPort}{pathAndQuery}"
-            : _url.TrimEnd('/') + pathAndQuery;
+        if (_isTunnel) return $"http://127.0.0.1:{_lastPort}{pathAndQuery}";
+        if (!Uri.TryCreate(_url, UriKind.Absolute, out var destination) || destination.Scheme is not ("http" or "https")) return null;
+        return new UriBuilder(destination) { Query = pathAndQuery.TrimStart('/', '?') }.Uri.AbsoluteUri;
     }
 
-    private async void AuthOpen_Click(object sender, RoutedEventArgs e)
+    private void AuthOpen_Click(object sender, RoutedEventArgs e)
     {
         var input = AuthUrlBox.Text.Trim();
         var target = BuildAuthTargetUrl(input);
@@ -776,13 +796,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
 
         AuthOverlay.Visibility = Visibility.Collapsed;
-
-        // Direct sessions may use machine names the embedded resolver cannot
-        // resolve; reuse the same resolution as the initial navigation.
-        if (!_isTunnel)
-        {
-            target = await HostResolver.ResolveUrlAsync(target) ?? target;
-        }
+        UpdateBrowserVisibility();
 
         FlickerLog.Log("webview-auth", "auth url open: " + MaskUrl(target) + " (" + LogTag + ")");
         Navigate(target);
@@ -791,6 +805,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private void AuthCancel_Click(object sender, RoutedEventArgs e)
     {
         AuthOverlay.Visibility = Visibility.Collapsed;
+        UpdateBrowserVisibility();
     }
 
     private void AuthUrlBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -827,8 +842,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
     }
 
-    private void Refresh_Click(object sender, RoutedEventArgs e)
+    private async void Refresh_Click(object sender, RoutedEventArgs e)
     {
+        if (_browserFailed) { await RecoverBrowserAsync(); return; }
         if (_coreReady)
         {
             WebView.CoreWebView2.Reload();
@@ -857,7 +873,11 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
     }
 
-    private void OverlayReconnect_Click(object sender, RoutedEventArgs e) => Reconnect_Click(sender, e);
+    private async void OverlayReconnect_Click(object sender, RoutedEventArgs e)
+    {
+        if (_browserFailed) await RecoverBrowserAsync();
+        else Reconnect_Click(sender, e);
+    }
 
     private void OverlayReturn_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
@@ -866,7 +886,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         _ballDragging = true;
         _ballMoved = false;
         _dragStart = e.GetPosition(OverlayCanvas);
-        _ballStart = new System.Windows.Point(Canvas.GetLeft(FloatBall), Canvas.GetTop(FloatBall));
+        _ballStart = new System.Windows.Point(FloatBallPopup.HorizontalOffset, FloatBallPopup.VerticalOffset);
         FloatBall.CaptureMouse();
         e.Handled = true;
     }
@@ -891,8 +911,8 @@ public partial class SessionView : System.Windows.Controls.UserControl
         var x = Math.Clamp(_ballStart.X + dx, 0, maxX);
         var y = Math.Clamp(_ballStart.Y + dy, 0, maxY);
 
-        Canvas.SetLeft(FloatBall, x);
-        Canvas.SetTop(FloatBall, y);
+        FloatBallPopup.HorizontalOffset = x;
+        FloatBallPopup.VerticalOffset = y;
         PositionActions(x, y);
     }
 
@@ -926,11 +946,11 @@ public partial class SessionView : System.Windows.Controls.UserControl
             return;
         }
 
-        var x = Canvas.GetLeft(FloatBall);
-        var y = Canvas.GetTop(FloatBall);
+        var x = _ballPositioned ? FloatBallPopup.HorizontalOffset : double.NaN;
+        var y = _ballPositioned ? FloatBallPopup.VerticalOffset : double.NaN;
         if (double.IsNaN(x) || x < 0 || x > width - BallSize)
         {
-            x = width - BallSize - 10;
+            x = Math.Max(0, width - BallSize - 10);
         }
 
         if (double.IsNaN(y) || y < 0 || y > height - BallSize)
@@ -938,9 +958,13 @@ public partial class SessionView : System.Windows.Controls.UserControl
             y = 10;
         }
 
-        Canvas.SetLeft(FloatBall, x);
-        Canvas.SetTop(FloatBall, y);
+        // A small offset change also repositions a Popup after its owner moves.
+        FloatBallPopup.HorizontalOffset = x + 0.01;
+        FloatBallPopup.HorizontalOffset = x;
+        FloatBallPopup.VerticalOffset = Math.Clamp(y, 0, Math.Max(0, height - BallSize));
+        _ballPositioned = true;
         PositionActions(x, y);
+        UpdatePopupVisibility();
     }
 
     private void PositionActions(double ballX, double ballY)
@@ -950,7 +974,80 @@ public partial class SessionView : System.Windows.Controls.UserControl
         var buttonCount = _isTunnel ? 4 : 2;
         var panelHeight = buttonCount * ActionHeight;
         var down = ballY + BallSize + panelHeight <= OverlayCanvas.ActualHeight;
-        Canvas.SetLeft(ActionsPanel, ballX);
-        Canvas.SetTop(ActionsPanel, down ? ballY + BallSize + 6 : ballY - panelHeight - 6);
+        var left = Math.Clamp(ballX, 0, Math.Max(0, OverlayCanvas.ActualWidth - ActionsPanel.Width));
+        ActionsPopup.HorizontalOffset = left + 0.01;
+        ActionsPopup.HorizontalOffset = left;
+        ActionsPopup.VerticalOffset = Math.Max(0, down ? ballY + BallSize + 6 : ballY - panelHeight - 6);
+    }
+
+    private void UpdateBrowserVisibility()
+    {
+        WebView.Visibility = StatusOverlay.Visibility == Visibility.Visible || AuthOverlay.Visibility == Visibility.Visible
+            ? Visibility.Hidden : Visibility.Visible;
+        UpdatePopupVisibility();
+    }
+
+    private void UpdatePopupVisibility()
+    {
+        var show = !_shutdown && IsLoaded && IsVisible && _popupOwner?.IsActive == true
+            && StatusOverlay.Visibility != Visibility.Visible && AuthOverlay.Visibility != Visibility.Visible;
+        FloatBallPopup.IsOpen = show;
+        ActionsPopup.IsOpen = show && ActionsPanel.Visibility == Visibility.Visible;
+    }
+
+    private void AttachPopupOwner()
+    {
+        var owner = Window.GetWindow(this);
+        if (ReferenceEquals(owner, _popupOwner)) return;
+        DetachPopupOwner();
+        _popupOwner = owner;
+        if (owner is null) return;
+        owner.LocationChanged += PopupOwnerChanged;
+        owner.SizeChanged += PopupOwnerSizeChanged;
+        owner.StateChanged += PopupOwnerChanged;
+        owner.Activated += PopupOwnerChanged;
+        owner.Deactivated += PopupOwnerChanged;
+    }
+
+    private void DetachPopupOwner()
+    {
+        FloatBallPopup.IsOpen = false;
+        ActionsPopup.IsOpen = false;
+        if (_popupOwner is not { } owner) return;
+        owner.LocationChanged -= PopupOwnerChanged;
+        owner.SizeChanged -= PopupOwnerSizeChanged;
+        owner.StateChanged -= PopupOwnerChanged;
+        owner.Activated -= PopupOwnerChanged;
+        owner.Deactivated -= PopupOwnerChanged;
+        _popupOwner = null;
+    }
+
+    private void PopupOwnerChanged(object? sender, EventArgs e) => PositionOverlay();
+    private void PopupOwnerSizeChanged(object sender, SizeChangedEventArgs e) => PositionOverlay();
+
+    private async Task RecoverBrowserAsync()
+    {
+        if (_shutdown || _recoveringBrowser) return;
+        _recoveringBrowser = true;
+        try
+        {
+            InitialWebState = ViewStateUrls.Extract(CurrentUrl) ?? InitialWebState;
+            var oldBrowser = WebView;
+            oldBrowser.PreviewKeyDown -= OnWebViewPreviewKeyDown;
+            BrowserGrid.Children.Remove(oldBrowser);
+            WebView = new WebView2();
+            BrowserGrid.Children.Insert(0, WebView);
+            ScheduleBrowserDisposal(oldBrowser, _browserProcess);
+            _browserProcess = null;
+            _coreReady = false;
+            _browserFailed = false;
+            _authCheckedNavId = 0;
+            OverlayReconnectButton.Content = "重连";
+            StatusOverlay.Visibility = Visibility.Collapsed;
+            if (_isTunnel && _profile is not null) ApplyState(_services.Tunnels.GetState(_profile.Id));
+            UpdateBrowserVisibility();
+            await InitializeWebViewAsync();
+        }
+        finally { _recoveringBrowser = false; }
     }
 }

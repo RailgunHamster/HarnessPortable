@@ -7,6 +7,28 @@ struct HostResolution {
 }
 
 enum HostResolver {
+    static func isLocalHost(_ host: String) -> Bool {
+        let value = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
+        if value == "localhost" || value == "::1" || value == "0:0:0:0:0:0:0:1"
+            || value == ProcessInfo.processInfo.hostName.lowercased() { return true }
+        let parts = value.split(separator: ".")
+        if parts.count == 4, parts.first == "127", parts.allSatisfy({ Int($0).map { (0...255).contains($0) } ?? false }) { return true }
+        var interfaces: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&interfaces) == 0 else { return false }
+        defer { freeifaddrs(interfaces) }
+        var cursor = interfaces
+        while let item = cursor {
+            if let address = item.pointee.ifa_addr,
+               address.pointee.sa_family == UInt8(AF_INET) || address.pointee.sa_family == UInt8(AF_INET6) {
+                var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(address, socklen_t(address.pointee.sa_len), &buffer, socklen_t(buffer.count), nil, 0, NI_NUMERICHOST) == 0,
+                   value == String(cString: buffer).lowercased() { return true }
+            }
+            cursor = item.pointee.ifa_next
+        }
+        return false
+    }
+
     static func isIPLiteral(_ host: String) -> Bool {
         let value = host.trimmingCharacters(in: .whitespacesAndNewlines)
         if value.contains(":") { return true }

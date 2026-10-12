@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HarnessPortable.Windows\HarnessPortable.Windows.csproj" />
+    <Content Include="..\HarnessPortable.Windows\MainWindow.xaml" Link="Fixtures\MainWindow.xaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

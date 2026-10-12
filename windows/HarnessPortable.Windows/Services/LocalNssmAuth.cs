@@ -33,6 +33,9 @@ public static class LocalNssmAuth
     {
         string? authUrl;
 
+        if (!Uri.TryCreate(destination, UriKind.Absolute, out var target)
+            || !LocalServiceIdentity.IsLocalHost(target.Host)) return null;
+
         try
         {
             authUrl = await RunDiscoveryScriptAsync(token).ConfigureAwait(false);
@@ -181,7 +184,8 @@ public static class LocalNssmAuth
 
         if (!Uri.TryCreate(destination.Trim(), UriKind.Absolute, out var dest) ||
             (dest.Scheme != Uri.UriSchemeHttp && dest.Scheme != Uri.UriSchemeHttps) ||
-            dest.Port != auth.Port)
+            dest.Port != auth.Port || !LocalServiceIdentity.IsLocalHost(dest.Host)
+            || !LocalServiceIdentity.IsLocalHost(auth.Host))
         {
             return null;
         }

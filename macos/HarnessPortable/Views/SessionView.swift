@@ -81,7 +81,8 @@ final class WebSessionStore: ObservableObject {
         case .management:
             destination = nil
         case .direct:
-            destination = tab.url.flatMap { HostResolver.resolveURL($0) ?? $0 }
+            // Preserve the origin used for TLS, Host routing and cookies.
+            destination = tab.url
             // Optional auto-login for a dsh web running on this Mac under the
             // Launch Agent: graft the newest token from its stdout log onto
             // the destination. No SSH hop is involved for a direct tab, so

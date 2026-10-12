@@ -87,31 +87,14 @@ public sealed class KnownHostsStore
 
     private FileFormat LoadFile()
     {
-        if (!File.Exists(_path))
-        {
-            return new FileFormat();
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<FileFormat>(File.ReadAllText(_path)) ?? new FileFormat();
-        }
-        catch
-        {
-            return new FileFormat();
-        }
+        var file = JsonFile.Read(_path, () => new FileFormat());
+        if (file.Hosts is null || file.Hosts.Values.Any(entry => entry is null || string.IsNullOrWhiteSpace(entry.Type) || string.IsNullOrWhiteSpace(entry.KeyBase64)))
+            throw new InvalidDataException($"主机密钥记录已损坏，拒绝自动信任：{_path}");
+        return file;
     }
 
     private void SaveFile(FileFormat file)
     {
-        var directory = Path.GetDirectoryName(_path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var tmp = _path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(file));
-        File.Move(tmp, _path, overwrite: true);
+        JsonFile.Write(_path, file);
     }
 }

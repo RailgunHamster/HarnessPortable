@@ -51,7 +51,12 @@ $share = "\\server-home\public\Software\HarnessPortable-Releases"
 $icon = Join-Path $root "windows\HarnessPortable.Windows\Assets\HarnessPortable.ico"
 
 New-Item -ItemType Directory -Force (Join-Path $root "artifacts") | Out-Null
-if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
+$resolvedPublish = [System.IO.Path]::GetFullPath($publishDir)
+$artifactRoot = [System.IO.Path]::GetFullPath((Join-Path $root 'artifacts')) + [System.IO.Path]::DirectorySeparatorChar
+if (-not $resolvedPublish.StartsWith($artifactRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Publish output is outside the repository artifacts directory: $resolvedPublish"
+}
+if (Test-Path -LiteralPath $resolvedPublish) { Remove-Item -LiteralPath $resolvedPublish -Recurse -Force }
 New-Item -ItemType Directory -Force $publishDir | Out-Null
 New-Item -ItemType Directory -Force $packDir | Out-Null
 Set-Content -Path $notesFile -Value $notes -Encoding utf8

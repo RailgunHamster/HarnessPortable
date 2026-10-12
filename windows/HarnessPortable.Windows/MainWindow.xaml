@@ -266,7 +266,7 @@
                         BorderThickness="1" CornerRadius="8" Padding="12,7"
                         HorizontalAlignment="Center" VerticalAlignment="Top">
                     <TextBlock x:Name="DragHintText" Text="拖到目标区域后释放"
-                               Foreground="#334155" FontSize="12"/>
+                               Foreground="#334155" FontSize="12" TextWrapping="Wrap"/>
                 </Border>
                 <Border x:Name="DropZoneCard" Width="238" Height="174"
                         Background="#F8FAFF" BorderBrush="#A5B4FC" BorderThickness="1"

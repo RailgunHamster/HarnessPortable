@@ -254,29 +254,10 @@ fun AppRoot() {
         }
 
         current is ActiveTarget.Direct -> {
-            // Direct URLs may address the server by machine name
-            // (http://winserver:4096), which Android's own resolver cannot
-            // look up (no NetBIOS support). Resolve the name to an IP first;
-            // only when the name is unknown do we fall back to the original
-            // URL and let the browser's resolver try (previous behavior).
+            // Preserve hostname identity for TLS, virtual hosts and cookies.
             val directUrl = current.url
-            val needsResolve = HostResolver.urlNeedsResolve(directUrl)
-            val effectiveUrl by produceState(
-                initialValue = if (needsResolve) null else directUrl,
-                key1 = directUrl
-            ) {
-                if (needsResolve) {
-                    value = withContext(Dispatchers.IO) {
-                        HostResolver.resolveUrl(directUrl) ?: directUrl
-                    }
-                }
-            }
-            val url = effectiveUrl
-            if (url == null) {
-                DirectResolvingScreen(host = hostOf(directUrl))
-            } else {
                 WebViewScreen(
-                    url = url,
+                    url = directUrl,
                     orientation = orientation,
                     tunnelMode = false,
                     tunnelInfo = null,
@@ -284,7 +265,6 @@ fun AppRoot() {
                     onChangeServer = { target = null },
                     onReconnect = { }
                 )
-            }
         }
 
         pending != null -> {

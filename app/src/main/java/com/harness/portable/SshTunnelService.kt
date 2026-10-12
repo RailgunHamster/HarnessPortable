@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
+import android.annotation.SuppressLint
+import androidx.core.content.ContextCompat
 import com.jcraft.jsch.HostKey
 import com.jcraft.jsch.HostKeyRepository
 import com.jcraft.jsch.JSch
@@ -68,7 +70,7 @@ class SshTunnelService : Service() {
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_PROFILE_ID, profileId)
                 .putExtra(EXTRA_RESTART, restart)
-            ctx.startForegroundService(intent)
+            ContextCompat.startForegroundService(ctx, intent)
         }
 
         /**
@@ -702,6 +704,7 @@ class SshTunnelService : Service() {
  * The first connection to a host remembers its key; a *changed* key later
  * yields CHANGED, which makes JSch abort the connection (MITM protection).
  */
+@SuppressLint("ApplySharedPref") // Identity changes must be durable before accepting the SSH connection.
 private class TofuHostKeyRepository(appContext: android.content.Context) : HostKeyRepository {
 
     private val prefs = appContext.getSharedPreferences(
@@ -709,36 +712,40 @@ private class TofuHostKeyRepository(appContext: android.content.Context) : HostK
     )
 
     private fun prefKey(host: String, type: String) = "hk_${host}_$type"
+    private fun identityKey(host: String) = "hk2_$host"
+    private val legacyTypes = listOf("ssh-rsa", "ssh-dss", "ssh-ed25519", "ssh-ed448",
+        "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521")
 
     override fun check(host: String?, key: ByteArray?): Int {
-        if (host == null || key == null) return HostKeyRepository.OK
+        if (host == null || key == null) return HostKeyRepository.CHANGED
         return try {
             val hk = HostKey(host, key)
             val type = hk.getType()
             val blob = hk.getKey()
-            val stored = prefs.getString(prefKey(host, type), null)
-            when {
-                stored == null -> {
-                    prefs.edit().putString(prefKey(host, type), blob).apply()
-                    HostKeyRepository.OK
-                }
-                stored == blob -> HostKeyRepository.OK
-                else -> HostKeyRepository.CHANGED
-            }
+            val identity = "$type:$blob"
+            val stored = prefs.getString(identityKey(host), null)
+            if (stored != null) return if (stored == identity) HostKeyRepository.OK else HostKeyRepository.CHANGED
+            val legacy = legacyTypes.mapNotNull { algorithm -> prefs.getString(prefKey(host, algorithm), null)?.let { algorithm to it } }
+            if (legacy.isNotEmpty() && legacy.none { it.first == type && it.second == blob }) return HostKeyRepository.CHANGED
+            if (prefs.edit().putString(identityKey(host), identity).commit()) HostKeyRepository.OK else HostKeyRepository.CHANGED
         } catch (e: Exception) {
-            // Unparseable key: don't lock the user out of their own server.
-            HostKeyRepository.OK
+            // Unreadable or unpersisted identities must not expand trust.
+            HostKeyRepository.CHANGED
         }
     }
 
     override fun add(hostkey: HostKey?, ui: UserInfo?) {
         val hk = hostkey ?: return
-        prefs.edit().putString(prefKey(hk.getHost(), hk.getType()), hk.getKey()).apply()
+        if (check(hk.getHost(), android.util.Base64.decode(hk.getKey(), android.util.Base64.DEFAULT)) != HostKeyRepository.OK)
+            throw IllegalStateException("无法保存或验证服务器主机密钥")
     }
 
     override fun remove(host: String?, type: String?) {
-        if (host != null && type != null) {
-            prefs.edit().remove(prefKey(host, type)).apply()
+        if (host != null) {
+            val editor = prefs.edit().remove(identityKey(host))
+            if (type != null) editor.remove(prefKey(host, type))
+            else legacyTypes.forEach { editor.remove(prefKey(host, it)) }
+            editor.commit()
         }
     }
 

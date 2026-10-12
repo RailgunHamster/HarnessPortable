@@ -7,6 +7,8 @@ private enum TunnelProcessError: LocalizedError {
     case hostKeyChanged
     case launchFailed(String)
     case noLocalPort(String)
+    case trustStoreUnavailable
+    case cancelled
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +24,10 @@ private enum TunnelProcessError: LocalizedError {
             return message
         case .noLocalPort(let message):
             return message
+        case .trustStoreUnavailable:
+            return "主机密钥记录无法读取或保存，拒绝连接。请恢复 known_hosts.json。"
+        case .cancelled:
+            return "连接已取消"
         }
     }
 }
@@ -117,6 +123,7 @@ final class SSHProcessTunnel {
 
     private func run(profile: TunnelProfile, generation: Int) {
         var backoff: TimeInterval = 3
+        var connectedOnce = false
         var passwordFile: URL?
         let emit: (TunnelInfo) -> Void = { [weak self] info in
             self?.emit(info, generation: generation)
@@ -148,24 +155,36 @@ final class SSHProcessTunnel {
                 case .changed:
                     appendDiagnostic("knownHosts=changed")
                     throw TunnelProcessError.hostKeyChanged
+                case .unavailable:
+                    throw TunnelProcessError.trustStoreUnavailable
                 }
 
                 let knownHostsFile = try makeKnownHostsFile(profile: profile, resolvedHost: resolution.ip, key: key)
                 var lastError: Error?
                 var connectedPort = 0
 
-                do {
-                    let launched = try launch(
-                        profile: profile,
-                        resolvedHost: resolution.ip,
-                        localPort: profile.localPort,
-                        knownHostsFile: knownHostsFile,
-                        passwordFile: passwordFile
-                    )
-                    child = launched
-                    connectedPort = profile.localPort
-                } catch {
-                    lastError = error
+                for delta in 0..<10 {
+                    let candidate = profile.localPort + delta
+                    if !(1...65535).contains(candidate) { break }
+                    guard isCurrent(generation) else { return }
+                    do {
+                        let launched = try launch(
+                            profile: profile,
+                            resolvedHost: resolution.ip,
+                            localPort: candidate,
+                            knownHostsFile: knownHostsFile,
+                            passwordFile: passwordFile,
+                            generation: generation
+                        )
+                        child = launched
+                        connectedPort = candidate
+                        break
+                    } catch {
+                        lastError = error
+                        let message = error.localizedDescription.lowercased()
+                        if !message.contains("address already in use") && !message.contains("cannot listen to port")
+                            && !message.contains("could not request local forwarding") { throw error }
+                    }
                 }
 
                 guard let child, connectedPort > 0 else {
@@ -184,6 +203,7 @@ final class SSHProcessTunnel {
                 }
 
                 backoff = 3
+                connectedOnce = true
                 let via = resolution.source == "tailscale" ? " · Tailscale \(resolution.ip)" : ""
 
                 // dsh-web style services gate the browser behind a launch
@@ -296,21 +316,27 @@ final class SSHProcessTunnel {
             } catch {
                 if !isCurrent(generation) { return }
                 let message = error.localizedDescription
-                if error is TunnelProcessError {
-                    if message.contains("主机密钥") || message == "未保存密码" || message.contains("认证") || message.contains("私钥") {
+                if let tunnelError = error as? TunnelProcessError {
+                    switch tunnelError {
+                    case .hostKeyChanged, .trustStoreUnavailable, .missingPassword:
                         emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .failed, message: message))
                         return
+                    default: break
                     }
                 }
                 if SSHIdentity.looksLikeAuthenticationFailure(message) {
                     emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .failed, message: "认证失败：\(message)"))
                     return
                 }
+                if !connectedOnce {
+                    emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .failed, message: "连接失败：\(message)"))
+                    return
+                }
                 emit(TunnelInfo(profileID: profile.id, profileName: profile.displayName, status: .retrying, message: message))
             }
 
             if let child {
-                child.terminate()
+                if child.isRunning { child.terminate() }
                 clearProcess(child)
             }
 
@@ -362,7 +388,8 @@ final class SSHProcessTunnel {
         resolvedHost: String,
         localPort: Int,
         knownHostsFile: URL,
-        passwordFile: URL?
+        passwordFile: URL?,
+        generation: Int
     ) throws -> Process {
         let askpass = passwordFile == nil ? nil : try prepareAskpass()
         let command = Process()
@@ -371,8 +398,12 @@ final class SSHProcessTunnel {
         let forward = "127.0.0.1:\(localPort):\(remote):\(profile.remotePort)"
         let escapedKnownHostsPath = knownHostsFile.path.replacingOccurrences(of: "\"", with: "\\\"")
         let knownHostsOption = "UserKnownHostsFile=\"\(escapedKnownHostsPath)\""
+        let controlSocket = URL(fileURLWithPath: "/tmp/hp-\(UUID().uuidString.prefix(16)).sock")
+        defer { try? FileManager.default.removeItem(at: controlSocket) }
         command.arguments = [
             "-N",
+            "-M", "-S", controlSocket.path,
+            "-o", "ControlPersist=no",
             "-4",
             "-L", forward,
             "-p", String(profile.sshPort),
@@ -398,9 +429,38 @@ final class SSHProcessTunnel {
         let errors = Pipe()
         command.standardError = errors
         try command.run()
-
-        Thread.sleep(forTimeInterval: 0.8)
-        guard command.isRunning else {
+        var ready = false
+        defer {
+            if !ready {
+                if command.isRunning { command.terminate() }
+                clearProcess(command)
+            }
+        }
+        stateLock.lock()
+        if self.generation == generation { process = command }
+        stateLock.unlock()
+        let deadline = Date().addingTimeInterval(25)
+        while command.isRunning && Date() < deadline && isCurrent(generation) {
+            if FileManager.default.fileExists(atPath: controlSocket.path) {
+                let check = Process()
+                check.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+                check.arguments = ["-S", controlSocket.path, "-O", "check", "\(profile.user)@\(resolvedHost)"]
+                check.standardOutput = FileHandle.nullDevice
+                check.standardError = FileHandle.nullDevice
+                try check.run()
+                check.waitUntilExit()
+                if check.terminationStatus == 0 { ready = true; return command }
+            }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        if !isCurrent(generation) {
+            if command.isRunning { command.terminate() }
+            throw TunnelProcessError.cancelled
+        }
+        if command.isRunning {
+            command.terminate()
+            throw TunnelProcessError.launchFailed("SSH 认证或端口转发就绪超时")
+        } else {
             let message = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if isHostKeyFailure(message ?? "") {
@@ -410,7 +470,6 @@ final class SSHProcessTunnel {
             appendDiagnostic("launch exited stderr=\(message ?? "<empty>")")
             throw TunnelProcessError.launchFailed(message?.isEmpty == false ? message! : "ssh 进程未能建立转发")
         }
-        return command
     }
 
     private func prepareAskpass() throws -> URL {

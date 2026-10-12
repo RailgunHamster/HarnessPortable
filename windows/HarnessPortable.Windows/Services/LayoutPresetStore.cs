@@ -31,20 +31,7 @@ public sealed class LayoutPresetStore
     {
         lock (_lock)
         {
-            if (!File.Exists(_path))
-            {
-                return [];
-            }
-
-            try
-            {
-                return JsonSerializer.Deserialize<List<WorkspaceLayout>>(File.ReadAllText(_path), JsonOptions)
-                       ?? [];
-            }
-            catch
-            {
-                return [];
-            }
+            return JsonFile.Read(_path, () => new List<WorkspaceLayout>(), JsonOptions);
         }
     }
 
@@ -52,15 +39,7 @@ public sealed class LayoutPresetStore
     {
         lock (_lock)
         {
-            var directory = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            var tmp = _path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(layouts.ToList(), JsonOptions));
-            File.Move(tmp, _path, overwrite: true);
+            JsonFile.Write(_path, layouts.ToList(), JsonOptions);
         }
     }
 

@@ -10,6 +10,9 @@ using WpfPoint = System.Windows.Point;
 using HarnessPortable.Windows.Controls;
 using HarnessPortable.Windows.Models;
 using HarnessPortable.Windows.Services;
+using DropZone = HarnessPortable.Windows.Services.TabDropZone;
+using Size = System.Windows.Size;
+using System.Globalization;
 
 namespace HarnessPortable.Windows;
 
@@ -17,15 +20,6 @@ public partial class MainWindow : Window
 {
     private enum SplitDirection
     {
-        Left,
-        Right,
-        Up,
-        Down,
-    }
-
-    private enum DropZone
-    {
-        Center,
         Left,
         Right,
         Up,
@@ -101,6 +95,9 @@ public partial class MainWindow : Window
         _managementView.DirectOpenRequested += OpenDirectSession;
 
         InitializeTabDragOverlayWindow();
+        Deactivated += (_, _) => EndTabDrag();
+        LostMouseCapture += (_, _) => { if (_tabDragActive && Mouse.Captured != this) EndTabDrag(); };
+        Closed += (_, _) => _tabDragOverlayWindow?.Close();
 
         InitializeDockLayout();
         DockManager.ActiveContentChanged += DockLayout_ActiveContentChanged;
@@ -271,6 +268,8 @@ public partial class MainWindow : Window
     {
         if (_tabDragCandidate is null || e.LeftButton != MouseButtonState.Pressed)
         {
+            if (_tabDragActive) EndTabDrag();
+            else _tabDragCandidate = null;
             return;
         }
 
@@ -406,13 +405,13 @@ public partial class MainWindow : Window
 
     private void EndTabDrag()
     {
+        _tabDragActive = false;
         if (Mouse.Captured == this)
         {
             ReleaseMouseCapture();
         }
 
         _tabDragCandidate = null;
-        _tabDragActive = false;
         _tabDragTargetPane = null;
         _tabDragTargetRect = Rect.Empty;
         _tabDragOverlayWindow?.Hide();
@@ -428,8 +427,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        SyncTabDragOverlayBounds();
         var overlayPoint = PointToOverlay(windowPoint);
-        var pane = FindPaneAt(windowPoint);
+        TabDragOverlay.UpdateLayout();
+        var previousCard = DropZoneCard.Visibility == Visibility.Visible
+            ? new Rect(Canvas.GetLeft(DropZoneCard), Canvas.GetTop(DropZoneCard), DropZoneCard.Width, DropZoneCard.Height) : Rect.Empty;
+        // Keep the target stable while using a card that extends over a narrow pane's neighbour.
+        var pane = DropZoneCard.Visibility == Visibility.Visible && previousCard.Contains(overlayPoint)
+            && _tabDragTargetPane?.Root == DockManager.Layout ? _tabDragTargetPane : FindPaneAt(windowPoint);
         _tabDragTargetPane = pane;
 
         if (pane is null || FindPaneControl(pane) is not { } paneControl)
@@ -469,18 +474,20 @@ public partial class MainWindow : Window
         DragTargetHighlight.Height = targetRect.Height;
         DragTargetHighlight.Visibility = Visibility.Visible;
 
-        var cardWidth = DropZoneCard.Width;
-        var cardHeight = DropZoneCard.Height;
-        var cardLeft = Math.Max(targetRect.Left + 8,
-            Math.Min(targetRect.Right - cardWidth - 8, targetRect.Left + (targetRect.Width - cardWidth) / 2));
-        var cardTop = Math.Max(targetRect.Top + 8,
-            Math.Min(targetRect.Bottom - cardHeight - 8, targetRect.Top + (targetRect.Height - cardHeight) / 2));
-        Canvas.SetLeft(DropZoneCard, cardLeft);
-        Canvas.SetTop(DropZoneCard, cardTop);
+        var cardRect = TabDropGeometry.CardBounds(targetRect, new Size(TabDragOverlay.ActualWidth, TabDragOverlay.ActualHeight), new Size(238, 174));
+        DropZoneCard.Width = cardRect.Width;
+        DropZoneCard.Height = cardRect.Height;
+        Canvas.SetLeft(DropZoneCard, cardRect.Left);
+        Canvas.SetTop(DropZoneCard, cardRect.Top);
         DropZoneCard.Visibility = Visibility.Visible;
-
-        var cardRect = new Rect(cardLeft, cardTop, cardWidth, cardHeight);
-        _tabDragZone = DetermineDropZone(targetRect, cardRect, overlayPoint);
+        TabDragOverlay.UpdateLayout();
+        Rect ButtonRect(System.Windows.Controls.Button button) => button.TransformToAncestor(TabDragOverlay).TransformBounds(new Rect(button.RenderSize));
+        _tabDragZone = TabDropGeometry.ZoneAt(targetRect, overlayPoint, new Dictionary<DropZone, Rect>
+        {
+            [DropZone.Up] = ButtonRect(DropUpButton), [DropZone.Down] = ButtonRect(DropDownButton),
+            [DropZone.Left] = ButtonRect(DropLeftButton), [DropZone.Right] = ButtonRect(DropRightButton),
+            [DropZone.Center] = ButtonRect(DropCenterButton),
+        });
         UpdateDropZoneVisual(_tabDragZone);
         DragHintText.Text = _tabDragZone switch
         {
@@ -496,7 +503,9 @@ public partial class MainWindow : Window
 
     private void UpdateDragHintPosition()
     {
-        var width = DragHintCard.ActualWidth > 0 ? DragHintCard.ActualWidth : 220;
+        DragHintCard.MaxWidth = Math.Max(0, TabDragOverlay.ActualWidth - 16);
+        DragHintCard.Measure(new Size(DragHintCard.MaxWidth, double.PositiveInfinity));
+        var width = DragHintCard.DesiredSize.Width;
         Canvas.SetLeft(DragHintCard, Math.Max(8, (TabDragOverlay.ActualWidth - width) / 2));
         Canvas.SetTop(DragHintCard, 8);
     }
@@ -515,32 +524,6 @@ public partial class MainWindow : Window
         DropRightButton.Background = zone == DropZone.Right ? active : normal;
         DropDownButton.Background = zone == DropZone.Down ? active : normal;
         DropCenterButton.Background = zone == DropZone.Center ? center : normal;
-    }
-
-    private static DropZone DetermineDropZone(Rect targetRect, Rect cardRect, WpfPoint point)
-    {
-        if (cardRect.Contains(point))
-        {
-            var column = (point.X - cardRect.Left) / cardRect.Width;
-            var row = (point.Y - cardRect.Top) / cardRect.Height;
-            if (column is >= 1.0 / 3.0 and <= 2.0 / 3.0 &&
-                row is >= 1.0 / 3.0 and <= 2.0 / 3.0)
-            {
-                return DropZone.Center;
-            }
-
-            if (row < 1.0 / 3.0) return DropZone.Up;
-            if (row > 2.0 / 3.0) return DropZone.Down;
-            if (column < 1.0 / 3.0) return DropZone.Left;
-            return DropZone.Right;
-        }
-
-        var edge = Math.Max(48, Math.Min(targetRect.Width, targetRect.Height) * 0.22);
-        if (point.X <= targetRect.Left + edge) return DropZone.Left;
-        if (point.X >= targetRect.Right - edge) return DropZone.Right;
-        if (point.Y <= targetRect.Top + edge) return DropZone.Up;
-        if (point.Y >= targetRect.Bottom - edge) return DropZone.Down;
-        return DropZone.Center;
     }
 
     private LayoutDocumentPane? FindPaneAt(WpfPoint windowPoint)
@@ -959,13 +942,7 @@ public partial class MainWindow : Window
 
         _docSuffixes[doc] = suffix;
 
-        view.TitleChanged += title =>
-        {
-            if (FindDocForView(view) is { } owner)
-            {
-                owner.Title = title + (_docSuffixes.TryGetValue(owner, out var s) ? s : "");
-            }
-        };
+        AttachDocumentTitle(doc, view);
 
         doc.Closed += (_, _) => OnSessionDocClosed(doc);
 
@@ -1009,6 +986,7 @@ public partial class MainWindow : Window
         _docSuffixes[doc] = suffix;
 
         doc.Closed += (_, _) => OnSessionDocClosed(doc);
+        AttachDocumentTitle(doc, view);
 
         _directDocs.Add(doc);
         targetPane.Children.Add(doc);
@@ -1026,6 +1004,15 @@ public partial class MainWindow : Window
     {
         BringToFront();
         CreateDirectDoc(url, NextDirectSuffix(url), GetTargetPane(), activate: true);
+    }
+
+    private void AttachDocumentTitle(LayoutDocument doc, SessionView view)
+    {
+        view.TitleChanged += title =>
+        {
+            if (ReferenceEquals(doc.Content, view))
+                doc.Title = title + (_docSuffixes.TryGetValue(doc, out var suffix) ? suffix : "");
+        };
     }
 
     /// <summary>
@@ -1395,13 +1382,7 @@ public partial class MainWindow : Window
             : $"direct:{Guid.NewGuid():N}";
         _docSuffixes[doc] = suffix;
 
-        newView.TitleChanged += title =>
-        {
-            if (ReferenceEquals(doc.Content, newView))
-            {
-                doc.Title = title + suffix;
-            }
-        };
+        AttachDocumentTitle(doc, newView);
 
         if (newTunnelProfileId is { } profileId)
         {
@@ -1454,6 +1435,9 @@ public partial class MainWindow : Window
         };
 
         _layoutPresets.Upsert(layout);
+        var settings = _services.Settings.Load();
+        settings.LastLayoutName = layout.Name;
+        _services.Settings.Save(settings);
         RefreshPresetBox(layout.Name);
     }
 
@@ -1477,6 +1461,12 @@ public partial class MainWindow : Window
         }
 
         _layoutPresets.Delete(selected.Name);
+        var settings = _services.Settings.Load();
+        if (string.Equals(settings.LastLayoutName, selected.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            settings.LastLayoutName = "";
+            _services.Settings.Save(settings);
+        }
         RefreshPresetBox(null);
     }
 
@@ -1573,7 +1563,7 @@ public partial class MainWindow : Window
 
     private static string? SerializeGridLength(GridLength length)
     {
-        return $"{length.Value}|{length.GridUnitType}";
+        return $"{length.Value.ToString(CultureInfo.InvariantCulture)}|{length.GridUnitType}";
     }
 
     private static GridLength? DeserializeGridLength(string? value)
@@ -1585,13 +1575,13 @@ public partial class MainWindow : Window
 
         var parts = value.Split('|');
         if (parts.Length != 2 ||
-            !double.TryParse(parts[0], out var size) ||
-            !Enum.TryParse<GridUnitType>(parts[1], out var unit))
+            !double.TryParse(parts[0].Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var size) ||
+            !Enum.TryParse<GridUnitType>(parts[1], out var unit) || !Enum.IsDefined(unit))
         {
             return null;
         }
 
-        if (size <= 0)
+        if (!double.IsFinite(size) || size <= 0)
         {
             return null;
         }

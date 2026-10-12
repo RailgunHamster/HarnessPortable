@@ -32,21 +32,7 @@ public sealed class SecureStore
     {
         lock (_lock)
         {
-            if (!File.Exists(_path))
-            {
-                return new Dictionary<string, string>();
-            }
-
-            try
-            {
-                var json = File.ReadAllText(_path);
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(json)
-                       ?? new Dictionary<string, string>();
-            }
-            catch
-            {
-                return new Dictionary<string, string>();
-            }
+            return JsonFile.Read(_path, () => new Dictionary<string, string>());
         }
     }
 
@@ -54,15 +40,7 @@ public sealed class SecureStore
     {
         lock (_lock)
         {
-            var directory = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            var tmp = _path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(dict));
-            File.Move(tmp, _path, overwrite: true);
+            JsonFile.Write(_path, dict);
         }
     }
 

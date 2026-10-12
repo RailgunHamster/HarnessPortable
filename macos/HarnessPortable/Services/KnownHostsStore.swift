@@ -1,10 +1,11 @@
 import Foundation
 
 final class KnownHostsStore {
-    enum Decision {
+    enum Decision: Equatable {
         case trustedNew
         case trustedMatch
         case changed
+        case unavailable
     }
 
     private struct Entry: Codable {
@@ -18,6 +19,9 @@ final class KnownHostsStore {
     }
 
     private let lock = NSLock()
+    private let path: URL
+
+    init(path: URL = AppPaths.knownHostsFile) { self.path = path }
 
     static func hostKeyID(host: String, port: Int) -> String {
         "\(host):\(port)"
@@ -28,7 +32,7 @@ final class KnownHostsStore {
         lock.lock()
         defer { lock.unlock() }
 
-        var file = load()
+        guard var file = try? load() else { return .unavailable }
         if let stored = file.hosts[id] {
             return stored.type.caseInsensitiveCompare(keyType) == .orderedSame && stored.keyBase64 == keyBase64
                 ? .trustedMatch
@@ -36,7 +40,7 @@ final class KnownHostsStore {
         }
 
         file.hosts[id] = Entry(type: keyType, keyBase64: keyBase64)
-        save(file)
+        do { try save(file) } catch { return .unavailable }
         return .trustedNew
     }
 
@@ -44,26 +48,19 @@ final class KnownHostsStore {
         let id = Self.hostKeyID(host: host, port: port)
         lock.lock()
         defer { lock.unlock() }
-        var file = load()
+        guard var file = try? load() else { return }
         file.hosts.removeValue(forKey: id)
-        save(file)
+        try? save(file)
     }
 
-    private func load() -> FileFormat {
-        guard let data = try? Data(contentsOf: AppPaths.knownHostsFile),
-              let decoded = try? decodeJSON(FileFormat.self, from: data) else {
-            return FileFormat()
-        }
-        return decoded
+    private func load() throws -> FileFormat {
+        guard FileManager.default.fileExists(atPath: path.path) else { return FileFormat() }
+        return try decodeJSON(FileFormat.self, from: Data(contentsOf: path))
     }
 
-    private func save(_ file: FileFormat) {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try writeAtomically(encoder.encode(file), to: AppPaths.knownHostsFile)
-        } catch {
-            // A failed write leaves the in-memory decision intact for this session.
-        }
+    private func save(_ file: FileFormat) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try writeAtomically(encoder.encode(file), to: path)
     }
 }

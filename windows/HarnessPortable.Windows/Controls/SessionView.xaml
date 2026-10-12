@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
              FontFamily="Segoe UI, Microsoft YaHei UI">
-    <Grid>
+    <Grid x:Name="BrowserGrid">
         <wv2:WebView2 x:Name="WebView"/>
 
         <Border x:Name="StatusOverlay" Background="#99000000" Visibility="Collapsed">
@@ -53,6 +53,8 @@
         </Border>
 
         <Canvas x:Name="OverlayCanvas" ClipToBounds="False">
+            <Popup x:Name="FloatBallPopup" PlacementTarget="{Binding ElementName=OverlayCanvas}"
+                   Placement="Relative" AllowsTransparency="True" StaysOpen="True" Focusable="False">
             <Border x:Name="FloatBall"
                     Width="48" Height="48"
                     Background="#3B82F6" CornerRadius="10"
@@ -65,7 +67,10 @@
                 <TextBlock x:Name="FloatBallText" Text="☰" Foreground="White" FontSize="20"
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
+            </Popup>
 
+            <Popup x:Name="ActionsPopup" PlacementTarget="{Binding ElementName=OverlayCanvas}"
+                   Placement="Relative" AllowsTransparency="True" StaysOpen="True">
             <StackPanel x:Name="ActionsPanel" Visibility="Collapsed" Width="76" IsHitTestVisible="True">
                 <Button Content="刷新" Height="36" Margin="0,0,0,6"
                         Style="{StaticResource ModernButton}" Click="Refresh_Click"/>
@@ -76,6 +81,7 @@
                 <Button x:Name="DisconnectAction" Content="断开" Height="36"
                         Style="{StaticResource ModernDangerButton}" Click="Disconnect_Click"/>
             </StackPanel>
+            </Popup>
         </Canvas>
     </Grid>
 </UserControl>

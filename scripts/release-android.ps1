@@ -61,6 +61,14 @@ if ($env:JAVA_HOME) {
     $env:Path = "$env:JAVA_HOME\bin;" + $env:Path
 }
 
+# Keep Windows AF_UNIX socket names short enough for the JDK's selector pipe.
+$javaSockets = Join-Path $root 'temp\java-sockets'
+New-Item -ItemType Directory -Path $javaSockets -Force | Out-Null
+if ($env:JAVA_TOOL_OPTIONS -notmatch 'jdk\.net\.unixdomain\.tmpdir') {
+    $socketOption = '-Djdk.net.unixdomain.tmpdir="' + $javaSockets.Replace('\', '/') + '"'
+    $env:JAVA_TOOL_OPTIONS = ($env:JAVA_TOOL_OPTIONS + ' ' + $socketOption).Trim()
+}
+
 Write-Host "Building Android release $version..."
 & (Join-Path $root "gradlew.bat") :app:assembleRelease --quiet
 if ($LASTEXITCODE -ne 0) { throw "assembleRelease failed" }

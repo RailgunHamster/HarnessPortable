@@ -164,15 +164,25 @@ final class UpdateService: NSObject, ObservableObject {
         phase = .downloading(fraction: 0)
         expectedDownloadBytes = 0
 
+        installVersion = version
+        if dmgURL.isFileURL {
+            Task {
+                do {
+                    let staged = try await Task.detached {
+                        let target = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".dmg")
+                        try FileManager.default.copyItem(at: dmgURL, to: target)
+                        return target
+                    }.value
+                    bridgeDidFinish(at: staged)
+                } catch { bridgeDidFail(error) }
+            }
+            return
+        }
         let session = URLSession(configuration: .default, delegate: DownloadProgressBridge(self), delegateQueue: nil)
         downloadSession = session
         let task = session.downloadTask(with: dmgURL)
         downloadTask = task
         task.resume()
-
-        // The bridge on a background queue drives main-actor updates through
-        // this helper; keep the version for the completion state.
-        installVersion = version
     }
 
     private var installVersion = ""
@@ -190,6 +200,7 @@ final class UpdateService: NSObject, ObservableObject {
     }
 
     fileprivate func bridgeDidFinish(at location: URL) {
+        defer { try? FileManager.default.removeItem(at: location) }
         downloadTask = nil
         downloadSession?.invalidateAndCancel()
         downloadSession = nil
@@ -269,8 +280,16 @@ private final class DownloadProgressBridge: NSObject, URLSessionDownloadDelegate
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let owner = self.owner
-        Task { @MainActor in
-            owner.bridgeDidFinish(at: location)
+        do {
+            if let response = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) {
+                throw URLError(.badServerResponse)
+            }
+            // URLSession deletes location after this callback returns.
+            let staged = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".dmg")
+            try FileManager.default.moveItem(at: location, to: staged)
+            Task { @MainActor in owner.bridgeDidFinish(at: staged) }
+        } catch {
+            Task { @MainActor in owner.bridgeDidFail(error) }
         }
     }
 

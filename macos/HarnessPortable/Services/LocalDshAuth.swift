@@ -22,7 +22,11 @@ enum LocalDshAuth {
               query.contains("token="),
               let tokenItems = URLComponents(string: "?" + query)?.queryItems,
               !tokenItems.isEmpty,
-              var target = URLComponents(string: destination) else {
+              var target = URLComponents(string: destination),
+              let targetHost = target.host, let sourceHost = source.host,
+              HostResolver.isLocalHost(targetHost), HostResolver.isLocalHost(sourceHost),
+              ["http", "https"].contains(target.scheme?.lowercased() ?? ""),
+              (target.port ?? (target.scheme == "https" ? 443 : 80)) == (source.port ?? (source.scheme == "https" ? 443 : 80)) else {
             return nil
         }
 

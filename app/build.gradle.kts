@@ -11,6 +11,15 @@ val keystoreProperties = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) load(FileInputStream(f))
 }
+val signingFields = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val hasReleaseSigning = signingFields.all { !keystoreProperties.getProperty(it).isNullOrBlank() }
+    && rootProject.file(keystoreProperties.getProperty("storeFile")).isFile
+
+gradle.taskGraph.whenReady {
+    if (!hasReleaseSigning && allTasks.any { it.project == project && it.name in listOf("packageRelease", "signReleaseBundle") }) {
+        throw GradleException("Release 签名配置缺失：请提供 keystore.properties（storeFile、storePassword、keyAlias、keyPassword）和有效的 keystore 文件。Debug 构建无需这些文件。")
+    }
+}
 
 android {
     namespace = "com.harness.portable"
@@ -20,12 +29,12 @@ android {
         applicationId = "com.harness.portable"
         minSdk = 24
         targetSdk = 36
-        versionCode = 19
+        versionCode = 20
         versionName = rootProject.file("VERSION").takeIf { it.exists() }?.readText()?.trim() ?: "2.5.0"
     }
 
     signingConfigs {
-        create("release") {
+        if (hasReleaseSigning) create("release") {
             storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
             storePassword = keystoreProperties["storePassword"] as String
             keyAlias = keystoreProperties["keyAlias"] as String
@@ -35,7 +44,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else null
             isMinifyEnabled = false
             isShrinkResources = false
             isDebuggable = false

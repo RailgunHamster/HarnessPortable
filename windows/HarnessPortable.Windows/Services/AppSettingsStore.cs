@@ -27,20 +27,9 @@ public sealed class AppSettingsStore
     {
         lock (_lock)
         {
-            if (!File.Exists(_path))
-            {
-                return new AppSettings();
-            }
-
-            try
-            {
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path), JsonOptions)
-                       ?? new AppSettings();
-            }
-            catch
-            {
-                return new AppSettings();
-            }
+            var settings = JsonFile.Read(_path, () => new AppSettings(), JsonOptions);
+            settings.DirectAuthModes ??= [];
+            return settings;
         }
     }
 
@@ -48,15 +37,7 @@ public sealed class AppSettingsStore
     {
         lock (_lock)
         {
-            var directory = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            var tmp = _path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(settings, JsonOptions));
-            File.Move(tmp, _path, overwrite: true);
+            JsonFile.Write(_path, settings, JsonOptions);
         }
     }
 }

@@ -280,14 +280,16 @@ public sealed partial class TunnelEngine
                     client = new SshClient(connectionInfo);
                     client.HostKeyReceived += (_, e) =>
                     {
-                        var decision = _knownHosts.Check(
-                            profile.SshHost, profile.SshPort, e.HostKeyName, e.HostKey);
-
-                        if (decision == HostKeyDecision.Changed)
+                        try
+                        {
+                            var decision = _knownHosts.Check(profile.SshHost, profile.SshPort, e.HostKeyName, e.HostKey);
+                            e.CanTrust = decision != HostKeyDecision.Changed;
+                            if (!e.CanTrust) hostKeyProblem = "服务器主机密钥已改变，拒绝连接（可能存在中间人攻击）";
+                        }
+                        catch (Exception ex)
                         {
                             e.CanTrust = false;
-                            hostKeyProblem =
-                                "服务器主机密钥已改变，拒绝连接（可能存在中间人攻击）";
+                            hostKeyProblem = "无法验证服务器主机密钥，已拒绝连接：" + ex.Message;
                         }
                     };
                     client.KeepAliveInterval = TimeSpan.FromSeconds(15);
