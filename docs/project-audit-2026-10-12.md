@@ -10,7 +10,13 @@ Windows 和 Android 的相关代码已修复。Windows 新增 22 项回归用例
 
 无 Release 签名文件的干净 Android 副本可以完成 Debug 构建，Release 会明确拒绝缺失签名的构建。构建过程中另修复了 Android 7 调用高版本前台服务 API 的兼容问题。
 
-macOS 对应源码和回归用例已修改，但构建机 macair 两次 SSH 连接超时，尚未编译和发布 Mac 产物。原生截图接口仍返回显示器捕获错误，因此完整鼠标拖拽、不同显示器及 DPI 的像素验收仍待实机确认。以下问题详情和图片记录的是修复前基线。
+macOS 已通过 GitHub 托管 Mac 构建机的 32 项测试，完成 Apple Silicon / Intel 通用 Release 构建和 DMG 打包，包的 SHA256 与构建机输出一致。[构建记录](https://github.com/RailgunHamster/HarnessPortable/actions/runs/38248543089)对应发布源码标签 `v2.6.27`。
+
+按用户最后指定的范围，本次只发布 Windows 和 Android，macOS DMG 保留在本地产物目录，未更新 macOS 发布附件和更新源。
+
+[2.6.27 已正式发布](https://github.com/RailgunHamster/HarnessPortable/releases/tag/v2.6.27)，公开最新版本接口已确认非草稿、非预发布。Windows 安装版、便携版、完整更新包、差分更新包及 Android APK 均与本地产物 SHA256 一致；局域网更新源已同步到 2.6.27，Android versionCode 为 20。macOS 更新源仍保留 2.6.16。
+
+原生截图接口仍返回显示器捕获错误，因此完整鼠标拖拽、不同显示器及 DPI 的像素验收仍待实机确认。以下问题详情和图片记录的是修复前基线。
 
 ## 检查范围和验证结果
 
@@ -234,10 +240,10 @@ macOS 只尝试 profile.localPort，未按契约尝试 localPort 至 localPort+9
 这些是后续验收项，不计入已确认的 17 项问题：
 
 - 普通大窗格拖拽提示不完整：最大化、全屏、跨显示器和不同 DPI 下确认覆盖窗口边界及坐标。
-- 拖拽中按 Esc、Alt Tab、松开鼠标或丢失鼠标捕获：确认覆盖层和候选标签状态被清理。当前只看到 Esc 和正常释放路径，不能据此认定其他场景已通过。
+- 拖拽中按 Esc、Alt Tab、松开鼠标或丢失鼠标捕获：修复已补充状态清理，仍需完整鼠标交互确认。
 - 真实 WebView2 网页上的认证、断连状态、浮动菜单及中文输入法。
 - 真实 SSH 服务的首次失败、睡眠恢复、端口占用、多隧道并发和主机密钥变化。
-- macOS 下载完成时主线程繁忙的情况，以及 Android 干净环境的 Debug 构建。
+- macOS 下载完成时主线程繁忙的情况。Android 无 Release 签名文件的干净环境 Debug 构建已通过。
 
 ## 诊断材料和执行顺序
 
