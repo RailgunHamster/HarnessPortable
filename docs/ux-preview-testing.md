@@ -12,7 +12,7 @@
 
 ## 试用建议
 
-Windows 解压测试 ZIP，运行 `HarnessPortable.exe`。使用现有配置时，先退出旧进程再启动测试包。默认数据目录仍为 `%APPDATA%\HarnessPortable`。
+Windows 解压测试 ZIP，运行根目录的 `Harness Portable.exe`。使用现有配置时，先退出旧进程再启动测试包。默认数据目录仍为 `%APPDATA%\HarnessPortable`。
 
 Android APK 使用现有正式签名和应用 ID，可覆盖安装并保留配置。应用内显示 2.7.0（versionCode 21）。这次测试包没有进入在线更新源。
 
@@ -28,6 +28,6 @@ Android APK 使用现有正式签名和应用 ID，可覆盖安装并保留配�
 ## 验证记录
 
 - Windows：175 项测试全部通过；实际 WPF 主窗口与设置分类构造、布局导出、900 像素窄窗口检查通过。更新源草稿切换和撤销检查通过。
-- Android：编译与 lint 通过；隔离模拟器验证列表与设置，网页在返回、设置之间保留实例和页面状态，取消切换保留旧服务，确认切换及断开释放旧实例。
+- Android：编译与 lint 通过；隔离模拟器验证列表与设置，网页在返回、设置之间保留实例和页面状态，取消切换保留旧服务，确认切换及断开释放旧实例，最终创建和释放各 2 次。320dp 小屏、130% 字号下连接操作与设置、更新导航检查通过。
 - macOS：37 项测试、arm64 与 x86_64 通用构建和 DMG 打包通过，见 [CI 验证](https://github.com/RailgunHamster/HarnessPortable/actions/runs/38275005019)。尚未在真实 Mac 上完成完整鼠标交互试用。
 - 模拟器的网页生命周期验证使用本地 HTTP 测试服务；实际服务器的 SSH 认证与网页交互仍需本次试用确认。
