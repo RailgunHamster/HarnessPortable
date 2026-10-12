@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 
 namespace HarnessPortable.Windows.Services;
@@ -59,11 +60,18 @@ public static class LocalNssmAuth
         var encoded = Convert.ToBase64String(
             Encoding.Unicode.GetBytes(NssmAuthUrlFetcher.BuildScript()));
 
+        // Full path, not "powershell": the app process is often relaunched by
+        // the Velopack updater, whose PATH may differ from an interactive
+        // shell's, and a resolved-but-wrong powershell surfaces as a bare
+        // exit=1 with no other clue.
+        var powershell = Path.Combine(
+            Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = "powershell",
+                FileName = powershell,
                 Arguments = "-NoProfile -NonInteractive -EncodedCommand " + encoded,
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -91,7 +99,7 @@ public static class LocalNssmAuth
         }))
         {
             var outputTask = process.StandardOutput.ReadToEndAsync(token);
-            _ = process.StandardError.ReadToEndAsync(token);
+            var errorTask = process.StandardError.ReadToEndAsync(token);
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeoutCts.CancelAfter(CommandTimeout);
@@ -117,7 +125,19 @@ public static class LocalNssmAuth
 
             if (process.ExitCode != 0)
             {
-                FlickerLog.Log("webview-auth", "local nssm fetch exit=" + process.ExitCode);
+                // The script's own misses exit 3/4; anything else (typically 1)
+                // is a terminating error whose stderr names the culprit —
+                // e.g. a stripped PSModulePath breaking Get-CimInstance module
+                // autoload in updater-relaunched processes.
+                var error = (await errorTask.ConfigureAwait(false))
+                    .Replace("\r", "").Replace("\n", " ").Trim();
+                if (error.Length > 300)
+                {
+                    error = error[..300];
+                }
+
+                FlickerLog.Log("webview-auth", $"local nssm fetch exit={process.ExitCode}" +
+                    (error.Length > 0 ? " stderr=" + error : ""));
                 return null;
             }
 

@@ -30,6 +30,9 @@ public static partial class NssmAuthUrlFetcher
     public static string BuildScript() => """
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+if (-not $env:PSModulePath -or $env:PSModulePath -notmatch "WindowsPowerShell") {
+  $env:PSModulePath = "${env:ProgramFiles}\WindowsPowerShell\Modules;${env:SystemRoot}\System32\WindowsPowerShell\v1.0\Modules"
+}
 foreach ($c in (Get-CimInstance Win32_Service | Where-Object { $_.State -eq "Running" -and $_.PathName -match "nssm\.exe" })) {
   $exe = [regex]::Match($c.PathName, "^""?(.+?nssm\.exe)").Groups[1].Value
   if (-not $exe) { continue }

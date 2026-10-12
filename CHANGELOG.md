@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.21
+
+- Windows：排查并加固直连「NSSM 自动」在本机的取 token 失败（railgunhamster 实测 `local nssm fetch exit=1`——同一脚本在同一用户下手工/SSH 执行都成功，只有应用拉起的子进程失败）：
+  - 调用 `powershell` 改用**绝对路径** `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`：应用常由 Velopack 更新器重启，其 PATH 可能与交互 Shell 不同，解析到错误的 powershell 只会表现为无头绪的 exit=1。
+  - 发现脚本开头补一道 `PSModulePath` 自愈：为空或不含 `WindowsPowerShell` 时（更新器重启的进程常见）重建标准模块路径，避免 `Get-CimInstance` 模块自动加载失败直接终止脚本。隧道（经 SSH）模式共用此脚本，同样受益。
+  - 失败日志带上子进程 **stderr 摘要**（≤300 字符）：以后 exit=1 这类终止错误能一眼看到是哪条命令抛的，而不是只有一个退出码。
+
 ## 2.6.20
 
 - Windows：修复直连行「认证模式」按钮**点了没反应**的假象。
