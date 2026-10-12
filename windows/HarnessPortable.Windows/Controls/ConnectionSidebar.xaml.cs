@@ -10,9 +10,10 @@ using MenuItem = System.Windows.Controls.MenuItem;
 
 namespace HarnessPortable.Windows.Controls;
 
-public sealed class ConnectionGroup(string name, IEnumerable<object> children, bool expanded = true)
+public sealed class ConnectionGroup(string name, IEnumerable<object> children, bool expanded = true, string? key = null)
 {
     public string Name { get; } = name;
+    public string Key { get; } = key ?? name;
     public List<object> Children { get; } = children.ToList();
     public bool Expanded { get; set; } = expanded;
 }
@@ -22,7 +23,9 @@ public sealed class ConnectionRow(ConnectionEntry entry, string status, Brush br
     public ConnectionEntry Entry { get; } = entry;
     public string Status { get; } = status;
     public Brush StatusBrush { get; } = brush;
+    public string Tooltip => Entry.Name + "\n" + Entry.Address;
     public Visibility DisconnectVisibility => Entry.Tunnel is null ? Visibility.Collapsed : Visibility.Visible;
+    public bool Expanded { get; set; }
 }
 
 public partial class ConnectionSidebar : System.Windows.Controls.UserControl
@@ -84,9 +87,14 @@ public partial class ConnectionSidebar : System.Windows.Controls.UserControl
             return new(e, label, (Brush)FindResource(state == TunnelStatus.Connected ? "DshGreen" :
                 state == TunnelStatus.Failed ? "DshRed" : "DshTextSecondary"));
         }
-        var old = (ConnectionTree.ItemsSource as IEnumerable<ConnectionGroup>)?.ToDictionary(g => g.Name, g => g.Expanded);
+        var old = new Dictionary<string, bool>();
+        void RememberGroups(IEnumerable<object> items)
+        {
+            foreach (var group in items.OfType<ConnectionGroup>()) { old[group.Key] = group.Expanded; RememberGroups(group.Children); }
+        }
+        if (ConnectionTree.ItemsSource is IEnumerable<ConnectionGroup> previous) RememberGroups(previous);
         ConnectionGroup Group(string name, IEnumerable<object> rows, bool expanded = true) =>
-            new(name, rows, old?.GetValueOrDefault(name, expanded) ?? expanded);
+            new(name, rows, old.GetValueOrDefault(name, expanded));
         ConnectionTree.ItemsSource = !string.IsNullOrWhiteSpace(SearchBox.Text)
             ? new[] { Group($"搜索结果 · {entries.Count}", entries.Select(Row)) }
             : new[]
@@ -94,7 +102,7 @@ public partial class ConnectionSidebar : System.Windows.Controls.UserControl
                 Group("常用", entries.Where(e => e.Favorite).Select(Row)),
                 Group("最近", entries.Where(e => e.LastOpened != null).OrderByDescending(e => e.LastOpened).Take(6).Select(Row)),
                 Group("分组", entries.GroupBy(e => e.Group).OrderBy(g => g.Key).Select(g =>
-                    new ConnectionGroup(g.Key, g.Select(Row), g.Key == "未分组"))),
+                    new ConnectionGroup(g.Key, g.Select(Row), old.GetValueOrDefault("group:" + g.Key, g.Key == "未分组"), "group:" + g.Key))),
             };
     }
 

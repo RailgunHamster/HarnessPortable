@@ -4,6 +4,19 @@
         Title="设置 · Harness Portable" Width="760" Height="660" MinWidth="650" MinHeight="520"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource DshBgBase}" FontFamily="{DynamicResource DshUiFont}">
+    <Window.Resources>
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Margin" Value="0,0,0,5"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+                <Border x:Name="CategoryBorder" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter/>
+                </Border><ControlTemplate.Triggers>
+                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="CategoryBorder" Property="Background" Value="{DynamicResource DshAccentSoft}"/><Setter Property="Foreground" Value="{DynamicResource DshAccent}"/></Trigger>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="CategoryBorder" Property="Background" Value="{DynamicResource DshBgLayer2}"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+    </Window.Resources>
     <DockPanel>
         <Border DockPanel.Dock="Top" Padding="24,20" Background="{DynamicResource DshBgLayer1}" BorderBrush="{DynamicResource DshBorderL1}" BorderThickness="0,0,0,1">
             <StackPanel><TextBlock Text="设置" Style="{StaticResource DshSectionHeader}"/>

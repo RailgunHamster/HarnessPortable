@@ -4,7 +4,7 @@
         xmlns:avalonDock="https://github.com/Dirkster99/AvalonDock"
         xmlns:controls="clr-namespace:HarnessPortable.Windows.Controls"
         Title="Harness Portable"
-        Icon="/Assets/HarnessPortable.png"
+        Icon="pack://application:,,,/HarnessPortable;component/Assets/HarnessPortable.png"
         Width="1200" Height="780"
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen"
@@ -207,14 +207,14 @@
                     <TextBlock Text="F11 全屏" Foreground="{DynamicResource DshTextTertiary}"
                                FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
+                <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="Harness Portable" FontSize="17" FontWeight="SemiBold"
                                Foreground="{DynamicResource DshTextPrimary}" VerticalAlignment="Center"/>
                     <Button x:Name="SidebarToggleButton" Content="☰ 连接库" Style="{StaticResource ModernToolbarButton}"
                             Margin="12,0,0,0" Padding="12,6" Click="ToggleSidebar_Click"/>
                     <Button Content="分屏" Style="{StaticResource ModernToolbarButton}" Margin="6,0,0,0" Click="SplitWorkspace_Click"/>
                     <Button Content="设置" Style="{StaticResource ModernToolbarButton}" Margin="6,0,0,0" Click="OpenManagement_Click"/>
-                </StackPanel>
+                </WrapPanel>
             </DockPanel>
         </Border>
 

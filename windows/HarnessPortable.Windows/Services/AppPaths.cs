@@ -4,9 +4,15 @@ namespace HarnessPortable.Windows.Services;
 
 public static class AppPaths
 {
-    public static string DataDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "HarnessPortable");
+    public static string DataDirectory { get; } = ResolveDataDirectory();
+
+    private static string ResolveDataDirectory()
+    {
+        var overridePath = Environment.GetEnvironmentVariable("HARNESS_PORTABLE_DATA_DIRECTORY");
+        return !string.IsNullOrWhiteSpace(overridePath) && Path.IsPathFullyQualified(overridePath)
+            ? Path.GetFullPath(overridePath)
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HarnessPortable");
+    }
 
     public static string ProfilesFile => Path.Combine(DataDirectory, "profiles.json");
     public static string SecretsFile => Path.Combine(DataDirectory, "secrets.json");

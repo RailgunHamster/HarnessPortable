@@ -8,14 +8,14 @@
             <TextBlock Text="{Binding Name}" Foreground="{DynamicResource DshTextSecondary}" Margin="2,9,0,6"/>
         </HierarchicalDataTemplate>
         <DataTemplate DataType="{x:Type local:ConnectionRow}">
-            <Grid Margin="0,2" MinWidth="150">
+            <Grid Margin="0,2" MinWidth="130">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <Button Style="{StaticResource ModernToolbarButton}" Tag="{Binding}" Click="Open_Click"
-                        HorizontalContentAlignment="Left" Padding="8" ToolTip="{Binding Entry.Address}">
+                        HorizontalContentAlignment="Left" Padding="8" ToolTip="{Binding Tooltip}">
                     <StackPanel>
-                        <TextBlock Text="{Binding Entry.Name}" TextTrimming="CharacterEllipsis" MaxWidth="170"
+                        <TextBlock Text="{Binding Entry.Name}" TextTrimming="CharacterEllipsis" MaxWidth="110"
                                    Foreground="{DynamicResource DshTextPrimary}"/>
-                        <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}" FontSize="11" Margin="0,4,0,0"/>
+                        <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}" FontSize="11" Margin="0,4,0,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
                     <Button.ContextMenu>
                         <ContextMenu Opened="Menu_Opened">
@@ -29,25 +29,32 @@
                     </Button.ContextMenu>
                 </Button>
                 <Button Grid.Column="1" Content="⋯" Style="{StaticResource ModernToolbarButton}" Tag="{Binding}"
-                        Padding="5,8" Click="More_Click" ToolTip="编辑、常用和分组"/>
+                        Padding="0,8" Width="24" Click="More_Click" ToolTip="编辑、常用和分组"/>
             </Grid>
         </DataTemplate>
         <Style TargetType="TreeViewItem">
             <Setter Property="IsExpanded" Value="{Binding Expanded, Mode=TwoWay}"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Foreground" Value="{DynamicResource DshTextPrimary}"/>
-            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="ItemsPanel"><Setter.Value><ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate></Setter.Value></Setter>
         </Style>
     </UserControl.Resources>
     <Grid Margin="12,16,10,12">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <TextBlock Text="连接库" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}" Margin="2,0,0,12"/>
-        <TextBox x:Name="SearchBox" Grid.Row="1" Style="{StaticResource ModernTextBox}" Margin="0,0,0,10"
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+        <TextBox x:Name="SearchBox" Style="{StaticResource ModernTextBox}"
                  ToolTip="搜索连接名称、服务器或分组" TextChanged="Search_Changed"
                  AutomationProperties.Name="搜索连接"/>
+        <TextBlock Text="搜索连接…" Margin="12,0" VerticalAlignment="Center" Foreground="{DynamicResource DshTextTertiary}" IsHitTestVisible="False">
+            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+        </TextBlock>
+        </Grid>
         <TreeView x:Name="ConnectionTree" Grid.Row="2" Background="Transparent" BorderThickness="0"
                   VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
-                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <TreeView.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate></TreeView.ItemsPanel>
+        </TreeView>
         <StackPanel Grid.Row="3" Margin="0,12,0,0">
             <Button Content="＋ 添加连接" Style="{StaticResource ModernPrimaryButton}" Click="Add_Click" Padding="12,9"/>
             <Button Content="设置" Style="{StaticResource ModernToolbarButton}" Click="Settings_Click" Margin="0,8,0,0" Padding="12,8"/>

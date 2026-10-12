@@ -214,18 +214,8 @@ public partial class MainWindow : Window
         var active = _services.Tunnels.GetActiveStates().ToList();
         StopTunnelButton.Visibility = active.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        StatusText.Text = active.Count switch
-        {
-            0 => "就绪",
-            _ => string.Join(
-                "   |   ",
-                active.Select(s => s.Status switch
-                {
-                    TunnelStatus.Connected => $"{s.ProfileName} 已连接 ({s.LocalPort})",
-                    TunnelStatus.Connecting => $"{s.ProfileName} 连接中…",
-                    _ => $"{s.ProfileName} 重连中…",
-                })),
-        };
+        StatusText.Text = $"{active.Count} 个活动 SSH 连接 · {AllSessionDocs().Count()} 个网页标签 · 工作区自动保存";
+        StatusText.ToolTip = active.Count == 0 ? "从连接库打开一个服务" : string.Join("\n", active.Select(s => $"{s.ProfileName} · {s.Status}"));
     }
 
     // ------------------------------------------------------------------
@@ -877,6 +867,8 @@ public partial class MainWindow : Window
     private SessionView CreateDirectView(string url, LayoutWebState? webState = null)
     {
         var view = new SessionView(_services, url) { InitialWebState = webState };
+        var preferredName = _services.Settings.Load().Connections.GetValueOrDefault(ConnectionLibrary.DirectKey(url))?.Name;
+        if (!string.IsNullOrWhiteSpace(preferredName)) view.SetCustomLabel(preferredName);
         WireSessionView(view);
         return view;
     }

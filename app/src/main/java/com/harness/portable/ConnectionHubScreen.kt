@@ -172,7 +172,7 @@ fun SettingsScreen(
                         ShellEmptyState(icon = Icons.Filled.Dns, title = "添加第一个连接", message = "通过 SSH 隧道或直连地址打开服务网页。", actionLabel = "添加连接", onAction = { showAddMenu = true })
                     }
                     items(entries, key = { it.key }) { entry ->
-                        PhoneConnectionRow(entry, entry.key in favorites, entry.profile?.id == runningTunnelId,
+                        PhoneConnectionRow(entry, entry.key in favorites, entry.profile != null && entry.profile.id == runningTunnelId,
                             onOpen = { entry.profile?.let(onConnectTunnel) ?: entry.url?.let(onConnectDirect) },
                             onEdit = { if (entry.profile != null) { editorFor = entry.profile; connectAfterSave = false; showEditor = true } else { directFor = entry.url; directInput = entry.url.orEmpty(); directError = null; showDirectEditor = true } },
                             onDelete = { deleting = entry }, onFavorite = {
@@ -270,11 +270,25 @@ fun SettingsScreen(
             val normalized = normalizeUrl(directInput)
             val parsed = normalized?.let { runCatching { java.net.URI(it) }.getOrNull() }
             if (normalized == null || parsed?.scheme !in listOf("http", "https") || parsed?.host.isNullOrBlank()) directError = "请输入有效的 HTTP(S) 地址"
-            else { directFor?.let { onUpdateDirect(it, normalized) } ?: onAddDirect(normalized); showDirectEditor = false }
+            else {
+                directFor?.let { old ->
+                    onUpdateDirect(old, normalized)
+                    if (old != normalized && "direct:$old" in favorites) {
+                        val next = favorites - "direct:$old" + "direct:$normalized"
+                        favorites = next; prefs.edit().putStringSet(UiPreferences.FAVORITES, next).apply()
+                    }
+                } ?: onAddDirect(normalized)
+                showDirectEditor = false
+            }
         }) { Text("保存") } }, dismissButton = { TextButton(onClick = { showDirectEditor = false }) { Text("取消") } })
     deleting?.let { entry -> AlertDialog(onDismissRequest = { deleting = null }, title = { Text("删除 ${entry.name}？") },
         text = { Text("删除保存的连接和对应凭据。若此服务正在使用，也会断开当前连接。") },
-        confirmButton = { TextButton(onClick = { entry.profile?.let(onDeleteTunnel) ?: entry.url?.let(onDeleteDirect); deleting = null }) { Text("删除", color = dsh.danger) } },
+        confirmButton = { TextButton(onClick = {
+            entry.profile?.let(onDeleteTunnel) ?: entry.url?.let(onDeleteDirect)
+            favorites = favorites - entry.key
+            prefs.edit().putStringSet(UiPreferences.FAVORITES, favorites).apply()
+            deleting = null
+        }) { Text("删除", color = dsh.danger) } },
         dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } }) }
 }
 
@@ -294,7 +308,7 @@ private fun PhoneConnectionRow(entry: PhoneConnection, favorite: Boolean, runnin
             Text((if (entry.profile == null) "直连" else "SSH") + (if (favorite) " · 常用" else "") + (if (running) " · 已连接" else ""), style = MaterialTheme.typography.bodySmall, color = if (running) dsh.success else dsh.textSecondary)
             Text(entry.address, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, color = dsh.textTertiary)
         }
-        TextButton(onClick = onOpen) { Text(if (running) "打开" else "连接") }
+        TextButton(onClick = onOpen) { Text(if (running || entry.profile == null) "打开" else "连接") }
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "${entry.name}菜单", tint = dsh.textSecondary) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
