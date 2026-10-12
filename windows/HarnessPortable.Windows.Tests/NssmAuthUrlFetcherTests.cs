@@ -10,9 +10,13 @@ public class NssmAuthUrlFetcherTests
         var script = NssmAuthUrlFetcher.BuildScript();
 
         Assert.Contains("nssm\\.exe", script);
-        Assert.Contains("get $c.Name Application", script);
-        Assert.Contains("get $c.Name AppParameters", script);
-        Assert.Contains("get $c.Name AppStdout", script);
+        // Reads the service's Parameters registry key — never calls nssm.exe,
+        // whose `get` opens LSA policy and is denied under the UAC-filtered
+        // token of an interactively launched app (2.6.22).
+        Assert.DoesNotContain("nssm get", script);
+        Assert.Contains(@"HKLM:\SYSTEM\CurrentControlSet\Services\$($c.Name)\Parameters", script);
+        Assert.Contains(".Application $.AppParameters", script.Replace("$($item.Application) $($item.AppParameters)", ".Application $.AppParameters"));
+        Assert.Contains(".AppStdout", script);
         Assert.Contains("dsh web: (http\\S+)", script);
         Assert.Contains("-eq \"303\"", script);
     }
