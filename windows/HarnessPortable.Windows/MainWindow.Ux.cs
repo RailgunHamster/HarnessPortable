@@ -99,7 +99,7 @@ public partial class MainWindow
     }
     private void ShowAddMenu()
     {
-        var menu = new ContextMenu { PlacementTarget = ConnectionLibraryView };
+        var menu = new ContextMenu { PlacementTarget = ConnectionLibraryView, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint };
         var ssh = new MenuItem { Header = "SSH 隧道" }; ssh.Click += (_, _) => EditTunnel(null);
         var direct = new MenuItem { Header = "直连网页" }; direct.Click += (_, _) => EditDirect(null);
         menu.Items.Add(ssh); menu.Items.Add(direct); menu.IsOpen = true;
@@ -143,6 +143,8 @@ public partial class MainWindow
         settings = _services.Settings.Load();
         var lastOpened = oldKey is null ? null : settings.Connections.GetValueOrDefault(oldKey)?.LastOpened;
         if (oldKey is not null) settings.Connections.Remove(oldKey);
+        if (oldKey is not null)
+            settings.ConnectionOrder = settings.ConnectionOrder.Select(key => key == oldKey ? ConnectionLibrary.DirectKey(editor.Url) : key).Distinct().ToList();
         if (previous is not null) settings.DirectAuthModes.Remove(previous);
         editor.Preference.LastOpened = lastOpened;
         settings.Connections[ConnectionLibrary.DirectKey(editor.Url)] = editor.Preference;
@@ -167,6 +169,7 @@ public partial class MainWindow
             _services.Profiles.SaveDirects(_services.Profiles.LoadDirects().Where(u => u != url));
         }
         var settings = _services.Settings.Load(); settings.Connections.Remove(entry.Key);
+        settings.ConnectionOrder.RemoveAll(key => key == entry.Key);
         if (entry.Url is not null) settings.DirectAuthModes.Remove(entry.Url);
         _services.Settings.Save(settings);
     }

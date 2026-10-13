@@ -51,7 +51,9 @@ struct SettingsWindowView: View {
                             Text("工作区").font(.headline)
                             Toggle("启动时恢复上次工作区", isOn: preference(\.restoreLastLayoutOnStartup))
                             Text("自动记录标签、网页状态和分屏比例。").font(.callout).foregroundStyle(dsh.textSecondary)
-                            Toggle("恢复时自动连接服务器", isOn: preference(\.reconnectRestoredWorkspace))
+                            Toggle("恢复时自动连接服务器", isOn: Binding(get: { settings.value.reconnectRestoredWorkspace }, set: { choice in
+                                settings.update { $0.reconnectRestoredWorkspace = choice; $0.startupReconnectPreference = choice }
+                            }))
                             Text("关闭时仅恢复布局，打开服务后再连接。").font(.callout).foregroundStyle(dsh.textSecondary)
                             Divider()
                             Text("命名预设").font(.headline)

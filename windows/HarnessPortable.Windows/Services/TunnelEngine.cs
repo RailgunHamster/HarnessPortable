@@ -70,7 +70,7 @@ public sealed partial class TunnelEngine
         var profile = _profiles.FindTunnel(profileId);
         if (profile is null)
         {
-            State.Set(new TunnelInfo(Status: TunnelStatus.Failed, Message: "隧道配置不存在"));
+            State.Set(new TunnelInfo(profileId, Status: TunnelStatus.Failed, Message: "隧道配置不存在"));
             return;
         }
 
@@ -102,6 +102,8 @@ public sealed partial class TunnelEngine
             _cts?.Cancel();
             _cts = new CancellationTokenSource();
             cts = _cts;
+            // Several restored tabs must share the attempt before its worker runs.
+            State.Set(new TunnelInfo(profile.Id, profile.DisplayName, TunnelStatus.Connecting, "正在连接 SSH…"));
         }
 
         _ = Task.Run(() => RunAsync(profile, generation, cts.Token));
@@ -109,11 +111,7 @@ public sealed partial class TunnelEngine
 
     public void Stop(bool announce = true)
     {
-        DetachCurrentForTeardown();
-
-        // Always publish the terminal state: the manager and the UI need it
-        // even when the app is shutting down or stopping every tunnel.
-        State.Set(TunnelInfo.Stopped());
+        DetachCurrentForTeardown(publishStopped: true);
     }
 
     /// <summary>
@@ -125,7 +123,7 @@ public sealed partial class TunnelEngine
     /// Callers reach this from the UI thread (stop buttons, tray exit, window
     /// close), so the teardown must never run there.
     /// </summary>
-    private void DetachCurrentForTeardown()
+    private void DetachCurrentForTeardown(bool publishStopped = false)
     {
         SshClient? client;
         ForwardedPortLocal? forward;
@@ -133,6 +131,9 @@ public sealed partial class TunnelEngine
         lock (_gate)
         {
             _generation++;
+            var previous = State.Current;
+            var id = _activeProfile?.Id ?? previous.ProfileId;
+            var name = _activeProfile?.DisplayName ?? previous.ProfileName;
             _activeProfile = null;
             _cts?.Cancel();
             _cts = null;
@@ -140,6 +141,8 @@ public sealed partial class TunnelEngine
             forward = _forward;
             _client = null;
             _forward = null;
+            // Publish with identity under the generation lock, before a new start.
+            if (publishStopped) State.Set(new TunnelInfo(id, name, TunnelStatus.Stopped, "隧道已停止"));
         }
 
         if (client is null && forward is null)

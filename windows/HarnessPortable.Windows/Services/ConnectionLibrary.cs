@@ -3,7 +3,7 @@ using HarnessPortable.Windows.Models;
 namespace HarnessPortable.Windows.Services;
 
 public sealed record ConnectionEntry(string Key, string Name, string Address, TunnelProfile? Tunnel, string? Url,
-    bool Favorite, string Group, DateTimeOffset? LastOpened);
+    bool Favorite, string Group, DateTimeOffset? LastOpened, int Order = int.MaxValue);
 
 public enum ConnectionLibraryFilter { All, Favorites, Recent }
 
@@ -15,7 +15,9 @@ public sealed class ConnectionLibrary(ProfileStore profiles, AppSettingsStore se
     public IReadOnlyList<ConnectionEntry> Load(string? query = null, ConnectionLibraryFilter filter = ConnectionLibraryFilter.All)
     {
         var config = profiles.Load();
-        var preferences = settings.Load().Connections;
+        var saved = settings.Load();
+        var preferences = saved.Connections;
+        var order = saved.ConnectionOrder.Distinct().Select((key, index) => (key, index)).ToDictionary(x => x.key, x => x.index);
         var entries = config.Tunnels.Select(p => Entry(TunnelKey(p.Id), p.DisplayName, p.Summary, p, null))
             .Concat(config.Directs.Select(url => Entry(DirectKey(url), ProfileStore.HostOf(url), url, null, url)));
         var search = query?.Trim() ?? "";
@@ -23,18 +25,39 @@ public sealed class ConnectionLibrary(ProfileStore profiles, AppSettingsStore se
                 (e.Name + " " + e.Address + " " + e.Group).Contains(search, StringComparison.OrdinalIgnoreCase));
         return filter switch
         {
-            ConnectionLibraryFilter.Favorites => matching.Where(e => e.Favorite).OrderBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
+            ConnectionLibraryFilter.Favorites => matching.Where(e => e.Favorite).OrderBy(e => e.Order).ThenBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
             ConnectionLibraryFilter.Recent => matching.Where(e => e.LastOpened is not null).OrderByDescending(e => e.LastOpened)
                 .ThenBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase).Take(12).ToList(),
-            _ => matching.OrderBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
+            _ => matching.OrderBy(e => e.Order).ThenBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
         };
 
         ConnectionEntry Entry(string key, string name, string address, TunnelProfile? tunnel, string? url)
         {
             var pref = preferences.GetValueOrDefault(key) ?? new ConnectionPreference();
             return new(key, string.IsNullOrWhiteSpace(pref.Name) ? name : pref.Name, address, tunnel, url,
-                pref.Favorite, string.IsNullOrWhiteSpace(pref.Group) ? "未分组" : pref.Group, pref.LastOpened);
+                pref.Favorite, string.IsNullOrWhiteSpace(pref.Group) ? "未分组" : pref.Group, pref.LastOpened, order.GetValueOrDefault(key, int.MaxValue));
         }
+    }
+
+    public bool Move(string key, string targetKey, bool after, bool regroup)
+    {
+        if (key == targetKey) return false;
+        var entries = Load();
+        var target = entries.FirstOrDefault(e => e.Key == targetKey);
+        if (target is null || !entries.Any(e => e.Key == key)) return false;
+        var order = entries.Select(e => e.Key).Distinct().ToList();
+        order.Remove(key);
+        order.Insert(order.IndexOf(targetKey) + (after ? 1 : 0), key);
+        var value = settings.Load();
+        value.ConnectionOrder = order;
+        if (regroup)
+        {
+            if (!value.Connections.TryGetValue(key, out var preference))
+                value.Connections[key] = preference = new ConnectionPreference();
+            preference.Group = value.Connections.GetValueOrDefault(targetKey)?.Group ?? "";
+        }
+        settings.Save(value);
+        return true;
     }
 
     public void Update(string key, Action<ConnectionPreference> update)

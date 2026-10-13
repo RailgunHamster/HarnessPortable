@@ -49,6 +49,8 @@ public partial class SettingsWindow : Window
         settings.CloseBehavior = SelectedTag(CloseBox);
         settings.RestoreLastLayoutOnStartup = RestoreBox.IsChecked == true;
         settings.ReconnectRestoredWorkspace = ReconnectBox.IsChecked == true;
+        if (ReferenceEquals(sender, ReconnectBox))
+            settings.StartupReconnectPreference = settings.ReconnectRestoredWorkspace;
         _services.Settings.Save(settings);
         AppTheme.SetPreference(settings.Appearance);
         SaveStatus.Text = "已保存 · 本设备偏好立即生效";

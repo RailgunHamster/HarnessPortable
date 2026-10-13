@@ -79,6 +79,7 @@ public partial class ConnectionSidebar : System.Windows.Controls.UserControl
         if (_filter == ConnectionLibraryFilter.All && entries.Any(e => e.Group != "未分组"))
         {
             view.SortDescriptions.Add(new("Entry.Group", System.ComponentModel.ListSortDirection.Ascending));
+            view.SortDescriptions.Add(new("Entry.Order", System.ComponentModel.ListSortDirection.Ascending));
             view.SortDescriptions.Add(new("Entry.Name", System.ComponentModel.ListSortDirection.Ascending));
             view.GroupDescriptions.Add(new PropertyGroupDescription("Entry.Group"));
         }

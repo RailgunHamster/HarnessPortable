@@ -61,7 +61,7 @@ public sealed class TunnelManager
             _engines.TryGetValue(profileId, out engine);
         }
 
-        return engine?.State.Current ?? new TunnelInfo(profileId, Status: TunnelStatus.Stopped);
+        return engine?.State.Current ?? new TunnelInfo(profileId, Status: TunnelStatus.Idle);
     }
 
     public IEnumerable<TunnelInfo> GetActiveStates()

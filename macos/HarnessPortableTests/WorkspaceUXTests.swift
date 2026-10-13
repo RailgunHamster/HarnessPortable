@@ -11,8 +11,24 @@ final class WorkspaceUXTests: XCTestCase {
         XCTAssertTrue(settings.connections.isEmpty)
     }
     func testExplicitPauseOnStartupIsPreserved() throws {
-        let settings = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"reconnectRestoredWorkspace":false}"#.utf8))
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"reconnectRestoredWorkspace":false,"startupReconnectPreference":false}"#.utf8))
         XCTAssertFalse(settings.reconnectRestoredWorkspace)
+    }
+    func testVersion271SavedDefaultMigratesToReconnect() throws {
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"reconnectRestoredWorkspace":false,"lastLayoutName":"Work"}"#.utf8))
+        XCTAssertTrue(settings.reconnectRestoredWorkspace)
+        let restored = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        XCTAssertTrue(restored.reconnectRestoredWorkspace)
+        XCTAssertEqual(restored.lastLayoutName, "Work")
+    }
+    func testConnectionOrderMovesAcrossKindsAndKeepsHiddenEntries() throws {
+        let keys = ["tunnel:a", "direct:b", "tunnel:c", "direct:d"]
+        let moved = try XCTUnwrap(ConnectionOrdering.moving("direct:d", to: "direct:b", after: false, keys: keys, saved: ["deleted", "tunnel:a", "tunnel:a"]))
+        XCTAssertEqual(moved, ["tunnel:a", "direct:d", "direct:b", "tunnel:c"])
+        var settings = AppSettings(); settings.connectionOrder = moved
+        let restored = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        XCTAssertEqual(restored.connectionOrder, moved)
+        XCTAssertNil(ConnectionOrdering.moving("external", to: "tunnel:a", after: true, keys: keys, saved: moved))
     }
     func testConnectionPreferencesRoundTrip() throws {
         var settings = AppSettings()

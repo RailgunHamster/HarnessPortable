@@ -39,7 +39,7 @@ struct ConnectionSidebarView: View {
     @State private var deleting: LibraryEntry?
     private var dsh: DshPalette { Dsh.palette(colorScheme) }
 
-    private var entries: [LibraryEntry] {
+    private var allEntries: [LibraryEntry] {
         let tunnelEntries = profiles.tunnels.map { p in
             LibraryEntry(id: "tunnel:\(p.id)", name: p.displayName, address: "\(p.user)@\(p.sshHost):\(p.sshPort)", profile: p, url: nil,
                 preference: settings.value.connections["tunnel:\(p.id)"] ?? ConnectionPreference())
@@ -49,14 +49,19 @@ struct ConnectionSidebarView: View {
             return LibraryEntry(id: "direct:\(url)", name: preference.name.isEmpty ? ProfileStore.host(of: url) : preference.name,
                 address: url, profile: nil, url: url, preference: preference)
         }
-        return (tunnelEntries + directEntries).filter {
+        return (tunnelEntries + directEntries).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+    private var entries: [LibraryEntry] {
+        let all = allEntries
+        let byKey = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+        return ConnectionOrdering.ordered(all.map(\.id), saved: settings.value.connectionOrder).compactMap { byKey[$0] }.filter {
             query.isEmpty || ($0.name + " " + $0.address + " " + $0.preference.group).localizedCaseInsensitiveContains(query)
         }
     }
     private var visibleEntries: [LibraryEntry] {
         switch filter {
-        case .all: return entries.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        case .favorites: return entries.filter { $0.preference.favorite }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .all: return entries
+        case .favorites: return entries.filter { $0.preference.favorite }
         case .recent: return Array(entries.filter { !$0.preference.lastOpened.isEmpty }.sorted { $0.preference.lastOpened > $1.preference.lastOpened }.prefix(12))
         }
     }
@@ -74,15 +79,15 @@ struct ConnectionSidebarView: View {
                 Text("连接").font(.headline).foregroundStyle(dsh.textPrimary)
                 Spacer()
                 Menu {
-                    Button("SSH 隧道") { editingProfile = TunnelProfile() }
-                    Button("直连网页") { editingDirect = nil; directEditor = true }
+                    addMenuItems
                 } label: { Image(systemName: "plus").frame(width: 24, height: 24) }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).help("添加连接")
             }
             TextField("搜索连接或服务器", text: $query).dshInput()
             Picker("连接视图", selection: $filter) { ForEach(LibraryFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                 .pickerStyle(.segmented).labelsHidden()
-            ScrollView {
+            GeometryReader { geometry in
+              ScrollView {
                 LazyVStack(alignment: .leading, spacing: 3) {
                     if filter == .all && visibleEntries.contains(where: { !$0.preference.group.isEmpty }) {
                         ForEach(Array(Set(visibleEntries.map { group(of: $0) })).sorted(), id: \.self) { group in
@@ -102,6 +107,9 @@ struct ConnectionSidebarView: View {
                             .font(.callout).foregroundStyle(dsh.textTertiary).padding(.top, 20)
                     }
                 }
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .topLeading)
+                .contentShape(Rectangle()).contextMenu { addMenuItems }
+              }
             }
             Divider()
             HStack {
@@ -132,7 +140,7 @@ struct ConnectionSidebarView: View {
             Button("删除", role: .destructive) {
                 guard let entry = deleting else { return }
                 if let profile = entry.profile { onDelete(profile) } else if let url = entry.url { onDeleteDirect(url) }
-                settings.update { $0.connections.removeValue(forKey: entry.id) }
+                settings.update { $0.connections.removeValue(forKey: entry.id); $0.connectionOrder.removeAll { $0 == entry.id } }
                 deleting = nil
             }
         } message: { Text("将删除 \(deleting?.name ?? "此连接") 的配置和对应凭据，并关闭它的网页。") }
@@ -140,7 +148,18 @@ struct ConnectionSidebarView: View {
 
     private func row(_ entry: LibraryEntry) -> some View {
         let status = entry.profile.map { tunnels.state(for: $0.id).status }
-        return HStack(spacing: 5) {
+        return ConnectionDragRow(key: entry.id, enabled: filter != .recent, move: { key, after in
+            settings.update { value in
+                guard let order = ConnectionOrdering.moving(key, to: entry.id, after: after, keys: allEntries.map(\.id), saved: value.connectionOrder) else { return }
+                value.connectionOrder = order
+                if filter == .all {
+                    var preference = value.connections[key] ?? ConnectionPreference()
+                    preference.group = value.connections[entry.id]?.group ?? ""
+                    value.connections[key] = preference
+                }
+            }
+        }) {
+          HStack(spacing: 5) {
             Button {
                 update(entry.id) { $0.lastOpened = ISO8601DateFormatter().string(from: Date()) }
                 if let profile = entry.profile { onConnect(profile) } else if let url = entry.url { onOpenDirect(url) }
@@ -161,20 +180,29 @@ struct ConnectionSidebarView: View {
             }
             .buttonStyle(.plain).help(entry.address)
             Menu {
-                Button("编辑连接") {
-                    if let profile = entry.profile { editingProfile = profile }
-                    else { editingDirect = entry.url; directEditor = true }
-                }
-                Button(entry.preference.favorite ? "移出常用" : "加入常用") { update(entry.id) { $0.favorite.toggle() } }
-                Button("设置分组…") { groupingKey = entry.id; groupName = entry.preference.group; showGroupPrompt = true }
-                if let profile = entry.profile, status == .connected || status == .connecting || status == .retrying { Button("断开连接") { tunnels.stop(profile.id) } }
-                Divider()
-                Button("删除连接…", role: .destructive) { deleting = entry }
+                connectionMenuItems(entry, status: status)
             } label: { Image(systemName: "ellipsis").frame(width: 20, height: 24) }
             .menuStyle(.borderlessButton).fixedSize()
         }
         .padding(.horizontal, 8).padding(.vertical, 2)
         .background(activeKey == entry.id ? dsh.accentSoft : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+        .contentShape(Rectangle()).contextMenu { connectionMenuItems(entry, status: status) }
+        }
+    }
+    @ViewBuilder private var addMenuItems: some View {
+        Button("SSH 隧道") { editingProfile = TunnelProfile() }
+        Button("直连网页") { editingDirect = nil; directEditor = true }
+    }
+    @ViewBuilder private func connectionMenuItems(_ entry: LibraryEntry, status: TunnelStatus?) -> some View {
+        Button("编辑连接") {
+            if let profile = entry.profile { editingProfile = profile }
+            else { editingDirect = entry.url; directEditor = true }
+        }
+        Button(entry.preference.favorite ? "移出常用" : "加入常用") { update(entry.id) { $0.favorite.toggle() } }
+        Button("设置分组…") { groupingKey = entry.id; groupName = entry.preference.group; showGroupPrompt = true }
+        if let profile = entry.profile, status == .connected || status == .connecting || status == .retrying { Button("断开连接") { tunnels.stop(profile.id) } }
+        Divider()
+        Button("删除连接…", role: .destructive) { deleting = entry }
     }
     private func update(_ key: String, _ change: (inout ConnectionPreference) -> Void) {
         settings.update { value in var preference = value.connections[key] ?? ConnectionPreference(); change(&preference); value.connections[key] = preference }
@@ -235,6 +263,7 @@ private struct DirectEditorView: View {
             var preference = value.connections["direct:\(previous ?? url)"] ?? ConnectionPreference()
             preference.name = name.trimmingCharacters(in: .whitespacesAndNewlines); preference.group = group.trimmingCharacters(in: .whitespacesAndNewlines); preference.favorite = favorite
             if let previous { value.connections.removeValue(forKey: "direct:\(previous)"); value.directAuthModes.removeValue(forKey: previous) }
+            if let previous { value.connectionOrder = value.connectionOrder.map { $0 == "direct:\(previous)" ? "direct:\(url)" : $0 } }
             value.connections["direct:\(url)"] = preference; value.directAuthModes[url] = authMode
         }
         dismiss()

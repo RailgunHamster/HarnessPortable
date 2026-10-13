@@ -14,9 +14,12 @@ public sealed class AppSettings
     public string LastLayoutName { get; set; } = "";
 
     public bool ReconnectRestoredWorkspace { get; set; } = true;
+    /// <summary>Explicit choice, distinct from the false default saved by 2.7.1.</summary>
+    public bool? StartupReconnectPreference { get; set; }
     public bool ConnectionSidebarCollapsed { get; set; }
     public string Appearance { get; set; } = "system";
     public Dictionary<string, ConnectionPreference> Connections { get; set; } = [];
+    public List<string> ConnectionOrder { get; set; } = [];
 
     /// <summary>Optional SSH config path override; empty means the current user's ~/.ssh/config.</summary>
     public string SshConfigPath { get; set; } = "";

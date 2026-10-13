@@ -59,7 +59,11 @@ public sealed class TunnelStateHub
 
         if (_uiContext is not null)
         {
-            _uiContext.Post(_ => StateChanged?.Invoke(info), null);
+            _uiContext.Post(_ =>
+            {
+                // A queued notification may outlive a stop/reconnect.
+                if (ReferenceEquals(Current, info)) StateChanged?.Invoke(info);
+            }, null);
         }
         else
         {

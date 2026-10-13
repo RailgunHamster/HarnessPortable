@@ -6,9 +6,11 @@ struct AppSettings: Codable {
     var restoreLastLayoutOnStartup: Bool = true
     var lastLayoutName: String = ""
     var reconnectRestoredWorkspace: Bool = true
+    var startupReconnectPreference: Bool?
     var connectionSidebarCollapsed: Bool = false
     var appearance: String = "system"
     var connections: [String: ConnectionPreference] = [:]
+    var connectionOrder: [String] = []
     /// Update feed slot: LAN share the Mac reaches through a mounted SMB
     /// volume (or any readable path/URL). Default mirrors the Windows home
     /// share; the smb:// form is mapped onto its /Volumes mount at use time.
@@ -29,6 +31,7 @@ struct AppSettings: Codable {
     private enum CodingKeys: String, CodingKey {
         case version, closeBehavior, restoreLastLayoutOnStartup, lastLayoutName
         case reconnectRestoredWorkspace, connectionSidebarCollapsed, appearance, connections
+        case startupReconnectPreference, connectionOrder
         case updateHomeUrl, updateGithubUrl, updateSourceSelected
         case updateProxyEnabled, updateProxyAddress
         case directAuthModes
@@ -43,7 +46,9 @@ struct AppSettings: Codable {
         closeBehavior = try container.decodeIfPresent(String.self, forKey: .closeBehavior) ?? "exit"
         restoreLastLayoutOnStartup = try container.decodeIfPresent(Bool.self, forKey: .restoreLastLayoutOnStartup) ?? true
         lastLayoutName = try container.decodeIfPresent(String.self, forKey: .lastLayoutName) ?? ""
-        reconnectRestoredWorkspace = try container.decodeIfPresent(Bool.self, forKey: .reconnectRestoredWorkspace) ?? true
+        startupReconnectPreference = try container.decodeIfPresent(Bool.self, forKey: .startupReconnectPreference)
+        reconnectRestoredWorkspace = startupReconnectPreference ?? true
+        connectionOrder = try container.decodeIfPresent([String].self, forKey: .connectionOrder) ?? []
         connectionSidebarCollapsed = try container.decodeIfPresent(Bool.self, forKey: .connectionSidebarCollapsed) ?? false
         appearance = try container.decodeIfPresent(String.self, forKey: .appearance) ?? "system"
         connections = try container.decodeIfPresent([String: ConnectionPreference].self, forKey: .connections) ?? [:]
@@ -78,6 +83,8 @@ struct AppSettings: Codable {
         try container.encode(restoreLastLayoutOnStartup, forKey: .restoreLastLayoutOnStartup)
         try container.encode(lastLayoutName, forKey: .lastLayoutName)
         try container.encode(reconnectRestoredWorkspace, forKey: .reconnectRestoredWorkspace)
+        try container.encodeIfPresent(startupReconnectPreference, forKey: .startupReconnectPreference)
+        try container.encode(connectionOrder, forKey: .connectionOrder)
         try container.encode(connectionSidebarCollapsed, forKey: .connectionSidebarCollapsed)
         try container.encode(appearance, forKey: .appearance)
         try container.encode(connections, forKey: .connections)

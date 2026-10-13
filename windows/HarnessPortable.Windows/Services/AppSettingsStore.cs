@@ -32,6 +32,9 @@ public sealed class AppSettingsStore
             var settings = JsonFile.Read(_path, () => new AppSettings(), JsonOptions);
             settings.DirectAuthModes ??= [];
             settings.Connections ??= [];
+            settings.ConnectionOrder ??= [];
+            // 2.7.1 persisted false during layout restore without a user choice.
+            settings.ReconnectRestoredWorkspace = settings.StartupReconnectPreference ?? true;
             return settings;
         }
     }

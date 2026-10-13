@@ -38,6 +38,7 @@ public sealed class TunnelManagerTests : IDisposable
         _manager.Stop(first.Id);
 
         WaitUntil(() => _manager.GetState(first.Id).Status == TunnelStatus.Stopped);
+        Assert.Equal(first.Id, _manager.GetState(first.Id).ProfileId);
         Assert.Equal(TunnelStatus.Failed, _manager.GetState(second.Id).Status);
     }
 

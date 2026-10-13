@@ -260,7 +260,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
         else
         {
-            Dispatcher.BeginInvoke(() => ApplyState(info));
+            Dispatcher.BeginInvoke(() => ApplyState(_services.Tunnels.GetState(_profile.Id)));
         }
     }
 
@@ -416,12 +416,14 @@ public partial class SessionView : System.Windows.Controls.UserControl
         OverlayTitle.Text = info.Status switch
         {
             TunnelStatus.Failed => "连接失败",
+            TunnelStatus.Idle => "尚未连接",
             TunnelStatus.Stopped => "隧道已停止",
             TunnelStatus.Retrying => "隧道中断，正在重连…",
             _ => "正在连接…",
         };
-        OverlayMessage.Text = info.Message ?? "";
-        OverlayReconnectButton.Visibility = info.Status is TunnelStatus.Failed or TunnelStatus.Retrying or TunnelStatus.Stopped
+        OverlayMessage.Text = info.Message ?? (info.Status == TunnelStatus.Idle ? "点击连接以启动此工作区的 SSH 隧道。" : "");
+        OverlayReconnectButton.Content = info.Status == TunnelStatus.Idle ? "连接" : "重新连接";
+        OverlayReconnectButton.Visibility = info.Status is TunnelStatus.Idle or TunnelStatus.Failed or TunnelStatus.Retrying or TunnelStatus.Stopped
             ? Visibility.Visible
             : Visibility.Collapsed;
         OverlayReturnButton.Content = "关闭标签";
@@ -432,6 +434,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         {
             TunnelStatus.Failed => $"✕ {_customLabel ?? _profile.DisplayName}",
             TunnelStatus.Stopped => $"○ {_customLabel ?? _profile.DisplayName}",
+            TunnelStatus.Idle => $"○ {_customLabel ?? _profile.DisplayName}",
             TunnelStatus.Retrying => $"↻ {_customLabel ?? _profile.DisplayName}",
             _ => $"… {_customLabel ?? _profile.DisplayName}",
         });

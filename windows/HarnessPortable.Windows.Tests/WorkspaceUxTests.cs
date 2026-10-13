@@ -59,9 +59,19 @@ public sealed class WorkspaceUxTests : IDisposable
         Assert.Empty(settings.Connections);
     }
     [Fact]
+    public void Version271SavedDefaultIsMigratedToReconnect()
+    {
+        File.WriteAllText(Path.Combine(_root, "settings.json"), """{"ReconnectRestoredWorkspace":false,"RestoreLastLayoutOnStartup":true,"LastLayoutName":"工作区"}""");
+        var settings = _settings.Load();
+        Assert.True(settings.ReconnectRestoredWorkspace);
+        _settings.Save(settings);
+        Assert.True(_settings.Load().ReconnectRestoredWorkspace);
+        Assert.Equal("工作区", settings.LastLayoutName);
+    }
+    [Fact]
     public void ExplicitPauseOnStartupIsPreserved()
     {
-        _settings.Save(new() { ReconnectRestoredWorkspace = false });
+        _settings.Save(new() { ReconnectRestoredWorkspace = false, StartupReconnectPreference = false });
         Assert.False(new AppSettingsStore(Path.Combine(_root, "settings.json")).Load().ReconnectRestoredWorkspace);
     }
     [Fact]
@@ -84,5 +94,37 @@ public sealed class WorkspaceUxTests : IDisposable
     [InlineData("", false, false)]
     public void UpdateAddressValidationAcceptsSupportedFeeds(string address, bool github, bool expected)
         => Assert.Equal(expected, UpdateSourceFactory.IsValid(address, github));
+
+    [Fact]
+    public void DragOrderPersistsAcrossTypesAndSearchWithoutLosingHiddenConnections()
+    {
+        _profiles.Save(new() { Tunnels = [new() { Id = "one", Name = "A", SshHost = "a.test", User = "test" }, new() { Id = "two", Name = "B", SshHost = "b.test", User = "test" }], Directs = ["https://c.test/", "https://d.test/"] });
+        var library = new ConnectionLibrary(_profiles, _settings);
+        library.Update("tunnel:one", p => { p.Favorite = true; p.Group = "工作"; });
+        library.Update("direct:https://d.test/", p => { p.Favorite = true; p.Group = "家庭"; });
+        library.MarkOpened("tunnel:one");
+        library.MarkOpened("direct:https://d.test/");
+        Assert.True(library.Move("direct:https://d.test/", "tunnel:one", false, true));
+        var restored = new ConnectionLibrary(_profiles, _settings);
+        Assert.Equal(["direct:https://d.test/", "tunnel:one", "tunnel:two", "direct:https://c.test/"], restored.Load().Select(e => e.Key));
+        Assert.Equal("工作", restored.Load()[0].Group);
+        Assert.Equal("direct:https://d.test/", restored.Load(filter: ConnectionLibraryFilter.Favorites)[0].Key);
+        Assert.Single(restored.Load("d.test"));
+        Assert.True(restored.Move("tunnel:one", "direct:https://d.test/", false, false));
+        Assert.Equal("direct:https://d.test/", restored.Load(filter: ConnectionLibraryFilter.Recent)[0].Key);
+        Assert.Equal(4, restored.Load().Count);
+        Assert.False(restored.Move("external", "tunnel:one", false, true));
+        Assert.False(restored.Move("tunnel:one", "tunnel:one", false, true));
+    }
+
+    [Fact]
+    public void MovingInFavoritesDoesNotChangeGroup()
+    {
+        var library = new ConnectionLibrary(_profiles, _settings);
+        library.Update("tunnel:one", p => p.Group = "工作");
+        library.Update("direct:https://console.test/", p => p.Group = "家庭");
+        Assert.True(library.Move("tunnel:one", "direct:https://console.test/", true, false));
+        Assert.Equal("工作", library.Load().Single(e => e.Key == "tunnel:one").Group);
+    }
     public void Dispose() { try { Directory.Delete(_root, true); } catch { } }
 }
