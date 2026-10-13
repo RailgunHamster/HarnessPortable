@@ -55,6 +55,7 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging.resources.excludes += "META-INF/versions/**/OSGI-INF/MANIFEST.MF"
     sourceSets.getByName("main").assets.srcDir(rootProject.file("shared"))
 
     compileOptions {
@@ -81,4 +82,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     // Actively maintained JSch fork: modern OpenSSH kex + signature algorithms
     implementation("com.github.mwiede:jsch:0.2.21")
+    implementation("com.hierynomus:smbj:0.14.0")
 }

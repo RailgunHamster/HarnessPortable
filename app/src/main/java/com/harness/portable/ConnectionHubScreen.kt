@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -70,6 +73,10 @@ fun SettingsScreen(
     var savedProxy by remember { mutableStateOf(UpdateProxyStore.load(ctx)) }
     var draftProxy by remember { mutableStateOf(savedProxy) }
     var checkedProxy by remember { mutableStateOf(savedProxy) }
+    var savedShareCredentials by remember { mutableStateOf(UpdateShareStore.load(ctx)) }
+    var draftShareCredentials by remember { mutableStateOf(savedShareCredentials) }
+    var checkedShareCredentials by remember { mutableStateOf(savedShareCredentials) }
+    var shareStatus by remember { mutableStateOf("") }
     var proxyStatus by remember { mutableStateOf("") }
     var updateStatus by remember { mutableStateOf("尚未检查更新") }
     var updateNotes by remember { mutableStateOf("") }
@@ -85,14 +92,24 @@ fun SettingsScreen(
 
     fun typedSources() = if (draftSources.selected == UpdateSourceKind.GitHub)
         draftSources.copy(github = updateUrl.trim()) else draftSources.copy(home = updateUrl.trim())
+    fun selectSource(kind: UpdateSourceKind) {
+        val kept = typedSources()
+        savedSources = UpdateSourceStore.select(ctx, kind)
+        draftSources = kept.copy(selected = kind)
+        updateUrl = draftSources.url()
+        pendingFeed = null
+        updateStatus = "已切换到${kind.label()} · 检查更新使用已保存地址"
+    }
     fun checkUpdate() {
         val sources = savedSources
         val proxy = savedProxy
+        val credentials = savedShareCredentials
         updateBusy = true; updateProgress = -1; updateStatus = "正在检查更新…"; pendingFeed = null
         scope.launch {
             try {
-                val feed = withContext(Dispatchers.IO) { ApkUpdate.fetchFeed(sources.url(), proxy) }
+                val feed = withContext(Dispatchers.IO) { ApkUpdate.fetchFeed(sources.url(), proxy, credentials) }
                 checkedProxy = proxy
+                checkedShareCredentials = credentials
                 pendingFeed = feed; updateNotes = feed.notes
                 updateStatus = if (feed.versionCode > versionCode) "发现新版本 ${feed.versionName}（当前 $versionName）" else "当前版本 $versionName，已是最新"
             } catch (error: Exception) { updateStatus = "检查失败：${error.message}" }
@@ -106,13 +123,14 @@ fun SettingsScreen(
         val usable = if (sources.selected == UpdateSourceKind.GitHub)
             parsed?.scheme in listOf("http", "https") && parsed?.host in listOf("github.com", "www.github.com") && parsed?.path?.trim('/')?.split('/')?.size?.let { it >= 2 } == true
         else sources.selectedLooksUsable() && runCatching { sources.feedUrl() }.isSuccess
-        if (url.isBlank() || !usable) { updateStatus = "地址未保存：请填写完整 GitHub 仓库地址或手机可访问的 HTTP(S) 地址。"; return }
+        if (url.isBlank() || !usable) { updateStatus = "地址未保存：请填写完整 GitHub 仓库、SMB 共享路径或 HTTP(S) 地址。"; return }
         UpdateSourceStore.save(ctx, sources); savedSources = sources; draftSources = sources; pendingFeed = null
         updateStatus = "已保存 · 下次检查使用此更新源"
     }
     fun installUpdate() {
         val feed = pendingFeed ?: return
         val proxy = checkedProxy
+        val credentials = checkedShareCredentials
         if (feed.versionCode <= versionCode) return
         val activity = ctx as? Activity
         if (activity != null && !ApkUpdate.canInstallPackages(ctx)) {
@@ -122,7 +140,7 @@ fun SettingsScreen(
         scope.launch {
             try {
                 val file = ApkUpdate.updateFile(ctx)
-                withContext(Dispatchers.IO) { ApkUpdate.download(feed.apkUrl, file, proxy) { p -> handler.post { updateProgress = p } } }
+                withContext(Dispatchers.IO) { ApkUpdate.download(feed.apkUrl, file, proxy, credentials) { p -> handler.post { updateProgress = p } } }
                 updateStatus = "正在打开系统安装界面…"; ApkUpdate.install(ctx, file)
             } catch (error: Exception) { updateStatus = "下载失败：${error.message}" }
             finally { updateBusy = false; updateProgress = -1 }
@@ -229,6 +247,31 @@ fun SettingsScreen(
                             Text("Harness Portable · $versionName", color = dsh.textPrimary)
                             Text("正在使用：${savedSources.selected.label()}", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                UpdateSourceKind.entries.forEach { kind ->
+                                    FilterChip(selected = savedSources.selected == kind, enabled = !updateBusy,
+                                        onClick = { selectSource(kind) }, label = { Text(kind.label()) })
+                                }
+                            }
+                            Text(savedSources.url(), style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                            if (savedSources.selected == UpdateSourceKind.File && SmbUpdateAddress.looksLikeSmb(savedSources.home)) {
+                                OutlinedTextField(value = draftShareCredentials.account, onValueChange = { draftShareCredentials = draftShareCredentials.copy(account = it); shareStatus = "修改后请保存共享账号" },
+                                    label = { Text("共享账号（允许匿名时可留空）") }, singleLine = true, enabled = !updateBusy,
+                                    modifier = Modifier.fillMaxWidth(), shape = DshControlShape, colors = dshFieldColors())
+                                OutlinedTextField(value = draftShareCredentials.password, onValueChange = { draftShareCredentials = draftShareCredentials.copy(password = it); shareStatus = "修改后请保存共享账号" },
+                                    label = { Text("共享密码") }, singleLine = true, enabled = !updateBusy, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                    modifier = Modifier.fillMaxWidth(), shape = DshControlShape, colors = dshFieldColors())
+                                Text("使用服务器的共享账号，可填写 域名\\用户名；密码加密保存在本机。", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                                if (shareStatus.isNotEmpty()) Text(shareStatus, style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(onClick = {
+                                        runCatching { UpdateShareStore.save(ctx, draftShareCredentials) }.onSuccess {
+                                            savedShareCredentials = draftShareCredentials; pendingFeed = null; shareStatus = "共享账号已保存"
+                                        }.onFailure { shareStatus = "共享账号保存失败：${it.message}" }
+                                    }, enabled = !updateBusy) { Text("保存共享账号") }
+                                    TextButton(onClick = { draftShareCredentials = savedShareCredentials; shareStatus = "" }, enabled = !updateBusy) { Text("撤销账号修改") }
+                                }
+                            }
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = { checkUpdate() }, enabled = !updateBusy) { Text("检查更新") }
                                 if ((pendingFeed?.versionCode ?: 0) > versionCode) OutlinedButton(onClick = { installUpdate() }, enabled = !updateBusy) { Text("下载并安装") }
                             }
@@ -239,7 +282,7 @@ fun SettingsScreen(
                                 Text("更新使用代理", modifier = Modifier.weight(1f), color = dsh.textPrimary)
                                 Switch(checked = draftProxy.enabled, onCheckedChange = { draftProxy = draftProxy.copy(enabled = it); proxyStatus = "修改后请保存代理设置" }, enabled = !updateBusy)
                             }
-                            Text("仅用于检查更新和下载安装包 · 默认关闭", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                            Text("用于 HTTP(S) 更新请求 · SMB 共享直接连接 · 默认关闭", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
                             OutlinedTextField(value = draftProxy.address, onValueChange = { draftProxy = draftProxy.copy(address = it); proxyStatus = "修改后请保存代理设置" },
                                 label = { Text("HTTP 代理地址") }, singleLine = true, enabled = draftProxy.enabled && !updateBusy,
                                 modifier = Modifier.fillMaxWidth(), shape = DshControlShape, colors = dshFieldColors())
@@ -259,13 +302,9 @@ fun SettingsScreen(
                             }
                             TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "收起高级设置" else "高级：自定义更新源") }
                             if (advanced) {
-                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    UpdateSourceKind.entries.forEach { kind -> FilterChip(selected = draftSources.selected == kind,
-                                        onClick = { val kept = typedSources(); draftSources = kept.copy(selected = kind); updateUrl = kept.url(kind) }, label = { Text(kind.label()) }) }
-                                }
-                                OutlinedTextField(value = updateUrl, onValueChange = { updateUrl = it }, label = { Text(if (draftSources.selected == UpdateSourceKind.GitHub) "GitHub 仓库" else "手机可访问的 HTTP(S) 地址") },
+                                OutlinedTextField(value = updateUrl, onValueChange = { updateUrl = it }, label = { Text(if (draftSources.selected == UpdateSourceKind.GitHub) "GitHub 仓库" else "SMB 共享路径或 HTTP(S) 地址") },
                                     modifier = Modifier.fillMaxWidth(), shape = DshControlShape, colors = dshFieldColors())
-                                Text("地址修改需要保存；切换或检查不会保存草稿。", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                                Text("切换更新源立即生效；地址修改需要保存，检查不会保存地址草稿。", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(onClick = { saveSources() }, enabled = !updateBusy) { Text("保存并使用") }
                                     TextButton(onClick = { draftSources = savedSources; updateUrl = savedSources.url() }) { Text("撤销") }

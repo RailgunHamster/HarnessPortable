@@ -7,14 +7,13 @@ import android.content.Context
  *
  * [File] covers a directory path — a Windows UNC share such as
  * `\\server-home\public\Software\HarnessPortable-Releases`, or a plain local
- * path. Only a PC can read one of those, so on Android it is offered but never
- * the default.
+ * path. Android reads Windows shares over SMB, or a home HTTP(S) mirror.
  */
 enum class UpdateSourceKind { File, GitHub }
 
 /** Short name used on the source picker. */
 fun UpdateSourceKind.label(): String = when (this) {
-    UpdateSourceKind.File -> "家庭目录"
+    UpdateSourceKind.File -> "家庭服务器"
     UpdateSourceKind.GitHub -> "GitHub"
 }
 
@@ -39,7 +38,7 @@ data class UpdateSources(
 
     /** True when the selected source is usable on this platform. */
     fun selectedLooksUsable(): Boolean =
-        selected != UpdateSourceKind.File || runCatching {
+        selected != UpdateSourceKind.File || (SmbUpdateAddress.looksLikeSmb(url()) && runCatching { SmbUpdateAddress.parse(url()) }.isSuccess) || runCatching {
             val uri = java.net.URI(url())
             uri.scheme?.lowercase() in listOf("http", "https") && !uri.host.isNullOrBlank()
         }.getOrDefault(false)
@@ -54,8 +53,7 @@ object UpdateSourceStore {
     const val DEFAULT_HOME = ApkUpdate.DEFAULT_HOME_DIR
 
     /**
-     * Phones cannot read a UNC path, so the default is GitHub; the home
-     * directory is still pre-filled for anyone running an http mirror.
+     * GitHub remains the initial selection; the home share is ready to select.
      */
     val DEFAULT_SELECTED = UpdateSourceKind.GitHub
 
@@ -75,6 +73,8 @@ object UpdateSourceStore {
             .putString(PREF_SELECTED, sources.selected.name)
             .apply()
     }
+
+    fun select(ctx: Context, kind: UpdateSourceKind): UpdateSources = load(ctx).copy(selected = kind).also { save(ctx, it) }
 
     /**
      * One-time import of the single-source setting that predates the two-slot

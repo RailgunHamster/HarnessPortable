@@ -23,7 +23,7 @@ object ApkUpdate {
     const val PREF_SERVER = "update_server_url"
     const val DEFAULT_SERVER = "https://github.com/RailgunHamster/HarnessPortable"
 
-    /** The LAN release directory the PC reads directly and phones cannot. */
+    /** LAN release directory: native filesystem on Windows, SMB on Android. */
     const val DEFAULT_HOME_DIR = "\\\\server-home\\public\\Software\\HarnessPortable-Releases"
 
     fun currentVersionName(ctx: Context): String =
@@ -42,7 +42,7 @@ object ApkUpdate {
 
     /**
      * Whether an address is a filesystem path — the UNC form of the home
-     * directory, or any Windows / POSIX path. A phone cannot read one.
+     * directory, or any Windows / POSIX path. UNC shares are read over SMB.
      */
     fun looksLikeReadablePath(url: String): Boolean {
         val v = url.trim()
@@ -70,6 +70,7 @@ object ApkUpdate {
 
     fun feedUrl(server: String): String {
         val raw = server.trim().ifEmpty { DEFAULT_SERVER }.trimEnd('/')
+        if (SmbUpdateAddress.looksLikeSmb(raw)) return SmbUpdateAddress.parse(raw).feed().url()
         val github = githubRepo(raw)
         if (github != null) {
             return "https://github.com/${github.first}/${github.second}/releases/latest/download/android.json"
@@ -82,6 +83,7 @@ object ApkUpdate {
 
     fun apkUrl(feedUrl: String, apkField: String): String {
         val apk = apkField.trim()
+        if (SmbUpdateAddress.looksLikeSmb(feedUrl)) return SmbUpdateAddress.parse(feedUrl).apk(apk)
         if (apk.startsWith("http://", true) || apk.startsWith("https://", true)) return apk
         // Resolve a bare file name next to the feed. A UNC feed is
         // backslash-separated, so cutting at '/' alone would yield the whole
@@ -92,9 +94,9 @@ object ApkUpdate {
         return base + apk.trimStart('/', '\\')
     }
 
-    fun fetchFeed(server: String, proxy: UpdateProxy = UpdateProxy()): ApkFeed {
+    fun fetchFeed(server: String, proxy: UpdateProxy = UpdateProxy(), shareCredentials: UpdateShareCredentials = UpdateShareCredentials()): ApkFeed {
         val url = feedUrl(server)
-        val body = httpGet(url, proxy)
+        val body = if (SmbUpdateAddress.looksLikeSmb(url)) SmbUpdate.readText(url, shareCredentials) else httpGet(url, proxy)
         val json = JSONObject(body)
         val apk = json.optString("apk").ifBlank {
             throw IllegalStateException("android.json 缺少 apk")
@@ -107,7 +109,8 @@ object ApkUpdate {
         )
     }
 
-    fun download(apkUrl: String, dest: File, proxy: UpdateProxy = UpdateProxy(), onProgress: (Int) -> Unit) {
+    fun download(apkUrl: String, dest: File, proxy: UpdateProxy = UpdateProxy(), shareCredentials: UpdateShareCredentials = UpdateShareCredentials(), onProgress: (Int) -> Unit) {
+        if (SmbUpdateAddress.looksLikeSmb(apkUrl)) { SmbUpdate.download(apkUrl, dest, shareCredentials, onProgress); return }
         dest.parentFile?.mkdirs()
         val tmp = File(dest.parentFile, dest.name + ".part")
         val conn = open(apkUrl, proxy)
