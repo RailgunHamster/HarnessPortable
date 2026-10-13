@@ -5,7 +5,7 @@ import AppKit
 
 final class UIPreviewTests: XCTestCase {
     @MainActor
-    func testManagementRendersInBothAppearances() throws {
+    func testNativeViewsRenderInBothAppearances() throws {
         guard ProcessInfo.processInfo.environment["CI"] == "true",
               let output = ProcessInfo.processInfo.environment["HP_UI_PREVIEW_DIR"] else {
             throw XCTSkip("Visual export runs only on the isolated CI Mac.")
@@ -14,9 +14,12 @@ final class UIPreviewTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         AppPaths.ensure()
         let previous = try? Data(contentsOf: AppPaths.profilesFile)
+        let previousSettings = try? Data(contentsOf: AppPaths.settingsFile)
         defer {
             if let previous { try? previous.write(to: AppPaths.profilesFile) }
             else { try? FileManager.default.removeItem(at: AppPaths.profilesFile) }
+            if let previousSettings { try? previousSettings.write(to: AppPaths.settingsFile) }
+            else { try? FileManager.default.removeItem(at: AppPaths.settingsFile) }
         }
         let config = ProfileConfig(version: 1, tunnels: [
             TunnelProfile(id: "ui-dev", name: "开发工作站", sshHost: "workstation.local", user: "dev"),
@@ -29,6 +32,10 @@ final class UIPreviewTests: XCTestCase {
         let knownHosts = KnownHostsStore()
         let tunnels = TunnelManager(keychain: keychain, knownHosts: knownHosts)
         let updater = UpdateService(settings: settings)
+        settings.update { value in
+            var favorite = ConnectionPreference(); favorite.favorite = true; favorite.group = "家庭"
+            value.connections["tunnel:ui-home"] = favorite
+        }
         for scheme in [ColorScheme.light, .dark] {
             let view = ManagementView(profiles: profiles, tunnels: tunnels, settings: settings,
                 updater: updater, keychain: keychain, knownHosts: knownHosts,
@@ -50,6 +57,21 @@ final class UIPreviewTests: XCTestCase {
             XCTAssertGreaterThan(data.count, 10_000, "The preview must contain rendered UI, not an empty surface.")
             try data.write(to: directory.appendingPathComponent(scheme == .dark ? "macos-dark.png" : "macos-light.png"))
             window.close()
+            let sidebar = ConnectionSidebarView(profiles: profiles, tunnels: tunnels, settings: settings, workspace: WorkspaceStore(),
+                keychain: keychain, onConnect: { _ in }, onReconnect: { _ in }, onOpenDirect: { _ in },
+                onDelete: { _ in }, onDeleteDirect: { _ in }, onSettings: {})
+                .environment(\.colorScheme, scheme).frame(width: 260, height: 650)
+            let sidebarHost = NSHostingView(rootView: sidebar)
+            let sidebarWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 260, height: 650),
+                styleMask: [.borderless], backing: .buffered, defer: false)
+            sidebarWindow.isReleasedWhenClosed = false; sidebarWindow.contentView = sidebarHost; sidebarWindow.orderFrontRegardless()
+            sidebarHost.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+            let sidebarBitmap = try XCTUnwrap(sidebarHost.bitmapImageRepForCachingDisplay(in: sidebarHost.bounds))
+            sidebarHost.cacheDisplay(in: sidebarHost.bounds, to: sidebarBitmap)
+            let sidebarData = try XCTUnwrap(sidebarBitmap.representation(using: .png, properties: [:]))
+            XCTAssertGreaterThan(sidebarData.count, 5_000)
+            try sidebarData.write(to: directory.appendingPathComponent(scheme == .dark ? "macos-sidebar-dark.png" : "macos-sidebar-light.png"))
+            sidebarWindow.close()
         }
     }
 }

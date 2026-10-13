@@ -5,7 +5,7 @@ struct AppSettings: Codable {
     var closeBehavior: String = "exit"
     var restoreLastLayoutOnStartup: Bool = true
     var lastLayoutName: String = ""
-    var reconnectRestoredWorkspace: Bool = false
+    var reconnectRestoredWorkspace: Bool = true
     var connectionSidebarCollapsed: Bool = false
     var appearance: String = "system"
     var connections: [String: ConnectionPreference] = [:]
@@ -40,7 +40,7 @@ struct AppSettings: Codable {
         closeBehavior = try container.decodeIfPresent(String.self, forKey: .closeBehavior) ?? "exit"
         restoreLastLayoutOnStartup = try container.decodeIfPresent(Bool.self, forKey: .restoreLastLayoutOnStartup) ?? true
         lastLayoutName = try container.decodeIfPresent(String.self, forKey: .lastLayoutName) ?? ""
-        reconnectRestoredWorkspace = try container.decodeIfPresent(Bool.self, forKey: .reconnectRestoredWorkspace) ?? false
+        reconnectRestoredWorkspace = try container.decodeIfPresent(Bool.self, forKey: .reconnectRestoredWorkspace) ?? true
         connectionSidebarCollapsed = try container.decodeIfPresent(Bool.self, forKey: .connectionSidebarCollapsed) ?? false
         appearance = try container.decodeIfPresent(String.self, forKey: .appearance) ?? "system"
         connections = try container.decodeIfPresent([String: ConnectionPreference].self, forKey: .connections) ?? [:]

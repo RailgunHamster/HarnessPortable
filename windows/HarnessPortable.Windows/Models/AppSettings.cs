@@ -13,7 +13,7 @@ public sealed class AppSettings
     /// <summary>Name of the last layout that was applied.</summary>
     public string LastLayoutName { get; set; } = "";
 
-    public bool ReconnectRestoredWorkspace { get; set; }
+    public bool ReconnectRestoredWorkspace { get; set; } = true;
     public bool ConnectionSidebarCollapsed { get; set; }
     public string Appearance { get; set; } = "system";
     public Dictionary<string, ConnectionPreference> Connections { get; set; } = [];

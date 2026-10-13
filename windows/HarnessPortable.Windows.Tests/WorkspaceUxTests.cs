@@ -50,13 +50,30 @@ public sealed class WorkspaceUxTests : IDisposable
         Assert.Equal("预设", Assert.Single(Assert.Single(presets.Load()).Root.Tabs).Label);
     }
     [Fact]
-    public void LegacyPreferencesKeepSettingsAndSafeRestoreDefault()
+    public void LegacyPreferencesKeepSettingsAndReconnectOnStartup()
     {
         File.WriteAllText(Path.Combine(_root, "settings.json"), "{\"CloseBehavior\":\"tray\",\"UpdateSourceSelected\":\"home\",\"UpdateHomeUrl\":\"D:\\\\releases\"}");
         var settings = _settings.Load();
-        Assert.Equal("tray", settings.CloseBehavior); Assert.False(settings.ReconnectRestoredWorkspace);
+        Assert.Equal("tray", settings.CloseBehavior); Assert.True(settings.ReconnectRestoredWorkspace);
         Assert.Equal(UpdateSourceSlot.Home, UpdateSelection.From(settings).Slot);
         Assert.Empty(settings.Connections);
+    }
+    [Fact]
+    public void ExplicitPauseOnStartupIsPreserved()
+    {
+        _settings.Save(new() { ReconnectRestoredWorkspace = false });
+        Assert.False(new AppSettingsStore(Path.Combine(_root, "settings.json")).Load().ReconnectRestoredWorkspace);
+    }
+    [Fact]
+    public void FiltersDoNotRepeatConnectionsAndRecentUsesOpeningOrder()
+    {
+        var library = new ConnectionLibrary(_profiles, _settings);
+        library.Update(ConnectionLibrary.TunnelKey("one"), p => { p.Favorite = true; p.LastOpened = DateTimeOffset.UtcNow.AddDays(-1); });
+        library.MarkOpened(ConnectionLibrary.DirectKey("https://console.test/"));
+        Assert.Equal(2, library.Load().Select(e => e.Key).Distinct().Count());
+        Assert.Single(library.Load(filter: ConnectionLibraryFilter.Favorites));
+        Assert.Equal("direct:https://console.test/", library.Load(filter: ConnectionLibraryFilter.Recent)[0].Key);
+        Assert.Single(library.Load("HOME.TEST", ConnectionLibraryFilter.Recent));
     }
     [Theory]
     [InlineData("https://github.com/owner/project", true, true)]

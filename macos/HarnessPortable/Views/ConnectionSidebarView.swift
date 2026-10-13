@@ -10,11 +10,14 @@ private struct LibraryEntry: Identifiable {
     let preference: ConnectionPreference
 }
 
+private enum LibraryFilter: String, CaseIterable { case all = "全部", favorites = "常用", recent = "最近" }
+
 @MainActor
 struct ConnectionSidebarView: View {
     @ObservedObject var profiles: ProfileStore
     @ObservedObject var tunnels: TunnelManager
     @ObservedObject var settings: SettingsStore
+    @ObservedObject var workspace: WorkspaceStore
     let keychain: KeychainStore
     let onConnect: (TunnelProfile) -> Void
     let onReconnect: (TunnelProfile) -> Void
@@ -31,7 +34,8 @@ struct ConnectionSidebarView: View {
     @State private var groupingKey: String?
     @State private var groupName = ""
     @State private var showGroupPrompt = false
-    @State private var expandedGroups: Set<String> = ["未分组"]
+    @State private var collapsedGroups: Set<String> = []
+    @State private var filter = LibraryFilter.all
     @State private var deleting: LibraryEntry?
     private var dsh: DshPalette { Dsh.palette(colorScheme) }
 
@@ -49,41 +53,64 @@ struct ConnectionSidebarView: View {
             query.isEmpty || ($0.name + " " + $0.address + " " + $0.preference.group).localizedCaseInsensitiveContains(query)
         }
     }
+    private var visibleEntries: [LibraryEntry] {
+        switch filter {
+        case .all: return entries.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .favorites: return entries.filter { $0.preference.favorite }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .recent: return Array(entries.filter { !$0.preference.lastOpened.isEmpty }.sorted { $0.preference.lastOpened > $1.preference.lastOpened }.prefix(12))
+        }
+    }
+    private var activeKey: String? {
+        guard let tab = workspace.selectedTab(in: workspace.activePaneID) else { return nil }
+        if let id = tab.profileID { return "tunnel:\(id)" }
+        if let url = tab.url { return "direct:\(url)" }
+        return nil
+    }
+    private func group(of entry: LibraryEntry) -> String { entry.preference.group.isEmpty ? "未分组" : entry.preference.group }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("连接库").font(.headline).foregroundStyle(dsh.textPrimary)
+            HStack {
+                Text("连接").font(.headline).foregroundStyle(dsh.textPrimary)
+                Spacer()
+                Menu {
+                    Button("SSH 隧道") { editingProfile = TunnelProfile() }
+                    Button("直连网页") { editingDirect = nil; directEditor = true }
+                } label: { Image(systemName: "plus").frame(width: 24, height: 24) }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).help("添加连接")
+            }
             TextField("搜索连接或服务器", text: $query).dshInput()
+            Picker("连接视图", selection: $filter) { ForEach(LibraryFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+                .pickerStyle(.segmented).labelsHidden()
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if query.isEmpty {
-                        heading("常用", image: "star")
-                        ForEach(entries.filter { $0.preference.favorite }) { row($0) }
-                        heading("最近", image: "clock")
-                        ForEach(Array(entries.filter { !$0.preference.lastOpened.isEmpty }.sorted { $0.preference.lastOpened > $1.preference.lastOpened }.prefix(6))) { row($0) }
-                        heading("分组", image: "folder")
-                        ForEach(Array(Set(entries.map { $0.preference.group.isEmpty ? "未分组" : $0.preference.group })).sorted(), id: \.self) { group in
-                            DisclosureGroup(group, isExpanded: Binding(get: { expandedGroups.contains(group) }, set: { if $0 { expandedGroups.insert(group) } else { expandedGroups.remove(group) } })) {
-                                ForEach(entries.filter { ($0.preference.group.isEmpty ? "未分组" : $0.preference.group) == group }) { row($0) }
+                LazyVStack(alignment: .leading, spacing: 3) {
+                    if filter == .all && visibleEntries.contains(where: { !$0.preference.group.isEmpty }) {
+                        ForEach(Array(Set(visibleEntries.map { group(of: $0) })).sorted(), id: \.self) { group in
+                            DisclosureGroup(isExpanded: Binding(get: { !collapsedGroups.contains(group) }, set: { if $0 { collapsedGroups.remove(group) } else { collapsedGroups.insert(group) } })) {
+                                ForEach(visibleEntries.filter { self.group(of: $0) == group }) { row($0) }
+                            } label: {
+                                HStack { Text(group); Spacer(); Text("\(visibleEntries.filter { self.group(of: $0) == group }.count)") }
+                                    .font(.caption).foregroundStyle(dsh.textTertiary)
                             }
-                            .foregroundStyle(dsh.textSecondary)
+                            .padding(.top, 12)
                         }
                     } else {
-                        heading("搜索结果", image: "magnifyingglass")
-                        ForEach(entries) { row($0) }
+                        ForEach(visibleEntries) { row($0) }
+                    }
+                    if visibleEntries.isEmpty {
+                        Text(!query.isEmpty ? "没有匹配的连接" : filter == .favorites ? "从连接菜单加入常用" : filter == .recent ? "打开过的连接会出现在这里" : "点击右上角 ＋ 添加连接")
+                            .font(.callout).foregroundStyle(dsh.textTertiary).padding(.top, 20)
                     }
                 }
             }
-            Menu {
-                Button("SSH 隧道") { editingProfile = TunnelProfile() }
-                Button("直连网页") { editingDirect = nil; directEditor = true }
-            } label: { Label("添加连接", systemImage: "plus").frame(maxWidth: .infinity) }
-            .menuStyle(.borderlessButton)
-            .padding(10).background(dsh.accentSoft, in: RoundedRectangle(cornerRadius: 8))
-            Button(action: onSettings) { Label("设置", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity) }
-                .buttonStyle(DshSecondaryButtonStyle())
+            Divider()
+            HStack {
+                Text("\(visibleEntries.count) 个连接").font(.caption).foregroundStyle(dsh.textTertiary)
+                Spacer()
+                Button("设置", action: onSettings).buttonStyle(.plain).foregroundStyle(dsh.textSecondary)
+            }.padding(.vertical, 4)
         }
-        .padding(16).frame(width: 240).background(dsh.bgLayer1)
+        .padding(14).frame(width: 260).background(dsh.bgBase)
         .sheet(item: $editingProfile, onDismiss: {
             if let profile = connectAfterDismiss { connectAfterDismiss = nil; onReconnect(profile) }
         }) { profile in
@@ -111,9 +138,6 @@ struct ConnectionSidebarView: View {
         } message: { Text("将删除 \(deleting?.name ?? "此连接") 的配置和对应凭据，并关闭它的网页。") }
     }
 
-    private func heading(_ text: String, image: String) -> some View {
-        Label(text, systemImage: image).font(.caption).foregroundStyle(dsh.textTertiary).padding(.top, 8)
-    }
     private func row(_ entry: LibraryEntry) -> some View {
         let status = entry.profile.map { tunnels.state(for: $0.id).status }
         return HStack(spacing: 5) {
@@ -122,11 +146,14 @@ struct ConnectionSidebarView: View {
                 if let profile = entry.profile { onConnect(profile) } else if let url = entry.url { onOpenDirect(url) }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: entry.profile == nil ? "globe" : "server.rack").foregroundStyle(dsh.textSecondary)
+                    Image(systemName: entry.profile == nil ? "globe" : "server.rack").frame(width: 18).foregroundStyle(dsh.textSecondary)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(entry.name).lineLimit(1).foregroundStyle(dsh.textPrimary)
-                        Text(entry.profile == nil ? "直连网页" : status == .connected ? "SSH · 已连接" : "SSH · 未连接")
-                            .font(.caption).foregroundStyle(status == .connected ? dsh.success : dsh.textSecondary)
+                        HStack(spacing: 5) {
+                            Circle().fill(status == .connected ? dsh.success : dsh.textTertiary).frame(width: 4, height: 4)
+                            Text(detail(for: entry, status: status))
+                                .lineLimit(1).font(.caption).foregroundStyle(dsh.textTertiary)
+                        }
                     }
                     Spacer(minLength: 0)
                 }
@@ -140,15 +167,29 @@ struct ConnectionSidebarView: View {
                 }
                 Button(entry.preference.favorite ? "移出常用" : "加入常用") { update(entry.id) { $0.favorite.toggle() } }
                 Button("设置分组…") { groupingKey = entry.id; groupName = entry.preference.group; showGroupPrompt = true }
-                if let profile = entry.profile { Button("断开连接") { tunnels.stop(profile.id) } }
+                if let profile = entry.profile, status == .connected || status == .connecting || status == .retrying { Button("断开连接") { tunnels.stop(profile.id) } }
                 Divider()
                 Button("删除连接…", role: .destructive) { deleting = entry }
             } label: { Image(systemName: "ellipsis").frame(width: 20, height: 24) }
             .menuStyle(.borderlessButton).fixedSize()
         }
+        .padding(.horizontal, 8).padding(.vertical, 2)
+        .background(activeKey == entry.id ? dsh.accentSoft : Color.clear, in: RoundedRectangle(cornerRadius: 7))
     }
     private func update(_ key: String, _ change: (inout ConnectionPreference) -> Void) {
         settings.update { value in var preference = value.connections[key] ?? ConnectionPreference(); change(&preference); value.connections[key] = preference }
+    }
+    private func detail(for entry: LibraryEntry, status: TunnelStatus?) -> String {
+        guard let profile = entry.profile else { return "直连网页" }
+        let label: String
+        switch status {
+        case .connected: label = "已连接"
+        case .connecting: label = "连接中…"
+        case .retrying: label = "重连中…"
+        case .failed: label = "连接失败"
+        default: label = "未连接"
+        }
+        return label + " · " + profile.sshHost
     }
 }
 

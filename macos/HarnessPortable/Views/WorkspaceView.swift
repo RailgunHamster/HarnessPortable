@@ -45,7 +45,7 @@ struct WorkspaceView: View {
 
             HStack(spacing: 0) {
             if !isFullScreen && !preferences.value.connectionSidebarCollapsed {
-                ConnectionSidebarView(profiles: services.profiles, tunnels: services.tunnels, settings: services.settings,
+                ConnectionSidebarView(profiles: services.profiles, tunnels: services.tunnels, settings: services.settings, workspace: workspace,
                     keychain: services.keychain, onConnect: connect, onReconnect: reconnect, onOpenDirect: openDirect,
                     onDelete: deleteProfile, onDeleteDirect: deleteDirect, onSettings: { openWindow(id: "settings") })
                 Divider()

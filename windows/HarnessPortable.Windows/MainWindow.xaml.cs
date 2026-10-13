@@ -164,6 +164,10 @@ public partial class MainWindow : Window
     {
         FlickerLog.Log("dock", "active=" + (DockManager.Layout.ActiveContent as LayoutDocument)?.Title);
 
+        var activeView = (DockManager.Layout.ActiveContent as LayoutDocument)?.Content as SessionView;
+        ConnectionLibraryView.SetActiveConnection(activeView?.ProfileId is { } profileId ? ConnectionLibrary.TunnelKey(profileId) :
+            activeView?.DirectUrl is { } url ? ConnectionLibrary.DirectKey(url) : null);
+
         // Don't steal focus from another application (e.g. while a layout is
         // being restored in the background on startup).
         if (!IsActive)

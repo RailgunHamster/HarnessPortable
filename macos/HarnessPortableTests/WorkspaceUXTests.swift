@@ -3,12 +3,16 @@ import XCTest
 
 @MainActor
 final class WorkspaceUXTests: XCTestCase {
-    func testLegacySettingsKeepDefaultsWithoutAutoConnecting() throws {
+    func testLegacySettingsKeepDefaultsAndReconnectOnStartup() throws {
         let settings = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"closeBehavior":"tray","updateSourceSelected":"home"}"#.utf8))
         XCTAssertEqual(settings.closeBehavior, "tray")
         XCTAssertEqual(settings.updateSourceSelected, "home")
-        XCTAssertFalse(settings.reconnectRestoredWorkspace)
+        XCTAssertTrue(settings.reconnectRestoredWorkspace)
         XCTAssertTrue(settings.connections.isEmpty)
+    }
+    func testExplicitPauseOnStartupIsPreserved() throws {
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"reconnectRestoredWorkspace":false}"#.utf8))
+        XCTAssertFalse(settings.reconnectRestoredWorkspace)
     }
     func testConnectionPreferencesRoundTrip() throws {
         var settings = AppSettings()

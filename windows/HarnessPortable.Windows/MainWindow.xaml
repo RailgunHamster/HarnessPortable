@@ -230,7 +230,7 @@
         </StatusBar>
 
         <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="240"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Border x:Name="SidebarBorder" BorderBrush="{DynamicResource DshBorderL1}" BorderThickness="0,0,1,0">
                 <controls:ConnectionSidebar x:Name="ConnectionLibraryView"/>
             </Border>

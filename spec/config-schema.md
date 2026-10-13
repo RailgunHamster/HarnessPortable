@@ -98,7 +98,7 @@ Windows 与 macOS 桌面版允许**同一进程内同时运行多个隧道**：
 - 三端界面可选择系统、浅色或深色，颜色/圆角/字体取自 DSH 前端设计系统
   （`dsh-client-ui-theme` 的 token），不再各自硬编码；技术值（host、端口、URL、版本）用等宽字体。
 - 应用设置（如关闭主窗口行为、启动恢复上次布局、更新源）存 `settings.json`，
-  默认“直接退出”、默认恢复上次工作区，默认不自动重连 SSH；
+  默认“直接退出”、默认恢复上次工作区并自动重连已有凭据的 SSH；明确保存为不重连的设置继续保留；
 - 桌面 `workspace.json` 保存自动快照，`layouts.json` 仍保存手动命名的预设。
   标签可带 `Selected` / `Active`（Windows）或 `selected` / `active`（macOS），旧配置缺失时按首个标签恢复。
   连接库偏好以 `tunnel:<id>` / `direct:<url>` 为键，包含名称、常用、分组与最近打开时间，保存在桌面应用设置中。
