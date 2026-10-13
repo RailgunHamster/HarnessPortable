@@ -162,6 +162,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void DockLayout_ActiveContentChanged(object? sender, EventArgs e)
     {
+        if (_maximizedPane is { } pane && DockManager.Layout.ActiveContent is LayoutDocument active && active.Parent != pane) RestorePaneFocus();
         FlickerLog.Log("dock", "active=" + (DockManager.Layout.ActiveContent as LayoutDocument)?.Title);
 
         var activeView = (DockManager.Layout.ActiveContent as LayoutDocument)?.Content as SessionView;
@@ -361,6 +362,7 @@ public partial class MainWindow : Window
 
     private void BeginTabDrag(WpfPoint point)
     {
+        RestorePaneFocus();
         _tabDragActive = true;
         SyncTabDragOverlayBounds();
         if (_tabDragOverlayWindow is not null && _tabDragOverlayWindow.Owner is null)
@@ -887,9 +889,10 @@ public partial class MainWindow : Window
             _services.Tunnels.Start(id);
         };
         view.AppFullScreenActive = _isFullScreen;
+        view.PaneMaximized = IsPaneMaximized;
         view.CloseRequested += () => CloseDocByView(view);
         view.FullScreenToggleRequested += ToggleFullScreen;
-        view.EscapeRequested += ExitFullScreen;
+        view.EscapeRequested += () => { if (IsPaneMaximized) RestorePaneFocus(); else ExitFullScreen(); };
     }
 
     private string NextTunnelSuffix(string profileId)
@@ -1263,6 +1266,7 @@ public partial class MainWindow : Window
 
     private void SplitDocument(LayoutDocument doc, SessionView view, SplitDirection direction)
     {
+        RestorePaneFocus();
         if (doc.Parent is not LayoutDocumentPane oldPane || oldPane.Parent is not ILayoutContainer parent)
         {
             return;
@@ -1508,6 +1512,7 @@ public partial class MainWindow : Window
 
     private void ApplyLayoutPreset(WorkspaceLayout layout)
     {
+        RestorePaneFocus();
         _restoredSelectedDocuments.Clear(); _restoredActiveDocument = null;
         _restoreConnectionReadiness.Clear();
         var restoredConfig = _services.Profiles.Load();
@@ -1590,22 +1595,12 @@ public partial class MainWindow : Window
         return new GridLength(size, unit);
     }
 
-    private static void CaptureDockSizes(ILayoutElement element, LayoutNode node)
+    private void CaptureDockSizes(ILayoutElement element, LayoutNode node)
     {
-        switch (element)
+        if (element is LayoutPanel or LayoutDocumentPaneGroup or LayoutDocumentPane)
         {
-            case LayoutPanel panel:
-                node.DockWidth = SerializeGridLength(panel.DockWidth);
-                node.DockHeight = SerializeGridLength(panel.DockHeight);
-                break;
-            case LayoutDocumentPaneGroup group:
-                node.DockWidth = SerializeGridLength(group.DockWidth);
-                node.DockHeight = SerializeGridLength(group.DockHeight);
-                break;
-            case LayoutDocumentPane pane:
-                node.DockWidth = SerializeGridLength(pane.DockWidth);
-                node.DockHeight = SerializeGridLength(pane.DockHeight);
-                break;
+            node.DockWidth = SerializeGridLength(_paneFocus.SavedWidth(element));
+            node.DockHeight = SerializeGridLength(_paneFocus.SavedHeight(element));
         }
     }
 
@@ -1851,6 +1846,11 @@ public partial class MainWindow : Window
         if (_tabDragActive && e.Key == Key.Escape)
         {
             EndTabDrag();
+            e.Handled = true;
+        }
+        else if (IsPaneMaximized && e.Key == Key.Escape)
+        {
+            RestorePaneFocus();
             e.Handled = true;
         }
         else if (e.Key == Key.F11)

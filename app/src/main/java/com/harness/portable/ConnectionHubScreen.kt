@@ -7,6 +7,7 @@ import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -260,7 +262,7 @@ fun SettingsScreen(
                                 OutlinedTextField(value = draftShareCredentials.password, onValueChange = { draftShareCredentials = draftShareCredentials.copy(password = it); shareStatus = "修改后请保存共享账号" },
                                     label = { Text("共享密码") }, singleLine = true, enabled = !updateBusy, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                                     modifier = Modifier.fillMaxWidth(), shape = DshControlShape, colors = dshFieldColors())
-                                Text("使用服务器的共享账号，可填写 域名\\用户名；密码加密保存在本机。", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                                Text("账号留空尝试免登录访客访问。若服务器要求登录，请填写共享账号（可用 域名\\用户名）并保存；Everyone 权限仍可能需要登录。密码加密保存在本机。", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
                                 if (shareStatus.isNotEmpty()) Text(shareStatus, style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(onClick = {
@@ -369,16 +371,19 @@ private fun PhoneConnectionRow(entry: PhoneConnection, favorite: Boolean, runnin
     onOpen: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, onFavorite: () -> Unit) {
     val dsh = LocalDsh.current
     var menu by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().dshCard().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (entry.profile == null) Icons.Filled.Language else Icons.Filled.Dns, null, tint = dsh.textSecondary)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = dsh.textPrimary)
-            Text((if (entry.profile == null) "直连" else "SSH") + (if (favorite) " · 常用" else "") + (if (running) " · 已连接" else ""), style = MaterialTheme.typography.bodySmall, color = if (running) dsh.success else dsh.textSecondary)
-            Text(entry.address, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, color = dsh.textTertiary)
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).dshCard(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).fillMaxHeight()
+            .clickable(role = Role.Button, onClickLabel = if (running || entry.profile == null) "打开" else "连接", onClick = onOpen)
+            .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (entry.profile == null) Icons.Filled.Language else Icons.Filled.Dns, null, tint = dsh.textSecondary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = dsh.textPrimary)
+                Text((if (entry.profile == null) "直连" else "SSH") + (if (favorite) " · 常用" else "") + (if (running) " · 已连接" else ""), style = MaterialTheme.typography.bodySmall, color = if (running) dsh.success else dsh.textSecondary)
+                Text(entry.address, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, color = dsh.textTertiary)
+            }
         }
-        TextButton(onClick = onOpen) { Text(if (running || entry.profile == null) "打开" else "连接") }
-        Box {
+        Box(Modifier.padding(end = 4.dp)) {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "${entry.name}菜单", tint = dsh.textSecondary) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("编辑连接") }, onClick = { menu = false; onEdit() })

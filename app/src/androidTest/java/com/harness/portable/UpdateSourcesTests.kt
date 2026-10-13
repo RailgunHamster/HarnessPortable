@@ -10,8 +10,8 @@ import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class UpdateSourcesTests {
-    private fun fixtureServer(): String {
-        val address = InstrumentationRegistry.getArguments().getString("smb_fixture")
+    private fun fixtureServer(argument: String = "smb_fixture"): String {
+        val address = InstrumentationRegistry.getArguments().getString(argument)
         assumeNotNull(address)
         return "smb://$address/public/releases"
     }
@@ -81,6 +81,47 @@ class UpdateSourcesTests {
         val server = fixtureServer()
         val error = runCatching { ApkUpdate.fetchFeed(server, shareCredentials = UpdateShareCredentials("fixture", "wrong")) }.exceptionOrNull()
         assertNotNull(error)
-        assertTrue(error!!.message.orEmpty(), error.message.orEmpty().contains("共享账号和密码"))
+        assertTrue(error!!.message.orEmpty(), error.message.orEmpty().contains("共享账号登录失败"))
+    }
+
+    @Test fun blankCredentialsCanReadGuestOnlyShare() {
+        val server = fixtureServer()
+        val feed = ApkUpdate.fetchFeed(server)
+        assertEquals("9.0.0", feed.versionName)
+        val destination = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "guest-test.apk")
+        try {
+            ApkUpdate.download(feed.apkUrl, destination) {}
+            assertEquals("smb-update-fixture", destination.readText())
+        } finally { destination.delete() }
+    }
+
+    @Test fun negotiationEofRetriesWithCompatibleDialectBeforeSendingCredentials() {
+        val feed = ApkUpdate.fetchFeed(fixtureServer("smb_compat_fixture"), shareCredentials = UpdateShareCredentials("fixture", "fixture-password"))
+        assertEquals("9.0.0", feed.versionName)
+    }
+
+    @Test fun serverRequiringLoginGetsActionableGuestError() {
+        val error = runCatching { ApkUpdate.fetchFeed(fixtureServer("smb_denied_fixture")) }.exceptionOrNull()
+        assertNotNull(error)
+        assertTrue(error!!.message.orEmpty(), error.message.orEmpty().contains("保存共享账号和密码"))
+        assertTrue(error.message.orEmpty().contains("Everyone"))
+    }
+
+    @Test fun connectionClosedBeforeNegotiationReportsPhaseWithoutPasswordError() {
+        val error = runCatching { ApkUpdate.fetchFeed(fixtureServer("smb_closed_fixture")) }.exceptionOrNull()
+        assertNotNull(error)
+        assertTrue(error!!.message.orEmpty(), error.message.orEmpty().contains("协商连接"))
+        assertTrue(error.message.orEmpty().contains("EOF"))
+        assertFalse(error.message.orEmpty().contains("密码"))
+    }
+
+    @Test fun eofMessageIncludesPhaseAndDoesNotClaimPasswordIsWrong() {
+        val cause = java.io.IOException(java.io.EOFException("EOF while reading packet"))
+        val guestMessage = SmbUpdate.failureMessage(SmbUpdate.Stage.AUTHENTICATE, true, cause)
+        assertTrue(guestMessage, guestMessage.contains("访客登录"))
+        assertFalse(guestMessage.contains("密码错误"))
+        val readMessage = SmbUpdate.failureMessage(SmbUpdate.Stage.READ, false, cause)
+        assertTrue(readMessage, readMessage.contains("读取更新文件"))
+        assertTrue(readMessage, readMessage.contains("EOF"))
     }
 }

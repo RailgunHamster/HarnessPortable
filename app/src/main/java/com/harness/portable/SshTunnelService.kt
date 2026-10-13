@@ -705,7 +705,7 @@ class SshTunnelService : Service() {
  * yields CHANGED, which makes JSch abort the connection (MITM protection).
  */
 @SuppressLint("ApplySharedPref") // Identity changes must be durable before accepting the SSH connection.
-private class TofuHostKeyRepository(appContext: android.content.Context) : HostKeyRepository {
+internal class TofuHostKeyRepository(appContext: android.content.Context) : HostKeyRepository {
 
     private val prefs = appContext.getSharedPreferences(
         "harness_portable_known_hosts", android.content.Context.MODE_PRIVATE
@@ -755,7 +755,29 @@ private class TofuHostKeyRepository(appContext: android.content.Context) : HostK
 
     override fun getKnownHostsRepositoryID(): String = "harness-portable-tofu"
 
-    override fun getHostKey(): Array<HostKey> = emptyArray()
+    override fun getHostKey(): Array<HostKey> = getHostKey(null, null)
 
-    override fun getHostKey(host: String?, type: String?): Array<HostKey> = emptyArray()
+    override fun getHostKey(host: String?, type: String?): Array<HostKey> {
+        // JSch uses these keys to prefer the already trusted algorithm during
+        // negotiation. Returning an empty list lets newly available algorithms
+        // select a different server key even though the pinned key is unchanged.
+        val hosts = if (host != null) setOf(host) else prefs.all.keys.mapNotNull { name ->
+            when {
+                name.startsWith("hk2_") -> name.removePrefix("hk2_")
+                name.startsWith("hk_") -> legacyTypes.firstOrNull { name.endsWith("_$it") }
+                    ?.let { name.removePrefix("hk_").removeSuffix("_$it") }
+                else -> null
+            }
+        }.toSet()
+        return hosts.flatMap { name ->
+            val stored = prefs.getString(identityKey(name), null)
+            val identities = if (stored != null) listOf(stored.substringBefore(':') to stored.substringAfter(':', ""))
+                else legacyTypes.mapNotNull { algorithm -> prefs.getString(prefKey(name, algorithm), null)?.let { algorithm to it } }
+            identities.mapNotNull { (algorithm, blob) ->
+                if (type != null && type != algorithm) return@mapNotNull null
+                runCatching { HostKey(name, android.util.Base64.decode(blob, android.util.Base64.DEFAULT)) }
+                    .getOrNull()?.takeIf { it.type == algorithm }
+            }
+        }.toTypedArray()
+    }
 }

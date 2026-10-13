@@ -56,6 +56,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     public int LocalPort => _lastPort;
     public string SessionTitle { get; private set; } = "";
     public bool AppFullScreenActive { get; set; }
+    public bool PaneMaximized { get; set; }
     public string? CustomLabel => _customLabel;
 
     /// <summary>
@@ -845,7 +846,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
                 break;
 
             case System.Windows.Input.Key.Escape:
-                if (AppFullScreenActive)
+                if (AppFullScreenActive || PaneMaximized)
                 {
                     e.Handled = true;
                     EscapeRequested?.Invoke();

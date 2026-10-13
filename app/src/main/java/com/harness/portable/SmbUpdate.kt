@@ -8,7 +8,9 @@ import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2CreateOptions
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.mssmb2.SMBApiException
+import com.hierynomus.mssmb2.SMB2Dialect
 import com.hierynomus.security.bc.BCSecurityProvider
+import com.hierynomus.ntlm.NtlmException
 import com.hierynomus.smbj.SMBClient
 import com.hierynomus.smbj.SmbConfig
 import com.hierynomus.smbj.auth.AuthenticationContext
@@ -16,6 +18,7 @@ import com.hierynomus.smbj.share.DiskShare
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.io.EOFException
 import java.net.URI
 import java.util.concurrent.TimeUnit
 
@@ -80,35 +83,89 @@ internal object UpdateShareStore {
 }
 
 internal object SmbUpdate {
+    internal enum class Stage(val label: String) { NEGOTIATE("协商连接"), AUTHENTICATE("登录共享"), SHARE("打开共享"), FILE("打开更新文件"), READ("读取更新文件") }
+    private class Failure(val stage: Stage, cause: Exception) : IOException(cause)
+
+    private fun Throwable.causes(): Sequence<Throwable> = generateSequence(this) { it.cause }
+    private fun Throwable.status(): Long? = causes().filterIsInstance<SMBApiException>().firstOrNull()?.statusCode
+    private fun Throwable.closedEarly(): Boolean = causes().any { it is EOFException }
+
+    internal fun failureMessage(stage: Stage, guest: Boolean, error: Throwable): String {
+        val reason = when (error.status()) {
+            0xC000006DL, 0xC000006AL, 0xC0000072L, 0xC000015BL -> if (guest)
+                "服务器不允许免登录访客访问，请填写并保存共享账号和密码；Everyone 共享权限不等于免登录"
+                else "共享账号登录失败，请检查账号、密码及账号是否启用"
+            0xC0000022L -> if (stage == Stage.AUTHENTICATE) {
+                if (guest) "服务器要求登录，请填写并保存共享账号和密码；Everyone 共享权限不等于免登录"
+                else "服务器拒绝共享账号登录，请检查账号和登录权限"
+            } else "共享账号没有读取更新目录或文件的权限"
+            0xC0000034L, 0xC000003AL, 0xC00000CCL -> "找不到更新文件，请检查共享名称和目录"
+            else -> if (error.closedEarly()) {
+                if (stage == Stage.AUTHENTICATE && guest) "服务器在访客登录时断开连接，请使用共享账号或确认服务器允许免登录访客访问"
+                else "服务器提前断开 SMB 连接（EOF），请检查共享服务和网络连接"
+            } else if (stage == Stage.AUTHENTICATE && guest && error.causes().any { it is NtlmException })
+                "服务器未接受免登录访客访问，请填写并保存共享账号和密码；Everyone 共享权限不等于免登录"
+            else error.causes().last().message ?: error.javaClass.simpleName
+        }
+        return "家庭服务器${stage.label}失败：$reason"
+    }
+
     private fun <T> withFile(raw: String, credentials: UpdateShareCredentials, action: (com.hierynomus.smbj.share.File) -> T): T {
         val address = SmbUpdateAddress.parse(raw)
         val host = HostResolver.resolve(address.host)?.ip ?: address.host
-        val config = SmbConfig.builder().withTimeout(20, TimeUnit.SECONDS).withSoTimeout(20, TimeUnit.SECONDS)
-            .withSecurityProvider(BCSecurityProvider()).build()
-        try {
-            SMBClient(config).use { client ->
-                val connection = client.connect(host, address.port)
-                try {
-                    val session = connection.authenticate(credentials.authentication())
-                    val share = session.connectShare(address.share) as DiskShare
-                    share.openFile(address.path.replace('/', '\\'), setOf(AccessMask.FILE_READ_DATA, AccessMask.FILE_READ_ATTRIBUTES),
-                        setOf(FileAttributes.FILE_ATTRIBUTE_NORMAL), setOf(SMB2ShareAccess.FILE_SHARE_READ, SMB2ShareAccess.FILE_SHARE_WRITE, SMB2ShareAccess.FILE_SHARE_DELETE),
-                        SMB2CreateDisposition.FILE_OPEN, setOf(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE)).use { file -> return action(file) }
-                } finally {
-                    // This operation owns a dedicated connection. Closing its
-                    // transport releases the share/session without waiting for
-                    // a network Logoff reply after the requested read completed.
-                    connection.close(true)
+        val guest = credentials.account.isBlank()
+        val authentications = if (guest) listOf(AuthenticationContext.guest(), AuthenticationContext.anonymous())
+            else listOf(credentials.authentication())
+        fun attempt(authentication: AuthenticationContext, compatible: Boolean): T {
+            var stage = Stage.NEGOTIATE
+            val builder = SmbConfig.builder().withTimeout(20, TimeUnit.SECONDS).withSoTimeout(20, TimeUnit.SECONDS)
+                .withSecurityProvider(BCSecurityProvider())
+            if (compatible) builder.withDialects(SMB2Dialect.SMB_3_0_2, SMB2Dialect.SMB_3_0, SMB2Dialect.SMB_2_1, SMB2Dialect.SMB_2_0_2)
+            val config = builder.build()
+            try {
+                SMBClient(config).use { client ->
+                    val connection = client.connect(host, address.port)
+                    try {
+                        stage = Stage.AUTHENTICATE
+                        val session = connection.authenticate(authentication)
+                        stage = Stage.SHARE
+                        val share = session.connectShare(address.share) as DiskShare
+                        stage = Stage.FILE
+                        val file = share.openFile(address.path.replace('/', '\\'), setOf(AccessMask.FILE_READ_DATA, AccessMask.FILE_READ_ATTRIBUTES),
+                            setOf(FileAttributes.FILE_ATTRIBUTE_NORMAL), setOf(SMB2ShareAccess.FILE_SHARE_READ, SMB2ShareAccess.FILE_SHARE_WRITE, SMB2ShareAccess.FILE_SHARE_DELETE),
+                            SMB2CreateDisposition.FILE_OPEN, setOf(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE))
+                        stage = Stage.READ
+                        return action(file)
+                    } finally {
+                        // This dedicated transport owns the file, share and session.
+                        // Closing it releases all handles without extra remote Close
+                        // or Logoff requests, which must not mask the original error.
+                        runCatching { connection.close(true) }
+                    }
+                }
+            } catch (error: Exception) { throw Failure(stage, error) }
+        }
+        var compatible = false
+        for ((index, authentication) in authentications.withIndex()) {
+            while (true) {
+                try { return attempt(authentication, compatible) }
+                catch (error: Failure) {
+                    // Retry an incompatible negotiate exactly once, before any
+                    // credentials were sent. Preserve signing; never enable SMB1.
+                    if (!compatible && error.stage == Stage.NEGOTIATE && error.closedEarly()) {
+                        compatible = true
+                        continue
+                    }
+                    // Null sessions and Guest logins are different on Windows
+                    // and NAS servers. Blank credentials may try each once.
+                    val guestRejected = error.closedEarly() || error.causes().any { it is NtlmException } ||
+                        error.status() in setOf(0xC000006DL, 0xC000006AL, 0xC0000022L, 0xC0000072L, 0xC000015BL)
+                    if (index < authentications.lastIndex && error.stage == Stage.AUTHENTICATE && guestRejected) break
+                    throw IOException(failureMessage(error.stage, guest, error), error)
                 }
             }
-        } catch (error: SMBApiException) {
-            val message = when (error.statusCode) {
-                0xC000006DL, 0xC000006AL, 0xC0000022L -> "家庭共享拒绝访问，请检查并保存共享账号和密码"
-                0xC0000034L, 0xC000003AL, 0xC00000CCL -> "家庭共享中找不到更新文件，请检查共享名称和目录"
-                else -> "读取家庭共享失败：${error.message}"
-            }
-            throw IOException(message, error)
         }
+        error("共享登录未完成")
     }
 
     fun readText(raw: String, credentials: UpdateShareCredentials): String = withFile(raw, credentials) { file ->
