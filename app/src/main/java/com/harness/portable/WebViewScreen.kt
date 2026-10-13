@@ -39,6 +39,8 @@ import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ScreenRotation
@@ -128,7 +130,13 @@ internal fun WebViewScreen(
         onDispose { fileChooser.complete(null) }
     }
     var controlsExpanded by remember { mutableStateOf(false) }
+    var toolbarCollapsed by remember { mutableStateOf(prefs.getBoolean("browser_toolbar_collapsed", false)) }
     var dragging by remember { mutableStateOf(false) }
+
+    fun setToolbarCollapsed(collapsed: Boolean) {
+        toolbarCollapsed = collapsed
+        prefs.edit().putBoolean("browser_toolbar_collapsed", collapsed).apply()
+    }
 
     val ballSizeDp = 48.dp
     val marginDp = 10.dp
@@ -268,12 +276,37 @@ internal fun WebViewScreen(
                 if ((ctx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.d("HarnessUi", "WebView released")
             }
         )
-        if (!fullScreen) Row(Modifier.fillMaxWidth().background(dsh.layer1).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { webRef?.reload() }) { Text("刷新") }
-            TextButton(onClick = onToggleOrientation) { Text("旋转") }
+        if (!fullScreen && !toolbarCollapsed) Row(Modifier.fillMaxWidth().background(dsh.layer1).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { webRef?.reload() }) {
+                Icon(Icons.Filled.Refresh, "刷新网页", tint = dsh.textPrimary)
+            }
+            IconButton(onClick = onToggleOrientation) {
+                Icon(Icons.Filled.ScreenRotation, "旋转屏幕", tint = dsh.textPrimary)
+            }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = onDisconnect) { Text("断开连接", color = dsh.danger) }
+            IconButton(onClick = onDisconnect) {
+                Icon(Icons.Filled.LinkOff, "断开连接", tint = dsh.danger)
+            }
+            IconButton(onClick = { setToolbarCollapsed(true) }) {
+                Icon(Icons.Filled.KeyboardArrowDown, "收起工具栏", tint = dsh.textSecondary)
+            }
         }
+        }
+
+        if (visible && !fullScreen && toolbarCollapsed) {
+            Surface(
+                color = dsh.layer1,
+                shape = DshControlShape,
+                border = BorderStroke(1.dp, dsh.borderOver(dsh.borderL2, dsh.layer1)),
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .imePadding()
+                    .padding(end = 12.dp, bottom = 8.dp)
+            ) {
+                IconButton(onClick = { setToolbarCollapsed(false) }) {
+                    Icon(Icons.Filled.KeyboardArrowUp, "展开工具栏", tint = dsh.textSecondary)
+                }
+            }
         }
 
         // Tunnel status overlay: covers the dead WebView while disconnected.

@@ -1,6 +1,7 @@
 using Velopack;
 using Velopack.Exceptions;
 using Velopack.Logging;
+using Velopack.Sources;
 
 namespace HarnessPortable.Windows.Services;
 
@@ -11,6 +12,11 @@ public sealed class UpdateService
     private string _checkedUrl = "";
     private UpdateProxyOptions _checkedProxy = new();
     private readonly AppSettingsStore _settings;
+    private readonly Func<string, UpdateProxyOptions, IUpdateSource> _createSource;
+    private readonly TimeSpan _checkTimeout;
+    private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(20);
+
+    private sealed record CheckResult(UpdateInfo? Pending, string? Available, bool CanApply, string Status, string Notes);
 
     public event Action? StateChanged;
 
@@ -30,11 +36,17 @@ public sealed class UpdateService
         : "安装版";
 
     public UpdateService(AppSettingsStore? settings = null)
+        : this(settings, UpdateSourceFactory.Create, CheckTimeout) { }
+
+    internal UpdateService(AppSettingsStore? settings, Func<string, UpdateProxyOptions, IUpdateSource> createSource, TimeSpan checkTimeout)
     {
         _settings = settings ?? new AppSettingsStore();
+        _createSource = createSource;
+        _checkTimeout = checkTimeout;
         try
         {
-            var manager = new UpdateManager(UpdateSourceFactory.Create(UpdateSourceFactory.DefaultServerUrl));
+            // Deployment detection needs only the local locator, never a network share.
+            var manager = new UpdateManager(new SimpleFileSource(new System.IO.DirectoryInfo(AppContext.BaseDirectory)));
             IsPackaged = manager.IsInstalled;
             IsPortable = manager.IsPortable;
         }
@@ -47,14 +59,54 @@ public sealed class UpdateService
 
     public async Task CheckAsync(string? updateUrl, CancellationToken token = default)
     {
-        if (Busy) return;
         var url = UpdateSourceFactory.Normalize(updateUrl);
         var proxy = UpdateProxyOptions.From(_settings.Load());
-        lock (_gate) { _pending = null; _checkedProxy = proxy; }
-        SetBusy(true, "正在检查更新…");
+        lock (_gate)
+        {
+            if (Busy) return;
+            _pending = null;
+            _checkedProxy = proxy;
+            CanApply = false;
+            AvailableVersion = null;
+            Busy = true;
+            Progress = 0;
+            Status = "正在检查更新…";
+        }
+        StateChanged?.Invoke();
         try
         {
-            var manager = new UpdateManager(UpdateSourceFactory.Create(url, proxy));
+            // SimpleFileSource can block synchronously on SMB even though its API
+            // returns a Task. Keep source creation and all feed reads off the UI.
+            // The worker returns data only, so a late result after timeout/cancel
+            // cannot replace the result of a subsequent check.
+            var result = await Task.Run(() => ReadCheckResultAsync(url, proxy), token)
+                .WaitAsync(_checkTimeout, token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            FinishCheck(result.Pending, url, result.Available, result.CanApply, result.Status, result.Notes);
+        }
+        catch (TimeoutException)
+        {
+            FlickerLog.Log("update", "check timed out");
+            FinishCheck(null, url, null, false, "检查更新超时，请检查更新源后重试", Changelog.ReadEmbedded());
+        }
+        catch (OperationCanceledException)
+        {
+            FlickerLog.Log("update", "cancelled");
+            SetBusy(false, "已取消检查");
+        }
+        catch (Exception ex)
+        {
+            FlickerLog.Log("update", "FAILED " + ex.GetType().Name + ": " + ex.Message);
+            FinishCheck(null, url, null, false, "检查更新失败：" + ex.Message, Changelog.ReadEmbedded());
+        }
+    }
+
+    private async Task<CheckResult> ReadCheckResultAsync(string url, UpdateProxyOptions proxy)
+    {
+        try
+        {
+            var source = _createSource(url, proxy);
+            var manager = new UpdateManager(source);
             FlickerLog.Log(
                 "update",
                 "check source=" + MaskUrl(url) +
@@ -65,24 +117,16 @@ public sealed class UpdateService
             if (!manager.IsInstalled)
             {
                 FlickerLog.Log("update", "not a Velopack deployment (" + DeploymentLabel + "); reading the feed directly");
-                await ReportFeedWithoutDeploymentAsync(url, proxy).ConfigureAwait(false);
-                return;
+                return await ReadFeedWithoutDeploymentAsync(source).ConfigureAwait(false);
             }
 
             var edition = manager.IsPortable ? "便携版" : "安装版";
             var info = await manager.CheckForUpdatesAsync().ConfigureAwait(false);
-            token.ThrowIfCancellationRequested();
             if (info is null)
             {
                 FlickerLog.Log("update", "no update (current=" + manager.CurrentVersion + ")");
-                FinishCheck(
-                    pending: null,
-                    url,
-                    available: null,
-                    canApply: false,
-                    status: $"当前版本 {manager.CurrentVersion}（{edition}），已是最新",
-                    notes: Changelog.ReadEmbedded());
-                return;
+                return new(null, null, false,
+                    $"当前版本 {manager.CurrentVersion}（{edition}），已是最新", Changelog.ReadEmbedded());
             }
 
             var notes = info.TargetFullRelease.NotesMarkdown;
@@ -92,40 +136,14 @@ public sealed class UpdateService
             }
 
             FlickerLog.Log("update", "available " + info.TargetFullRelease.Version + " (current=" + manager.CurrentVersion + ")");
-            FinishCheck(
-                pending: info,
-                url,
-                available: info.TargetFullRelease.Version.ToString(),
-                canApply: true,
-                status: $"发现新版本 {info.TargetFullRelease.Version}（当前 {manager.CurrentVersion}，{edition}）",
-                notes: notes);
+            return new(info, info.TargetFullRelease.Version.ToString(), true,
+                $"发现新版本 {info.TargetFullRelease.Version}（当前 {manager.CurrentVersion}，{edition}）", notes);
         }
         catch (NotInstalledException)
         {
             FlickerLog.Log("update", "NotInstalledException");
-            FinishCheck(
-                pending: null,
-                url,
-                available: null,
-                canApply: false,
-                status: $"当前版本 {CurrentVersion}（{DeploymentLabel}，无法在线更新。请使用 Setup 安装包或便携 zip）",
-                notes: Changelog.ReadEmbedded());
-        }
-        catch (OperationCanceledException)
-        {
-            FlickerLog.Log("update", "cancelled");
-            SetBusy(false, "已取消检查");
-        }
-        catch (Exception ex)
-        {
-            FlickerLog.Log("update", "FAILED " + ex.GetType().Name + ": " + ex.Message);
-            FinishCheck(
-                pending: null,
-                url,
-                available: null,
-                canApply: false,
-                status: "检查更新失败：" + ex.Message,
-                notes: Changelog.ReadEmbedded());
+            return new(null, null, false,
+                $"当前版本 {CurrentVersion}（{DeploymentLabel}，无法在线更新。请使用 Setup 安装包或便携 zip）", Changelog.ReadEmbedded());
         }
     }
 
@@ -152,11 +170,11 @@ public sealed class UpdateService
     /// release feed directly. The user then learns the version and its notes
     /// instead of only being told that updates are unavailable here.
     /// </summary>
-    private async Task ReportFeedWithoutDeploymentAsync(string url, UpdateProxyOptions proxy)
+    private async Task<CheckResult> ReadFeedWithoutDeploymentAsync(IUpdateSource source)
     {
         try
         {
-            var feed = await UpdateSourceFactory.Create(url, proxy)
+            var feed = await source
                 .GetReleaseFeed(
                     NullVelopackLogger.Instance,
                     appId: "HarnessPortable",
@@ -173,14 +191,8 @@ public sealed class UpdateService
             if (newest is null || !IsNewerThanCurrent(newest.Version.Version))
             {
                 FlickerLog.Log("update", "feed has no release newer than " + CurrentVersion);
-                FinishCheck(
-                    pending: null,
-                    url,
-                    available: null,
-                    canApply: false,
-                    status: $"当前版本 {CurrentVersion}（{DeploymentLabel}），已是最新",
-                    notes: Changelog.ReadEmbedded());
-                return;
+                return new(null, null, false,
+                    $"当前版本 {CurrentVersion}（{DeploymentLabel}），已是最新", Changelog.ReadEmbedded());
             }
 
             var notes = string.IsNullOrWhiteSpace(newest.NotesMarkdown)
@@ -188,24 +200,13 @@ public sealed class UpdateService
                 : newest.NotesMarkdown;
 
             FlickerLog.Log("update", "feed has " + newest.Version + " but this build cannot self-update");
-            FinishCheck(
-                pending: null,
-                url,
-                available: newest.Version.ToString(),
-                canApply: false,
-                status: $"最新版本 {newest.Version}（当前 {CurrentVersion}，{DeploymentLabel} 不能自更新：请用 Setup 安装包或便携 zip）",
-                notes: notes);
+            return new(null, newest.Version.ToString(), false,
+                $"最新版本 {newest.Version}（当前 {CurrentVersion}，{DeploymentLabel} 不能自更新：请用 Setup 安装包或便携 zip）", notes);
         }
         catch (Exception ex)
         {
             FlickerLog.Log("update", "feed read FAILED " + ex.GetType().Name + ": " + ex.Message);
-            FinishCheck(
-                pending: null,
-                url,
-                available: null,
-                canApply: false,
-                status: "检查更新失败：" + ex.Message,
-                notes: Changelog.ReadEmbedded());
+            return new(null, null, false, "检查更新失败：" + ex.Message, Changelog.ReadEmbedded());
         }
     }
 
