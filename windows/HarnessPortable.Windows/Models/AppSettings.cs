@@ -37,6 +37,9 @@ public sealed class AppSettings
     /// <summary>"home" or "github" — which of the two a check uses.</summary>
     public string UpdateSourceSelected { get; set; } = "";
 
+    public bool UpdateProxyEnabled { get; set; }
+    public string UpdateProxyAddress { get; set; } = "localhost:7890";
+
     /// <summary>
     /// Web-login mode per direct URL: "nssm" = auto-login from this machine's
     /// NSSM-hosted dsh log, missing/"none" = open as-is. Kept in settings.json

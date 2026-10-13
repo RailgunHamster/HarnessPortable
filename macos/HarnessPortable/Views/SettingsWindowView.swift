@@ -13,6 +13,8 @@ struct SettingsWindowView: View {
     @State private var draftSource: String
     @State private var draftHome: String
     @State private var draftGithub: String
+    @State private var draftProxy: UpdateProxy
+    @State private var proxyStatus = ""
     @State private var status = "偏好立即保存；地址修改需要明确保存。"
     private var dsh: DshPalette { Dsh.palette(colorScheme) }
     init(settings: SettingsStore, profiles: ProfileStore, updater: UpdateService) {
@@ -20,6 +22,7 @@ struct SettingsWindowView: View {
         _draftSource = State(initialValue: settings.value.updateSourceSelected)
         _draftHome = State(initialValue: settings.value.updateHomeUrl)
         _draftGithub = State(initialValue: settings.value.updateGithubUrl)
+        _draftProxy = State(initialValue: UpdateProxy(settings: settings.value))
     }
     var body: some View {
         VStack(spacing: 0) {
@@ -70,6 +73,15 @@ struct SettingsWindowView: View {
                             if case .available = updater.phase { Button("下载并安装") { updater.download() }.buttonStyle(DshPrimaryButtonStyle()) }
                             if case .readyToInstall = updater.phase { Button("打开安装镜像") { updater.openInstaller() } }
                             if case .downloading(let fraction) = updater.phase { ProgressView(value: fraction) }
+                            Divider()
+                            Toggle("更新使用代理", isOn: Binding(get: { draftProxy.enabled }, set: { draftProxy.enabled = $0; proxyStatus = "修改后请保存代理设置" })).disabled(busy)
+                            Text("仅用于检查更新和下载安装包 · 默认关闭").font(.callout).foregroundStyle(dsh.textSecondary)
+                            TextField("HTTP 代理地址，例如 localhost:7890", text: Binding(get: { draftProxy.address }, set: { draftProxy.address = $0; proxyStatus = "修改后请保存代理设置" })).dshInput().disabled(!draftProxy.enabled || busy)
+                            Text(proxyStatus.isEmpty ? (settings.value.updateProxyEnabled ? "已启用 · \(settings.value.updateProxyAddress)" : "已关闭 · 更新直接连接") : proxyStatus).font(.callout).foregroundStyle(dsh.textSecondary)
+                            HStack {
+                                Button("保存代理设置") { saveProxy() }.disabled(busy)
+                                Button("撤销") { draftProxy = UpdateProxy(settings: settings.value); proxyStatus = "" }.disabled(busy)
+                            }
                             DisclosureGroup("高级：局域网目录或自定义更新源") {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Picker("更新源", selection: $draftSource) { Text("GitHub").tag("github"); Text("局域网目录 / HTTP").tag("home") }
@@ -117,6 +129,17 @@ struct SettingsWindowView: View {
         guard !value.isEmpty, valid else { status = "地址未保存：请输入完整地址或绝对目录路径。"; return }
         settings.update { $0.updateSourceSelected = draftSource; $0.updateHomeUrl = draftHome.trimmingCharacters(in: .whitespacesAndNewlines); $0.updateGithubUrl = draftGithub.trimmingCharacters(in: .whitespacesAndNewlines) }
         updater.resetSourceResult(); status = "已保存 · 下次检查使用此更新源"
+    }
+    private func saveProxy() {
+        guard !busy else { return }
+        let next = UpdateProxy(enabled: draftProxy.enabled, address: draftProxy.address)
+        guard !next.enabled || UpdateProxy.endpoint(next.address) != nil else {
+            proxyStatus = "请输入 HTTP 代理地址，例如 localhost:7890。"; return
+        }
+        settings.update { $0.updateProxyEnabled = next.enabled; $0.updateProxyAddress = next.address }
+        draftProxy = next; updater.resetSourceResult()
+        proxyStatus = "已保存 · \(next.enabled ? "代理已启用" : "代理已关闭")"
+        status = "已保存代理设置 · 下次检查与下载生效"
     }
     private func resetDraft() { draftSource = settings.value.updateSourceSelected; draftHome = settings.value.updateHomeUrl; draftGithub = settings.value.updateGithubUrl; status = "已撤销地址修改" }
     private func useOfficialSource() {

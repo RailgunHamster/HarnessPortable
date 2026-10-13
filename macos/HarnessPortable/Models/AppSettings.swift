@@ -19,6 +19,8 @@ struct AppSettings: Codable {
     /// `home` / `github`; both slots are always kept so switching never loses
     /// the other address.
     var updateSourceSelected: String = "github"
+    var updateProxyEnabled: Bool = false
+    var updateProxyAddress: String = "localhost:7890"
     /// Per-direct-URL auth mode (macOS only; tunnels carry their own field).
     /// `none` (default) or `launchd` = read this Mac's dsh-web Launch Agent
     /// log and append its token to the URL. Keyed by the direct URL string.
@@ -28,6 +30,7 @@ struct AppSettings: Codable {
         case version, closeBehavior, restoreLastLayoutOnStartup, lastLayoutName
         case reconnectRestoredWorkspace, connectionSidebarCollapsed, appearance, connections
         case updateHomeUrl, updateGithubUrl, updateSourceSelected
+        case updateProxyEnabled, updateProxyAddress
         case directAuthModes
         case legacyUpdateServerUrl = "updateServerUrl"
     }
@@ -62,6 +65,8 @@ struct AppSettings: Codable {
         updateSourceSelected = try container.decodeIfPresent(String.self, forKey: .updateSourceSelected)
             ?? ((legacy?.lowercased().hasPrefix("smb://") == true || legacy?.hasPrefix("/") == true) ? "home" : "github")
         if updateSourceSelected != "github" { updateSourceSelected = "home" }
+        updateProxyEnabled = try container.decodeIfPresent(Bool.self, forKey: .updateProxyEnabled) ?? false
+        updateProxyAddress = try container.decodeIfPresent(String.self, forKey: .updateProxyAddress) ?? "localhost:7890"
         directAuthModes = try container.decodeIfPresent([String: String].self, forKey: .directAuthModes) ?? [:]
     }
 
@@ -79,6 +84,8 @@ struct AppSettings: Codable {
         try container.encode(updateHomeUrl, forKey: .updateHomeUrl)
         try container.encode(updateGithubUrl, forKey: .updateGithubUrl)
         try container.encode(updateSourceSelected, forKey: .updateSourceSelected)
+        try container.encode(updateProxyEnabled, forKey: .updateProxyEnabled)
+        try container.encode(updateProxyAddress, forKey: .updateProxyAddress)
         if !directAuthModes.isEmpty {
             try container.encode(directAuthModes, forKey: .directAuthModes)
         }

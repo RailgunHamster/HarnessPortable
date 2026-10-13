@@ -38,13 +38,14 @@ public static class UpdateSourceFactory
         return UpdateSourceKind.File;
     }
 
-    public static IUpdateSource Create(string? url)
+    public static IUpdateSource Create(string? url, UpdateProxyOptions? proxy = null)
     {
         var value = Normalize(url);
+        var downloader = new UpdateFileDownloader(proxy ?? new());
         return Classify(value) switch
         {
-            UpdateSourceKind.GitHub => new GithubSource(GitHubRepoUrlFrom(value), accessToken: null, prerelease: false),
-            UpdateSourceKind.Web => new SimpleWebSource(value),
+            UpdateSourceKind.GitHub => new GithubSource(GitHubRepoUrlFrom(value), accessToken: null, prerelease: false, downloader: downloader),
+            UpdateSourceKind.Web => new SimpleWebSource(value, downloader),
             _ => new SimpleFileSource(new DirectoryInfo(value)),
         };
     }

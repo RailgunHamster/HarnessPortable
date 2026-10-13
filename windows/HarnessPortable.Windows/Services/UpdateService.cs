@@ -9,6 +9,8 @@ public sealed class UpdateService
     private readonly object _gate = new();
     private UpdateInfo? _pending;
     private string _checkedUrl = "";
+    private UpdateProxyOptions _checkedProxy = new();
+    private readonly AppSettingsStore _settings;
 
     public event Action? StateChanged;
 
@@ -27,8 +29,9 @@ public sealed class UpdateService
         : IsPortable ? "便携版"
         : "安装版";
 
-    public UpdateService()
+    public UpdateService(AppSettingsStore? settings = null)
     {
+        _settings = settings ?? new AppSettingsStore();
         try
         {
             var manager = new UpdateManager(UpdateSourceFactory.Create(UpdateSourceFactory.DefaultServerUrl));
@@ -44,11 +47,14 @@ public sealed class UpdateService
 
     public async Task CheckAsync(string? updateUrl, CancellationToken token = default)
     {
+        if (Busy) return;
         var url = UpdateSourceFactory.Normalize(updateUrl);
+        var proxy = UpdateProxyOptions.From(_settings.Load());
+        lock (_gate) { _pending = null; _checkedProxy = proxy; }
         SetBusy(true, "正在检查更新…");
         try
         {
-            var manager = new UpdateManager(UpdateSourceFactory.Create(url));
+            var manager = new UpdateManager(UpdateSourceFactory.Create(url, proxy));
             FlickerLog.Log(
                 "update",
                 "check source=" + MaskUrl(url) +
@@ -59,7 +65,7 @@ public sealed class UpdateService
             if (!manager.IsInstalled)
             {
                 FlickerLog.Log("update", "not a Velopack deployment (" + DeploymentLabel + "); reading the feed directly");
-                await ReportFeedWithoutDeploymentAsync(url).ConfigureAwait(false);
+                await ReportFeedWithoutDeploymentAsync(url, proxy).ConfigureAwait(false);
                 return;
             }
 
@@ -126,7 +132,7 @@ public sealed class UpdateService
     public void ResetSourceResult()
     {
         if (Busy) return;
-        FinishCheck(null, "", null, false, "更新源已更改，请重新检查", Changelog.ReadEmbedded());
+        FinishCheck(null, "", null, false, "更新设置已更改，请重新检查", Changelog.ReadEmbedded());
     }
 
     /// <summary>Never write query strings (tokens) into the debug log.</summary>
@@ -146,11 +152,11 @@ public sealed class UpdateService
     /// release feed directly. The user then learns the version and its notes
     /// instead of only being told that updates are unavailable here.
     /// </summary>
-    private async Task ReportFeedWithoutDeploymentAsync(string url)
+    private async Task ReportFeedWithoutDeploymentAsync(string url, UpdateProxyOptions proxy)
     {
         try
         {
-            var feed = await UpdateSourceFactory.Create(url)
+            var feed = await UpdateSourceFactory.Create(url, proxy)
                 .GetReleaseFeed(
                     NullVelopackLogger.Instance,
                     appId: "HarnessPortable",
@@ -198,7 +204,7 @@ public sealed class UpdateService
                 url,
                 available: null,
                 canApply: false,
-                status: $"当前版本 {CurrentVersion}（{DeploymentLabel}，无法在线更新。请使用 Setup 安装包或便携 zip）",
+                status: "检查更新失败：" + ex.Message,
                 notes: Changelog.ReadEmbedded());
         }
     }
@@ -208,11 +214,14 @@ public sealed class UpdateService
 
     public async Task ApplyAsync(string? updateUrl, CancellationToken token = default)
     {
+        if (Busy) return;
         UpdateInfo? pending;
         string url;
+        UpdateProxyOptions proxy;
         lock (_gate)
         {
             pending = _pending;
+            proxy = _checkedProxy;
             url = string.IsNullOrWhiteSpace(_checkedUrl)
                 ? UpdateSourceFactory.Normalize(updateUrl)
                 : _checkedUrl;
@@ -224,6 +233,7 @@ public sealed class UpdateService
             lock (_gate)
             {
                 pending = _pending;
+                proxy = _checkedProxy;
             }
 
             if (pending is null)
@@ -235,7 +245,7 @@ public sealed class UpdateService
         SetBusy(true, "正在下载更新…");
         try
         {
-            var manager = new UpdateManager(UpdateSourceFactory.Create(url));
+            var manager = new UpdateManager(UpdateSourceFactory.Create(url, proxy));
             FlickerLog.Log("update", "apply " + pending.TargetFullRelease.Version + " from " + MaskUrl(url));
             await manager.DownloadUpdatesAsync(pending, p =>
             {

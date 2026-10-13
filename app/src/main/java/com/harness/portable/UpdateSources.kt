@@ -39,7 +39,10 @@ data class UpdateSources(
 
     /** True when the selected source is usable on this platform. */
     fun selectedLooksUsable(): Boolean =
-        selected != UpdateSourceKind.File || ApkUpdate.looksLikeReadablePath(url())
+        selected != UpdateSourceKind.File || runCatching {
+            val uri = java.net.URI(url())
+            uri.scheme?.lowercase() in listOf("http", "https") && !uri.host.isNullOrBlank()
+        }.getOrDefault(false)
 }
 
 object UpdateSourceStore {

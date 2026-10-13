@@ -92,9 +92,9 @@ object ApkUpdate {
         return base + apk.trimStart('/', '\\')
     }
 
-    fun fetchFeed(server: String): ApkFeed {
+    fun fetchFeed(server: String, proxy: UpdateProxy = UpdateProxy()): ApkFeed {
         val url = feedUrl(server)
-        val body = httpGet(url)
+        val body = httpGet(url, proxy)
         val json = JSONObject(body)
         val apk = json.optString("apk").ifBlank {
             throw IllegalStateException("android.json 缺少 apk")
@@ -107,10 +107,10 @@ object ApkUpdate {
         )
     }
 
-    fun download(apkUrl: String, dest: File, onProgress: (Int) -> Unit) {
+    fun download(apkUrl: String, dest: File, proxy: UpdateProxy = UpdateProxy(), onProgress: (Int) -> Unit) {
         dest.parentFile?.mkdirs()
         val tmp = File(dest.parentFile, dest.name + ".part")
-        val conn = open(apkUrl)
+        val conn = open(apkUrl, proxy)
         try {
             val length = conn.contentLengthLong.takeIf { it > 0 } ?: conn.contentLength.toLong()
             conn.inputStream.use { input ->
@@ -171,8 +171,8 @@ object ApkUpdate {
         return parts[0] to parts[1]
     }
 
-    private fun httpGet(url: String): String {
-        val conn = open(url)
+    private fun httpGet(url: String, proxy: UpdateProxy): String {
+        val conn = open(url, proxy)
         try {
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
@@ -186,8 +186,8 @@ object ApkUpdate {
         }
     }
 
-    private fun open(url: String): HttpURLConnection {
-        val conn = URL(url).openConnection() as HttpURLConnection
+    private fun open(url: String, proxy: UpdateProxy): HttpURLConnection {
+        val conn = URL(url).openConnection(proxy.connectionProxy()) as HttpURLConnection
         conn.instanceFollowRedirects = true
         conn.connectTimeout = 20_000
         conn.readTimeout = 60_000

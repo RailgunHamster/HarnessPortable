@@ -40,6 +40,8 @@ final class UpdateService: NSObject, ObservableObject {
     private var downloadTask: URLSessionDownloadTask?
     private var downloadSession: URLSession?
     private var expectedDownloadBytes: Int64 = 0
+    private var checkedProxy = UpdateProxy()
+    private var checkedBase: URL?
 
     init(settings: SettingsStore) {
         self.settings = settings
@@ -48,6 +50,7 @@ final class UpdateService: NSObject, ObservableObject {
     func resetSourceResult() {
         switch phase { case .checking, .downloading: return; default: break }
         feed = nil; notes = ""; phase = .idle
+        checkedBase = nil
     }
 
     nonisolated static let currentVersion: String = {
@@ -131,16 +134,21 @@ final class UpdateService: NSObject, ObservableObject {
         }
 
         let feedURL = base.appendingPathComponent("macos.json")
-        Task { await loadFeed(from: feedURL) }
+        feed = nil; checkedBase = base
+        let proxy = UpdateProxy(settings: settings.value)
+        checkedProxy = proxy
+        Task { await loadFeed(from: feedURL, proxy: proxy) }
     }
 
-    private func loadFeed(from url: URL) async {
+    private func loadFeed(from url: URL, proxy: UpdateProxy) async {
         do {
             let data: Data
             if url.isFileURL {
                 data = try Data(contentsOf: url)
             } else {
-                let (payload, response) = try await URLSession.shared.data(from: url)
+                let session = URLSession(configuration: try proxy.configuration())
+                defer { session.finishTasksAndInvalidate() }
+                let (payload, response) = try await session.data(from: url)
                 if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                     throw URLError(.badServerResponse)
                 }
@@ -163,7 +171,7 @@ final class UpdateService: NSObject, ObservableObject {
     func download() {
         guard let feed,
               case .available(let version) = phase,
-              let base = feedBase else { return }
+              let base = checkedBase else { return }
 
         let dmgURL = base.appendingPathComponent(feed.dmg)
         phase = .downloading(fraction: 0)
@@ -183,7 +191,10 @@ final class UpdateService: NSObject, ObservableObject {
             }
             return
         }
-        let session = URLSession(configuration: .default, delegate: DownloadProgressBridge(self), delegateQueue: nil)
+        let configuration: URLSessionConfiguration
+        do { configuration = try checkedProxy.configuration() }
+        catch { bridgeDidFail(error); return }
+        let session = URLSession(configuration: configuration, delegate: DownloadProgressBridge(self), delegateQueue: nil)
         downloadSession = session
         let task = session.downloadTask(with: dmgURL)
         downloadTask = task

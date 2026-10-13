@@ -67,6 +67,10 @@ fun SettingsScreen(
     var savedSources by remember { mutableStateOf(initialSources) }
     var draftSources by remember { mutableStateOf(initialSources) }
     var updateUrl by remember { mutableStateOf(initialSources.url()) }
+    var savedProxy by remember { mutableStateOf(UpdateProxyStore.load(ctx)) }
+    var draftProxy by remember { mutableStateOf(savedProxy) }
+    var checkedProxy by remember { mutableStateOf(savedProxy) }
+    var proxyStatus by remember { mutableStateOf("") }
     var updateStatus by remember { mutableStateOf("尚未检查更新") }
     var updateNotes by remember { mutableStateOf("") }
     var updateBusy by remember { mutableStateOf(false) }
@@ -83,10 +87,12 @@ fun SettingsScreen(
         draftSources.copy(github = updateUrl.trim()) else draftSources.copy(home = updateUrl.trim())
     fun checkUpdate() {
         val sources = savedSources
+        val proxy = savedProxy
         updateBusy = true; updateProgress = -1; updateStatus = "正在检查更新…"; pendingFeed = null
         scope.launch {
             try {
-                val feed = withContext(Dispatchers.IO) { ApkUpdate.fetchFeed(sources.url()) }
+                val feed = withContext(Dispatchers.IO) { ApkUpdate.fetchFeed(sources.url(), proxy) }
+                checkedProxy = proxy
                 pendingFeed = feed; updateNotes = feed.notes
                 updateStatus = if (feed.versionCode > versionCode) "发现新版本 ${feed.versionName}（当前 $versionName）" else "当前版本 $versionName，已是最新"
             } catch (error: Exception) { updateStatus = "检查失败：${error.message}" }
@@ -106,6 +112,7 @@ fun SettingsScreen(
     }
     fun installUpdate() {
         val feed = pendingFeed ?: return
+        val proxy = checkedProxy
         if (feed.versionCode <= versionCode) return
         val activity = ctx as? Activity
         if (activity != null && !ApkUpdate.canInstallPackages(ctx)) {
@@ -115,7 +122,7 @@ fun SettingsScreen(
         scope.launch {
             try {
                 val file = ApkUpdate.updateFile(ctx)
-                withContext(Dispatchers.IO) { ApkUpdate.download(feed.apkUrl, file) { p -> handler.post { updateProgress = p } } }
+                withContext(Dispatchers.IO) { ApkUpdate.download(feed.apkUrl, file, proxy) { p -> handler.post { updateProgress = p } } }
                 updateStatus = "正在打开系统安装界面…"; ApkUpdate.install(ctx, file)
             } catch (error: Exception) { updateStatus = "下载失败：${error.message}" }
             finally { updateBusy = false; updateProgress = -1 }
@@ -227,6 +234,29 @@ fun SettingsScreen(
                             }
                             if (updateBusy) LinearProgressIndicator(progress = { (updateProgress.coerceAtLeast(0) / 100f) }, modifier = Modifier.fillMaxWidth())
                             Text(updateStatus, style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                            HorizontalDivider(color = dsh.borderL1)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("更新使用代理", modifier = Modifier.weight(1f), color = dsh.textPrimary)
+                                Switch(checked = draftProxy.enabled, onCheckedChange = { draftProxy = draftProxy.copy(enabled = it); proxyStatus = "修改后请保存代理设置" }, enabled = !updateBusy)
+                            }
+                            Text("仅用于检查更新和下载安装包 · 默认关闭", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                            OutlinedTextField(value = draftProxy.address, onValueChange = { draftProxy = draftProxy.copy(address = it); proxyStatus = "修改后请保存代理设置" },
+                                label = { Text("HTTP 代理地址") }, singleLine = true, enabled = draftProxy.enabled && !updateBusy,
+                                modifier = Modifier.fillMaxWidth(), shape = DshControlShape, colors = dshFieldColors())
+                            Text(proxyStatus.ifEmpty { if (savedProxy.enabled) "已启用 · ${savedProxy.address}" else "已关闭 · 更新直接连接" }, style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                            Text("localhost 指这台手机；电脑上的代理请填写电脑的局域网 IP。", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = {
+                                    val next = draftProxy.copy(address = draftProxy.address.trim().ifEmpty { UpdateProxy.DEFAULT_ADDRESS })
+                                    val valid = !next.enabled || runCatching { UpdateProxy.parseAddress(next.address) }.isSuccess
+                                    if (!valid) proxyStatus = "请输入 HTTP 代理地址，例如 localhost:7890。"
+                                    else {
+                                        UpdateProxyStore.save(ctx, next); savedProxy = next; draftProxy = next; pendingFeed = null
+                                        proxyStatus = "已保存 · ${if (next.enabled) "代理已启用" else "代理已关闭"}"; updateStatus = "更新设置已更改，请重新检查"
+                                    }
+                                }, enabled = !updateBusy) { Text("保存代理设置") }
+                                TextButton(onClick = { draftProxy = savedProxy; proxyStatus = "" }, enabled = !updateBusy) { Text("撤销") }
+                            }
                             TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "收起高级设置" else "高级：自定义更新源") }
                             if (advanced) {
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -239,7 +269,7 @@ fun SettingsScreen(
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(onClick = { saveSources() }, enabled = !updateBusy) { Text("保存并使用") }
                                     TextButton(onClick = { draftSources = savedSources; updateUrl = savedSources.url() }) { Text("撤销") }
-                                    TextButton(onClick = { savedSources = savedSources.copy(selected = UpdateSourceKind.GitHub, github = ApkUpdate.DEFAULT_SERVER); UpdateSourceStore.save(ctx, savedSources); draftSources = savedSources; updateUrl = savedSources.url(); pendingFeed = null }) { Text("官方源") }
+                                    TextButton(onClick = { savedSources = savedSources.copy(selected = UpdateSourceKind.GitHub, github = ApkUpdate.DEFAULT_SERVER); UpdateSourceStore.save(ctx, savedSources); draftSources = savedSources; updateUrl = savedSources.url(); pendingFeed = null }, enabled = !updateBusy) { Text("官方源") }
                                 }
                             }
                             if (updateNotes.isNotBlank()) {

@@ -78,6 +78,15 @@
                         </WrapPanel>
                         <ProgressBar x:Name="Progress" Maximum="100" Height="5" Margin="0,14,0,0" Visibility="Collapsed"/>
                         <TextBlock x:Name="UpdateStatusLabel" Style="{StaticResource DshMuted}" Margin="0,14,0,0"/>
+                        <Border Style="{StaticResource DshDivider}"/>
+                        <CheckBox x:Name="ProxyEnabledBox" Content="更新使用代理" Style="{StaticResource DshCheckBox}" Checked="ProxyDraft_Changed" Unchecked="ProxyDraft_Changed"/>
+                        <TextBlock Text="仅用于检查更新和下载安装包 · 默认关闭" Style="{StaticResource DshMuted}" Margin="0,8,0,10"/>
+                        <TextBox x:Name="ProxyAddressBox" Style="{StaticResource ModernTextBox}" Text="localhost:7890" IsEnabled="False" TextChanged="ProxyAddress_Changed" ToolTip="HTTP 代理地址，例如 localhost:7890 或 http://127.0.0.1:7890"/>
+                        <TextBlock x:Name="ProxyHint" Style="{StaticResource DshMuted}" Margin="0,8,0,0"/>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button x:Name="SaveProxyButton" Content="保存代理设置" Style="{StaticResource ModernToolbarButton}" Click="SaveProxy_Click"/>
+                            <Button x:Name="ResetProxyButton" Content="撤销" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="ResetProxy_Click"/>
+                        </WrapPanel>
                         <Expander Header="高级：局域网目录或自定义更新源" Foreground="{DynamicResource DshTextSecondary}" Margin="0,24,0,0">
                             <StackPanel Margin="0,12,0,0">
                                 <ComboBox x:Name="SourceBox" Style="{StaticResource ModernComboBox}" SelectionChanged="Source_Changed">

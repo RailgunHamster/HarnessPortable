@@ -7,11 +7,12 @@ public sealed class AppServices
     public KnownHostsStore KnownHosts { get; } = new();
     public AppSettingsStore Settings { get; } = new();
     public TunnelManager Tunnels { get; }
-    public UpdateService Updates { get; } = new();
+    public UpdateService Updates { get; }
 
     public AppServices()
     {
         AppPaths.Ensure();
+        Updates = new UpdateService(Settings);
         Tunnels = new TunnelManager(Profiles, Secrets, KnownHosts);
     }
 }
