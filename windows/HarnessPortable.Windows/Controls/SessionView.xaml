@@ -56,36 +56,5 @@
           </ScrollViewer>
         </Border>
 
-        <Canvas x:Name="OverlayCanvas" ClipToBounds="False">
-            <Popup x:Name="FloatBallPopup" PlacementTarget="{Binding ElementName=OverlayCanvas}"
-                   Placement="Relative" AllowsTransparency="True" StaysOpen="True" Focusable="False">
-            <Border x:Name="FloatBall"
-                    Width="44" Height="44"
-                    Background="{DynamicResource DshAccent}" CornerRadius="14"
-                    IsHitTestVisible="True"
-                    Cursor="Hand"
-                    Opacity="0.95"
-                    MouseLeftButtonDown="FloatBall_MouseLeftButtonDown"
-                    MouseMove="FloatBall_MouseMove"
-                    MouseLeftButtonUp="FloatBall_MouseLeftButtonUp">
-                <TextBlock x:Name="FloatBallText" Text="☰" Foreground="{DynamicResource DshBrandText}" FontSize="20"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            </Popup>
-
-            <Popup x:Name="ActionsPopup" PlacementTarget="{Binding ElementName=OverlayCanvas}"
-                   Placement="Relative" AllowsTransparency="True" StaysOpen="True">
-            <StackPanel x:Name="ActionsPanel" Visibility="Collapsed" Width="76" IsHitTestVisible="True">
-                <Button Content="刷新" Height="36" Margin="0,0,0,6"
-                        Style="{StaticResource ModernButton}" Click="Refresh_Click"/>
-                <Button Content="认证" Height="36" Margin="0,0,0,6"
-                        Style="{StaticResource ModernButton}" Click="AuthAction_Click"/>
-                <Button x:Name="ReconnectAction" Content="重连" Height="36" Margin="0,0,0,6"
-                        Style="{StaticResource ModernButton}" Click="Reconnect_Click"/>
-                <Button x:Name="DisconnectAction" Content="断开" Height="36"
-                        Style="{StaticResource ModernDangerButton}" Click="Disconnect_Click"/>
-            </StackPanel>
-            </Popup>
-        </Canvas>
     </Grid>
 </UserControl>

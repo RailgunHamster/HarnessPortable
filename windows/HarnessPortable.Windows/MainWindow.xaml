@@ -32,31 +32,35 @@
                                 <avalonDock:DocumentPaneTabPanel x:Name="HeaderPanel"
                                                                  IsItemsHost="True"
                                                                  KeyboardNavigation.TabIndex="1"/>
-                                <Button Grid.Column="1" Width="32" Height="30" Margin="2,2,4,2" Padding="8"
-                                        AutomationProperties.Name="最大化或还原当前窗格" Click="TogglePaneFocus_Click">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource ModernToolbarButton}">
-                                            <Setter Property="ToolTip" Value="最大化当前窗格"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsPaneMaximized, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                    <Setter Property="ToolTip" Value="还原分屏（Esc）"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                    <Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" Stretch="Uniform">
-                                        <Path.Style>
-                                            <Style TargetType="Path">
-                                                <Setter Property="Data" Value="M0,5 V0 H5 M9,0 H14 V5 M14,9 V14 H9 M5,14 H0 V9"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <controls:PaneActions Session="{Binding Model.SelectedContent.Content, RelativeSource={RelativeSource AncestorType={x:Type avalonDock:LayoutDocumentPaneControl}}}"
+                                                          PaneWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type avalonDock:LayoutDocumentPaneControl}}}"/>
+                                    <Button Width="32" Height="30" Margin="2,2,4,2" Padding="8"
+                                            AutomationProperties.Name="最大化或还原当前窗格" Click="TogglePaneFocus_Click">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource ModernToolbarButton}">
+                                                <Setter Property="ToolTip" Value="最大化当前窗格"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsPaneMaximized, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                        <Setter Property="Data" Value="M4,0 H14 V10 H10 M0,4 H10 V14 H0 Z"/>
+                                                        <Setter Property="ToolTip" Value="还原分屏（Esc）"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </Path.Style>
-                                    </Path>
-                                </Button>
+                                        </Button.Style>
+                                        <Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" Stretch="Uniform">
+                                            <Path.Style>
+                                                <Style TargetType="Path">
+                                                    <Setter Property="Data" Value="M0,5 V0 H5 M9,0 H14 V5 M14,9 V14 H9 M5,14 H0 V9"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsPaneMaximized, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                            <Setter Property="Data" Value="M4,0 H14 V10 H10 M0,4 H10 V14 H0 Z"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Path.Style>
+                                        </Path>
+                                    </Button>
+                                </StackPanel>
                             </Grid>
                             <Border x:Name="ContentPanel"
                                     Grid.Row="1"

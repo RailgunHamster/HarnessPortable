@@ -15,19 +15,12 @@ namespace HarnessPortable.Windows.Controls;
 
 public partial class SessionView : System.Windows.Controls.UserControl
 {
-    private const double BallSize = 48;
-    private const double ActionHeight = 36 + 6;
-
     private readonly AppServices _services;
     private readonly bool _isTunnel;
     private TunnelProfile? _profile;
     private readonly string _url;
     private int _lastPort;
 
-    private bool _ballDragging;
-    private bool _ballMoved;
-    private System.Windows.Point _dragStart;
-    private System.Windows.Point _ballStart;
     private bool _tunnelWasDown;
     private bool _coreReady;
     private bool _initialized;
@@ -37,11 +30,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private string? _customLabel;
     private ulong _authCheckedNavId;
     private string? _lastAuthNav;
-    private Window? _popupOwner;
     private Process? _browserProcess;
     private bool _browserFailed;
     private bool _recoveringBrowser;
-    private bool _ballPositioned;
 
     public event Action? CloseRequested;
     public event Action<string>? TitleChanged;
@@ -117,9 +108,6 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private void ConfigureInitialState()
     {
-        ReconnectAction.Visibility = _isTunnel ? Visibility.Visible : Visibility.Collapsed;
-        DisconnectAction.Visibility = _isTunnel ? Visibility.Visible : Visibility.Collapsed;
-
         if (_isTunnel)
         {
             _services.Tunnels.StateChanged += OnTunnelStateChanged;
@@ -129,27 +117,19 @@ public partial class SessionView : System.Windows.Controls.UserControl
         Loaded += async (_, _) =>
         {
             LogHostState("Loaded");
-            AttachPopupOwner();
-            PositionOverlay();
-
             if (_initialized || (_isTunnel && _profile is not null && _services.Tunnels.GetState(_profile.Id).Status != TunnelStatus.Connected))
             {
                 return;
             }
 
             _initialized = true;
-            PositionOverlay();
             await InitializeWebViewAsync();
         };
 
         // The WebView2 is an HwndHost: every re-host destroys and recreates its
         // child window, which flashes. Recording Loaded/Unloaded plus the HWND
         // is what tells a re-host storm apart from a purely visual flicker.
-        Unloaded += (_, _) => { LogHostState("Unloaded"); DetachPopupOwner(); };
-        IsVisibleChanged += (_, _) => UpdatePopupVisibility();
-        FloatBall.LostMouseCapture += (_, _) => _ballDragging = false;
-
-        SizeChanged += (_, _) => PositionOverlay();
+        Unloaded += (_, _) => LogHostState("Unloaded");
     }
 
     private void LogHostState(string what)
@@ -202,7 +182,6 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
 
         _shutdown = true;
-        DetachPopupOwner();
 
         if (_isTunnel)
         {
@@ -856,8 +835,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
     }
 
-    private async void Refresh_Click(object sender, RoutedEventArgs e)
+    public async Task RefreshAsync()
     {
+        if (_shutdown) return;
         if (_browserFailed) { await RecoverBrowserAsync(); return; }
         if (_coreReady)
         {
@@ -869,10 +849,14 @@ public partial class SessionView : System.Windows.Controls.UserControl
     /// Opens the paste overlay on demand, so the manual web login stays
     /// reachable even when the rejection page is never detected.
     /// </summary>
-    private void AuthAction_Click(object sender, RoutedEventArgs e) => ShowAuthOverlay();
-
-    private void Reconnect_Click(object sender, RoutedEventArgs e)
+    public void RequestAuthentication()
     {
+        if (!_shutdown) ShowAuthOverlay();
+    }
+
+    public void RequestReconnect()
+    {
+        if (_shutdown || !_isTunnel) return;
         if (ReconnectRequested is not null) { ReconnectRequested.Invoke(); return; }
         if (_isTunnel && _profile is not null)
         {
@@ -880,8 +864,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
     }
 
-    private void Disconnect_Click(object sender, RoutedEventArgs e)
+    public void RequestDisconnect()
     {
+        if (_shutdown) return;
         if (_isTunnel && _profile is not null)
         {
             _services.Tunnels.Stop(_profile.Id);
@@ -891,154 +876,16 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private async void OverlayReconnect_Click(object sender, RoutedEventArgs e)
     {
         if (_browserFailed) await RecoverBrowserAsync();
-        else Reconnect_Click(sender, e);
+        else RequestReconnect();
     }
 
     private void OverlayReturn_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
-
-    private void FloatBall_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        _ballDragging = true;
-        _ballMoved = false;
-        _dragStart = e.GetPosition(OverlayCanvas);
-        _ballStart = new System.Windows.Point(FloatBallPopup.HorizontalOffset, FloatBallPopup.VerticalOffset);
-        FloatBall.CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void FloatBall_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (!_ballDragging)
-        {
-            return;
-        }
-
-        var current = e.GetPosition(OverlayCanvas);
-        var dx = current.X - _dragStart.X;
-        var dy = current.Y - _dragStart.Y;
-        if (Math.Abs(dx) + Math.Abs(dy) > 3)
-        {
-            _ballMoved = true;
-        }
-
-        var maxX = Math.Max(0, OverlayCanvas.ActualWidth - BallSize);
-        var maxY = Math.Max(0, OverlayCanvas.ActualHeight - BallSize);
-        var x = Math.Clamp(_ballStart.X + dx, 0, maxX);
-        var y = Math.Clamp(_ballStart.Y + dy, 0, maxY);
-
-        FloatBallPopup.HorizontalOffset = x;
-        FloatBallPopup.VerticalOffset = y;
-        PositionActions(x, y);
-    }
-
-    private void FloatBall_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        if (!_ballDragging)
-        {
-            return;
-        }
-
-        _ballDragging = false;
-        FloatBall.ReleaseMouseCapture();
-        e.Handled = true;
-
-        if (!_ballMoved)
-        {
-            ActionsPanel.Visibility = ActionsPanel.Visibility == Visibility.Visible
-                ? Visibility.Collapsed
-                : Visibility.Visible;
-            FloatBallText.Text = ActionsPanel.Visibility == Visibility.Visible ? "✕" : "☰";
-            PositionOverlay();
-        }
-    }
-
-    private void PositionOverlay()
-    {
-        var width = OverlayCanvas.ActualWidth;
-        var height = OverlayCanvas.ActualHeight;
-        if (width <= 0 || height <= 0)
-        {
-            return;
-        }
-
-        var x = _ballPositioned ? FloatBallPopup.HorizontalOffset : double.NaN;
-        var y = _ballPositioned ? FloatBallPopup.VerticalOffset : double.NaN;
-        if (double.IsNaN(x) || x < 0 || x > width - BallSize)
-        {
-            x = Math.Max(0, width - BallSize - 10);
-        }
-
-        if (double.IsNaN(y) || y < 0 || y > height - BallSize)
-        {
-            y = 10;
-        }
-
-        // A small offset change also repositions a Popup after its owner moves.
-        FloatBallPopup.HorizontalOffset = x + 0.01;
-        FloatBallPopup.HorizontalOffset = x;
-        FloatBallPopup.VerticalOffset = Math.Clamp(y, 0, Math.Max(0, height - BallSize));
-        _ballPositioned = true;
-        PositionActions(x, y);
-        UpdatePopupVisibility();
-    }
-
-    private void PositionActions(double ballX, double ballY)
-    {
-        // Refresh and the auth entry are always visible; reconnect/disconnect
-        // only exist for tunnel sessions.
-        var buttonCount = _isTunnel ? 4 : 2;
-        var panelHeight = buttonCount * ActionHeight;
-        var down = ballY + BallSize + panelHeight <= OverlayCanvas.ActualHeight;
-        var left = Math.Clamp(ballX, 0, Math.Max(0, OverlayCanvas.ActualWidth - ActionsPanel.Width));
-        ActionsPopup.HorizontalOffset = left + 0.01;
-        ActionsPopup.HorizontalOffset = left;
-        ActionsPopup.VerticalOffset = Math.Max(0, down ? ballY + BallSize + 6 : ballY - panelHeight - 6);
-    }
 
     private void UpdateBrowserVisibility()
     {
         WebView.Visibility = StatusOverlay.Visibility == Visibility.Visible || AuthOverlay.Visibility == Visibility.Visible
             ? Visibility.Hidden : Visibility.Visible;
-        UpdatePopupVisibility();
     }
-
-    private void UpdatePopupVisibility()
-    {
-        var show = !_shutdown && IsLoaded && IsVisible && _popupOwner?.IsActive == true
-            && StatusOverlay.Visibility != Visibility.Visible && AuthOverlay.Visibility != Visibility.Visible;
-        FloatBallPopup.IsOpen = show;
-        ActionsPopup.IsOpen = show && ActionsPanel.Visibility == Visibility.Visible;
-    }
-
-    private void AttachPopupOwner()
-    {
-        var owner = Window.GetWindow(this);
-        if (ReferenceEquals(owner, _popupOwner)) return;
-        DetachPopupOwner();
-        _popupOwner = owner;
-        if (owner is null) return;
-        owner.LocationChanged += PopupOwnerChanged;
-        owner.SizeChanged += PopupOwnerSizeChanged;
-        owner.StateChanged += PopupOwnerChanged;
-        owner.Activated += PopupOwnerChanged;
-        owner.Deactivated += PopupOwnerChanged;
-    }
-
-    private void DetachPopupOwner()
-    {
-        FloatBallPopup.IsOpen = false;
-        ActionsPopup.IsOpen = false;
-        if (_popupOwner is not { } owner) return;
-        owner.LocationChanged -= PopupOwnerChanged;
-        owner.SizeChanged -= PopupOwnerSizeChanged;
-        owner.StateChanged -= PopupOwnerChanged;
-        owner.Activated -= PopupOwnerChanged;
-        owner.Deactivated -= PopupOwnerChanged;
-        _popupOwner = null;
-    }
-
-    private void PopupOwnerChanged(object? sender, EventArgs e) => PositionOverlay();
-    private void PopupOwnerSizeChanged(object sender, SizeChangedEventArgs e) => PositionOverlay();
 
     private async Task RecoverBrowserAsync()
     {
