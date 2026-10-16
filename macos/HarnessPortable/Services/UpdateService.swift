@@ -108,9 +108,12 @@ final class UpdateService: NSObject, ObservableObject {
     }
 
     private var feedBase: URL? {
-        let value = settings.value.updateSourceSelected == "github"
-            ? settings.value.updateGithubUrl
-            : settings.value.updateHomeUrl
+        let value: String
+        switch settings.value.updateSourceSelected {
+        case "github": value = settings.value.updateGithubUrl
+        case "home": value = settings.value.updateHomeUrl
+        default: value = settings.value.updateGiteeUrl
+        }
         guard let base = Self.resolveReadableURL(value) else { return nil }
         if base.scheme?.lowercased() == "http" || base.scheme?.lowercased() == "https" {
             return base
@@ -173,7 +176,8 @@ final class UpdateService: NSObject, ObservableObject {
               case .available(let version) = phase,
               let base = checkedBase else { return }
 
-        let dmgURL = base.appendingPathComponent(feed.dmg)
+        let absolute = URL(string: feed.dmg)
+        let dmgURL = ["http", "https"].contains(absolute?.scheme?.lowercased() ?? "") ? absolute! : base.appendingPathComponent(feed.dmg)
         phase = .downloading(fraction: 0)
         expectedDownloadBytes = 0
 

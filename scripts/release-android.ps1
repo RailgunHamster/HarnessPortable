@@ -5,6 +5,7 @@
 #   pwsh -File scripts/release-android.ps1
 param(
     [switch]$SkipGitHub,
+    [switch]$SkipGitee,
     [switch]$SkipShare
 )
 
@@ -158,3 +159,8 @@ if (-not $SkipGitHub) {
 Write-Host "Done. Android $version (versionCode $versionCode)"
 Write-Host "  apk   $apkDest"
 if (-not $SkipShare) { Write-Host "  share $share" }
+
+if (-not $SkipGitee) {
+    & (Join-Path $PSScriptRoot "release-gitee.ps1") -Platform Android -Version $version
+    if ($LASTEXITCODE -ne 0) { throw "Gitee publication failed" }
+}

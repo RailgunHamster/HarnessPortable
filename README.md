@@ -11,7 +11,7 @@
 ## 核心功能
 
 - **SSH 本地端口转发**：等价于 `ssh -N -L local:remoteHost:remotePort user@host`；支持私钥登录（可不填密码），密码错误不会反复重试
-- **Windows 自动更新**：Velopack（Setup 安装包和便携 zip 都能更新）；更新源可选「家庭目录」（局域网共享）或 GitHub，两个地址都保留，设置里一键切换，并可查看更新日志
+- **Windows 自动更新**：Velopack（Setup 安装包和便携 zip 都能更新）；默认使用 Gitee 静态更新索引，也可选「家庭目录」（局域网共享）或 GitHub，各地址都保留，设置里一键切换，并可查看更新日志
 - **桌面多隧道并发**：同一进程可同时连接多个服务器，每个隧道独立重连/停止；手机保持一个当前服务
 - **连接库**：桌面可折叠侧栏提供全部、常用、最近三种视图和搜索，全部视图按分组展示，连接不重复堆叠；手机合并 SSH 和直连列表，返回列表保持当前服务
 - **独立设置**：桌面分类设置窗口、手机设置页；偏好即时保存，更新源明确保存或撤销
@@ -190,3 +190,15 @@ git clone git@github.com:RailgunHamster/HarnessPortable.git
 
 - 主分支：`main`
 - 忽略项：Android 签名、本地 SDK 路径、.NET 构建产物、`temp/`、`branding/node_modules`
+
+
+## 许可证与署名
+
+本项目采用标准 [Apache License 2.0](LICENSE)，署名见 [NOTICE](NOTICE)。
+Copyright 2026 RailgunHamster。
+
+再分发本项目或其衍生作品时，应按 Apache License 2.0 第 4 条随附许可证、保留相关版权和署名通知，并标明对文件的修改。NOTICE 中相关署名可保留在随附的 NOTICE、源码或文档中，也可放在软件通常显示第三方声明的界面中，不强制要求在界面展示。个人自用无须额外公开声明。本段为说明，具体以 LICENSE 正文为准；第三方组件适用各自的许可证。
+
+代码仓库：[Gitee](https://gitee.com/railgunhamster/HarnessPortable) · [GitHub](https://github.com/RailgunHamster/HarnessPortable)。
+Gitee 默认更新索引位于 `updates` 分支；安装包使用发行版附件直链，无需在客户端保存维护者令牌。
+发布 Windows / Android 时，发布脚本默认同步 Gitee；可用 `-SkipGitee` 跳过。已构建的两端包也可统一执行 `pwsh -File scripts/release-gitee.ps1 -Platform All`，脚本在匿名下载和 SHA-256 校验通过后才更新公开索引。

@@ -92,8 +92,7 @@ fun SettingsScreen(
     val homeScroll = rememberLazyListState()
     val settingsScroll = rememberLazyListState()
 
-    fun typedSources() = if (draftSources.selected == UpdateSourceKind.GitHub)
-        draftSources.copy(github = updateUrl.trim()) else draftSources.copy(home = updateUrl.trim())
+    fun typedSources() = draftSources.withUrl(draftSources.selected, updateUrl.trim())
     fun selectSource(kind: UpdateSourceKind) {
         val kept = typedSources()
         savedSources = UpdateSourceStore.select(ctx, kind)
@@ -121,11 +120,8 @@ fun SettingsScreen(
     fun saveSources() {
         val sources = typedSources()
         val url = sources.url()
-        val parsed = runCatching { java.net.URI(url) }.getOrNull()
-        val usable = if (sources.selected == UpdateSourceKind.GitHub)
-            parsed?.scheme in listOf("http", "https") && parsed?.host in listOf("github.com", "www.github.com") && parsed?.path?.trim('/')?.split('/')?.size?.let { it >= 2 } == true
-        else sources.selectedLooksUsable() && runCatching { sources.feedUrl() }.isSuccess
-        if (url.isBlank() || !usable) { updateStatus = "地址未保存：请填写完整 GitHub 仓库、SMB 共享路径或 HTTP(S) 地址。"; return }
+        val usable = sources.selectedLooksUsable() && runCatching { sources.feedUrl() }.isSuccess
+        if (url.isBlank() || !usable) { updateStatus = "地址未保存：请填写完整 Gitee / GitHub 仓库、SMB 共享路径或 HTTP(S) 地址。"; return }
         UpdateSourceStore.save(ctx, sources); savedSources = sources; draftSources = sources; pendingFeed = null
         updateStatus = "已保存 · 下次检查使用此更新源"
     }
@@ -304,13 +300,13 @@ fun SettingsScreen(
                             }
                             TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "收起高级设置" else "高级：自定义更新源") }
                             if (advanced) {
-                                OutlinedTextField(value = updateUrl, onValueChange = { updateUrl = it }, label = { Text(if (draftSources.selected == UpdateSourceKind.GitHub) "GitHub 仓库" else "SMB 共享路径或 HTTP(S) 地址") },
+                                OutlinedTextField(value = updateUrl, onValueChange = { updateUrl = it }, label = { Text(if (draftSources.selected != UpdateSourceKind.File) "${draftSources.selected.label()} 仓库" else "SMB 共享路径或 HTTP(S) 地址") },
                                     modifier = Modifier.fillMaxWidth(), shape = DshControlShape, colors = dshFieldColors())
                                 Text("切换更新源立即生效；地址修改需要保存，检查不会保存地址草稿。", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(onClick = { saveSources() }, enabled = !updateBusy) { Text("保存并使用") }
                                     TextButton(onClick = { draftSources = savedSources; updateUrl = savedSources.url() }) { Text("撤销") }
-                                    TextButton(onClick = { savedSources = savedSources.copy(selected = UpdateSourceKind.GitHub, github = ApkUpdate.DEFAULT_SERVER); UpdateSourceStore.save(ctx, savedSources); draftSources = savedSources; updateUrl = savedSources.url(); pendingFeed = null }, enabled = !updateBusy) { Text("官方源") }
+                                    TextButton(onClick = { savedSources = savedSources.copy(selected = UpdateSourceKind.Gitee, gitee = ApkUpdate.DEFAULT_SERVER); UpdateSourceStore.save(ctx, savedSources); draftSources = savedSources; updateUrl = savedSources.url(); pendingFeed = null }, enabled = !updateBusy) { Text("官方源") }
                                 }
                             }
                             if (updateNotes.isNotBlank()) {

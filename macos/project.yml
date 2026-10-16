@@ -25,6 +25,10 @@ targets:
         buildPhase: resources
       - path: HarnessPortable/Resources/HarnessPortable.icns
         buildPhase: resources
+      - path: ../LICENSE
+        buildPhase: resources
+      - path: ../NOTICE
+        buildPhase: resources
       - path: ../shared/systemd-auth.sh
         buildPhase: resources
     dependencies:

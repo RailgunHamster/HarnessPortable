@@ -6,6 +6,7 @@
 #   pwsh -File scripts/release-windows.ps1 -SkipShare
 param(
     [switch]$SkipGitHub,
+    [switch]$SkipGitee,
     [switch]$SkipShare
 )
 
@@ -132,3 +133,8 @@ Write-Host "  pack   $packDir"
 if (-not $SkipShare) { Write-Host "  share  $share" }
 Write-Host "  setup  $(Join-Path $packDir 'HarnessPortable-win-Setup.exe')"
 Write-Host "  portable $(Join-Path $packDir 'HarnessPortable-win-Portable.zip')"
+
+if (-not $SkipGitee) {
+    & (Join-Path $PSScriptRoot "release-gitee.ps1") -Platform Windows -Version $version
+    if ($LASTEXITCODE -ne 0) { throw "Gitee publication failed" }
+}

@@ -11,6 +11,7 @@ param(
     [string]$MacTarget = "RailgunHamster@macair",
     [string]$Version = "",
     [switch]$SkipGitHub,
+    [switch]$SkipGitee,
     [switch]$SkipShare
 )
 
@@ -40,7 +41,7 @@ Write-Host "==> syncing sources to $MacTarget"
 Invoke-OnMac "mkdir -p ~/$remoteRoot"
 $localTar = Join-Path $env:TEMP "hp-macos-src.tgz"
 if (Test-Path $localTar) { Remove-Item $localTar -Force }
-tar -czf $localTar -C $root macos shared VERSION
+tar -czf $localTar -C $root macos shared VERSION LICENSE NOTICE
 scp @sshArgs $localTar "${MacTarget}:~/$remoteRoot/macos-src.tgz"
 if ($LASTEXITCODE -ne 0) { throw "scp upload failed" }
 
@@ -175,3 +176,8 @@ if (-not $SkipGitHub) {
 }
 
 Write-Host "Done: $dmgPath (+ macos.json feed)"
+
+if (-not $SkipGitee) {
+    & (Join-Path $PSScriptRoot "release-gitee.ps1") -Platform macOS -Version $version
+    if ($LASTEXITCODE -ne 0) { throw "Gitee publication failed" }
+}

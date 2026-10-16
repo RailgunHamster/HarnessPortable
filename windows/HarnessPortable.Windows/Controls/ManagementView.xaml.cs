@@ -198,7 +198,7 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         _suppressSettings = true;
         var settings = _services.Settings.Load();
         var selection = UpdateSelection.From(settings);
-        UpdateSourceBox.SelectedIndex = selection.Slot == UpdateSourceSlot.GitHub ? 1 : 0;
+        UpdateSourceBox.SelectedItem = UpdateSourceBox.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == UpdateSelection.Tag(selection.Slot));
         UpdateServerBox.Text = selection.Url();
         VersionText.Text = "当前版本 " + _services.Updates.CurrentVersion
             + " · " + _services.Updates.DeploymentLabel;
@@ -213,16 +213,9 @@ public partial class ManagementView : System.Windows.Controls.UserControl
     private UpdateSelection LoadUpdateSelection()
     {
         var stored = UpdateSelection.From(_services.Settings.Load());
-        var slot = UpdateSourceBox.SelectedItem is ComboBoxItem { Tag: "github" }
-            ? UpdateSourceSlot.GitHub
-            : UpdateSourceSlot.Home;
+        var slot = UpdateSelection.ParseSlot((UpdateSourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? UpdateSourceSlot.Gitee;
         var typed = UpdateServerBox.Text.Trim();
-        return new UpdateSelection
-        {
-            Slot = slot,
-            HomeUrl = slot == UpdateSourceSlot.Home ? typed : stored.HomeUrl,
-            GitHubUrl = slot == UpdateSourceSlot.GitHub ? typed : stored.GitHubUrl,
-        };
+        return stored.WithUrl(slot, typed) with { Slot = slot };
     }
 
     private void UpdateSourceBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -239,14 +232,14 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         var stored = UpdateSelection.From(_services.Settings.Load());
         var typed = UpdateServerBox.Text.Trim();
         var leavingTag = (e.RemovedItems.Cast<ComboBoxItem>().FirstOrDefault()?.Tag as string)?.Trim();
-        var selection = UpdateSelection.MergeTyped(stored, leavingTag, typed);
+        var selection = UpdateSelection.MergeTyped(stored, leavingTag, typed, (UpdateSourceBox.SelectedItem as ComboBoxItem)?.Tag as string);
 
         var settings = _services.Settings.Load();
         selection.Store(settings);
         _services.Settings.Save(settings);
 
         _suppressSettings = true;
-        UpdateSourceBox.SelectedIndex = selection.Slot == UpdateSourceSlot.GitHub ? 1 : 0;
+        UpdateSourceBox.SelectedItem = UpdateSourceBox.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == UpdateSelection.Tag(selection.Slot));
         UpdateServerBox.Text = selection.Url();
         _suppressSettings = false;
     }

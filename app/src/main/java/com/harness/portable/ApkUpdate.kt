@@ -21,7 +21,8 @@ data class ApkFeed(
 
 object ApkUpdate {
     const val PREF_SERVER = "update_server_url"
-    const val DEFAULT_SERVER = "https://github.com/RailgunHamster/HarnessPortable"
+    const val DEFAULT_SERVER = "https://gitee.com/railgunhamster/HarnessPortable"
+    const val DEFAULT_GITHUB = "https://github.com/RailgunHamster/HarnessPortable"
 
     /** LAN release directory: native filesystem on Windows, SMB on Android. */
     const val DEFAULT_HOME_DIR = "\\\\server-home\\public\\Software\\HarnessPortable-Releases"
@@ -38,7 +39,11 @@ object ApkUpdate {
      * Whether an address is a GitHub repository (whose feed lives at
      * `releases/latest/download/`) rather than a plain path or directory URL.
      */
-    fun looksLikeGitHub(url: String): Boolean = githubRepo(url) != null
+    fun looksLikeGitHub(url: String): Boolean = repository(url, "github.com") != null
+    fun looksLikeGitee(url: String): Boolean = repository(url, "gitee.com") != null
+    fun isOfficialGitHub(url: String): Boolean = repository(url, "github.com")?.let {
+        it.first.equals("RailgunHamster", true) && it.second.equals("HarnessPortable", true)
+    } == true
 
     /**
      * Whether an address is a filesystem path — the UNC form of the home
@@ -54,7 +59,11 @@ object ApkUpdate {
 
     /** Classifies an address the way the update feed expects to read it. */
     fun classify(url: String): UpdateSourceKind =
-        if (looksLikeGitHub(url)) UpdateSourceKind.GitHub else UpdateSourceKind.File
+        when {
+            looksLikeGitee(url) -> UpdateSourceKind.Gitee
+            looksLikeGitHub(url) -> UpdateSourceKind.GitHub
+            else -> UpdateSourceKind.File
+        }
 
     fun storedServer(ctx: Context): String =
         ctx.getSharedPreferences("harness_portable", Context.MODE_PRIVATE)
@@ -71,7 +80,9 @@ object ApkUpdate {
     fun feedUrl(server: String): String {
         val raw = server.trim().ifEmpty { DEFAULT_SERVER }.trimEnd('/')
         if (SmbUpdateAddress.looksLikeSmb(raw)) return SmbUpdateAddress.parse(raw).feed().url()
-        val github = githubRepo(raw)
+        val gitee = repository(raw, "gitee.com")
+        if (gitee != null) return "https://gitee.com/${gitee.first}/${gitee.second}/raw/updates/android.json"
+        val github = repository(raw, "github.com")
         if (github != null) {
             return "https://github.com/${github.first}/${github.second}/releases/latest/download/android.json"
         }
@@ -165,13 +176,14 @@ object ApkUpdate {
         ctx.startActivity(intent)
     }
 
-    private fun githubRepo(url: String): Pair<String, String>? {
-        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
+    private fun repository(url: String, domain: String): Pair<String, String>? {
+        val uri = runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return null
         val host = uri.host ?: return null
-        if (!host.equals("github.com", true) && !host.equals("www.github.com", true)) return null
+        if (uri.scheme?.lowercase() !in listOf("http", "https")) return null
+        if (!host.equals(domain, true) && !host.equals("www.$domain", true)) return null
         val parts = uri.path.orEmpty().trim('/').split('/').filter { it.isNotEmpty() }
         if (parts.size < 2) return null
-        return parts[0] to parts[1]
+        return parts[0] to parts[1].removeSuffix(".git")
     }
 
     private fun httpGet(url: String, proxy: UpdateProxy): String {

@@ -59,22 +59,17 @@ public partial class SettingsWindow : Window
     {
         _loading = true;
         _draft = UpdateSelection.From(_services.Settings.Load());
-        SelectTag(SourceBox, _draft.Slot == UpdateSourceSlot.GitHub ? "github" : "home");
+        SelectTag(SourceBox, UpdateSelection.Tag(_draft.Slot));
         SourceAddressBox.Text = _draft.Url();
         DraftHint.Text = "修改后需要保存；检查更新使用已保存的源。";
         _loading = false;
     }
-    private UpdateSelection TypedDraft() => new()
-    {
-        Slot = _draft.Slot,
-        HomeUrl = _draft.Slot == UpdateSourceSlot.Home ? SourceAddressBox.Text.Trim() : _draft.HomeUrl,
-        GitHubUrl = _draft.Slot == UpdateSourceSlot.GitHub ? SourceAddressBox.Text.Trim() : _draft.GitHubUrl,
-    };
+    private UpdateSelection TypedDraft() => _draft.WithUrl(_draft.Slot, SourceAddressBox.Text.Trim());
     private void Source_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_loading) return;
         var typed = TypedDraft();
-        _draft = new() { Slot = SelectedTag(SourceBox) == "github" ? UpdateSourceSlot.GitHub : UpdateSourceSlot.Home, HomeUrl = typed.HomeUrl, GitHubUrl = typed.GitHubUrl };
+        _draft = typed with { Slot = UpdateSelection.ParseSlot(SelectedTag(SourceBox)) ?? UpdateSourceSlot.Gitee };
         SourceAddressBox.Text = _draft.Url();
         DraftHint.Text = "有未保存的修改 · 切换分类或检查更新不会保存草稿";
     }
@@ -86,9 +81,9 @@ public partial class SettingsWindow : Window
     {
         if (_services.Updates.Busy) { SaveStatus.Text = "检查或下载结束后再保存更新源"; return; }
         var next = TypedDraft();
-        if (!UpdateSourceFactory.IsValid(next.Url(), next.Slot == UpdateSourceSlot.GitHub))
+        if (!UpdateSourceFactory.IsValid(next.Url(), next.Slot == UpdateSourceSlot.GitHub, next.Slot == UpdateSourceSlot.Gitee))
         {
-            DraftHint.Text = "请输入完整的 GitHub 仓库地址、HTTP(S) 地址或绝对目录路径。";
+            DraftHint.Text = "请输入完整的 Gitee / GitHub 仓库地址、HTTP(S) 地址或绝对目录路径。";
             return;
         }
         var settings = _services.Settings.Load(); next.Store(settings); _services.Settings.Save(settings);
@@ -101,8 +96,8 @@ public partial class SettingsWindow : Window
         if (_services.Updates.Busy) return;
         var stored = UpdateSelection.From(_services.Settings.Load());
         var settings = _services.Settings.Load();
-        new UpdateSelection { Slot = UpdateSourceSlot.GitHub, HomeUrl = stored.HomeUrl, GitHubUrl = UpdateSelection.GitHub }.Store(settings);
-        _services.Settings.Save(settings); _services.Updates.ResetSourceResult(); ResetDraft(); RefreshUpdates(); SaveStatus.Text = "已保存 · 使用官方 GitHub 更新源";
+        (stored with { Slot = UpdateSourceSlot.Gitee, GiteeUrl = UpdateSelection.Gitee }).Store(settings);
+        _services.Settings.Save(settings); _services.Updates.ResetSourceResult(); ResetDraft(); RefreshUpdates(); SaveStatus.Text = "已保存 · 使用官方 Gitee 更新源";
     }
     private async void Check_Click(object sender, RoutedEventArgs e) => await _services.Updates.CheckAsync(UpdateSelection.From(_services.Settings.Load()).Url());
     private void ResetProxyDraft()

@@ -90,7 +90,7 @@
                         <Expander Header="高级：局域网目录或自定义更新源" Foreground="{DynamicResource DshTextSecondary}" Margin="0,24,0,0">
                             <StackPanel Margin="0,12,0,0">
                                 <ComboBox x:Name="SourceBox" Style="{StaticResource ModernComboBox}" SelectionChanged="Source_Changed">
-                                    <ComboBoxItem Content="官方 / GitHub" Tag="github"/><ComboBoxItem Content="局域网目录 / HTTP" Tag="home"/>
+                                    <ComboBoxItem Content="官方 / Gitee" Tag="gitee"/><ComboBoxItem Content="GitHub" Tag="github"/><ComboBoxItem Content="局域网目录 / HTTP" Tag="home"/>
                                 </ComboBox>
                                 <TextBox x:Name="SourceAddressBox" Style="{StaticResource ModernTextBox}" Margin="0,10,0,0" TextChanged="SourceAddress_Changed"/>
                                 <TextBlock x:Name="DraftHint" Style="{StaticResource DshMuted}" Margin="0,8,0,0" Text="修改后需要保存"/>

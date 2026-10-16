@@ -1,6 +1,7 @@
 import Foundation
 
 struct AppSettings: Codable {
+    static let defaultGitee = "https://gitee.com/railgunhamster/HarnessPortable/raw/updates"
     var version: Int = 1
     var closeBehavior: String = "exit"
     var restoreLastLayoutOnStartup: Bool = true
@@ -20,7 +21,8 @@ struct AppSettings: Codable {
     var updateGithubUrl: String = "https://github.com/RailgunHamster/HarnessPortable/releases/latest/download"
     /// `home` / `github`; both slots are always kept so switching never loses
     /// the other address.
-    var updateSourceSelected: String = "github"
+    var updateSourceSelected: String = "gitee"
+    var updateGiteeUrl: String = AppSettings.defaultGitee
     var updateProxyEnabled: Bool = false
     var updateProxyAddress: String = "localhost:7890"
     /// Per-direct-URL auth mode (macOS only; tunnels carry their own field).
@@ -32,7 +34,7 @@ struct AppSettings: Codable {
         case version, closeBehavior, restoreLastLayoutOnStartup, lastLayoutName
         case reconnectRestoredWorkspace, connectionSidebarCollapsed, appearance, connections
         case startupReconnectPreference, connectionOrder
-        case updateHomeUrl, updateGithubUrl, updateSourceSelected
+        case updateHomeUrl, updateGithubUrl, updateGiteeUrl, updateSourceSelected
         case updateProxyEnabled, updateProxyAddress
         case directAuthModes
         case legacyUpdateServerUrl = "updateServerUrl"
@@ -69,7 +71,12 @@ struct AppSettings: Codable {
         }
         updateSourceSelected = try container.decodeIfPresent(String.self, forKey: .updateSourceSelected)
             ?? ((legacy?.lowercased().hasPrefix("smb://") == true || legacy?.hasPrefix("/") == true) ? "home" : "github")
-        if updateSourceSelected != "github" { updateSourceSelected = "home" }
+        let hadGitee = container.contains(.updateGiteeUrl)
+        updateGiteeUrl = try container.decodeIfPresent(String.self, forKey: .updateGiteeUrl) ?? Self.defaultGitee
+        if !hadGitee && updateSourceSelected == "github" && updateGithubUrl.lowercased().hasPrefix("https://github.com/railgunhamster/harnessportable/") {
+            updateSourceSelected = "gitee"
+        }
+        if !["github", "home", "gitee"].contains(updateSourceSelected) { updateSourceSelected = "gitee" }
         updateProxyEnabled = try container.decodeIfPresent(Bool.self, forKey: .updateProxyEnabled) ?? false
         updateProxyAddress = try container.decodeIfPresent(String.self, forKey: .updateProxyAddress) ?? "localhost:7890"
         directAuthModes = try container.decodeIfPresent([String: String].self, forKey: .directAuthModes) ?? [:]
@@ -90,6 +97,7 @@ struct AppSettings: Codable {
         try container.encode(connections, forKey: .connections)
         try container.encode(updateHomeUrl, forKey: .updateHomeUrl)
         try container.encode(updateGithubUrl, forKey: .updateGithubUrl)
+        try container.encode(updateGiteeUrl, forKey: .updateGiteeUrl)
         try container.encode(updateSourceSelected, forKey: .updateSourceSelected)
         try container.encode(updateProxyEnabled, forKey: .updateProxyEnabled)
         try container.encode(updateProxyAddress, forKey: .updateProxyAddress)

@@ -2,105 +2,92 @@ package com.harness.portable
 
 import android.content.Context
 
-/**
- * Which of the two known update feeds a source points at.
- *
- * [File] covers a directory path — a Windows UNC share such as
- * `\\server-home\public\Software\HarnessPortable-Releases`, or a plain local
- * path. Android reads Windows shares over SMB, or a home HTTP(S) mirror.
- */
-enum class UpdateSourceKind { File, GitHub }
+enum class UpdateSourceKind { File, GitHub, Gitee }
 
-/** Short name used on the source picker. */
 fun UpdateSourceKind.label(): String = when (this) {
     UpdateSourceKind.File -> "家庭服务器"
     UpdateSourceKind.GitHub -> "GitHub"
+    UpdateSourceKind.Gitee -> "Gitee"
 }
 
-/**
- * A selectable place to fetch `android.json` from.
- *
- * Two are kept at once — the home directory and the GitHub repository — so
- * switching between them never loses the other address. [selected] only
- * chooses which one a check uses.
- */
+/** All addresses survive switching between sources. */
 data class UpdateSources(
     val home: String,
     val github: String,
-    val selected: UpdateSourceKind
+    val selected: UpdateSourceKind,
+    val gitee: String = ApkUpdate.DEFAULT_SERVER
 ) {
-    fun url(kind: UpdateSourceKind = selected): String =
-        (if (kind == UpdateSourceKind.GitHub) github else home).trim()
+    fun url(kind: UpdateSourceKind = selected): String = when (kind) {
+        UpdateSourceKind.File -> home
+        UpdateSourceKind.GitHub -> github
+        UpdateSourceKind.Gitee -> gitee
+    }.trim()
 
-    /** The feed address a check would actually request. */
-    fun feedUrl(kind: UpdateSourceKind = selected): String =
-        ApkUpdate.feedUrl(url(kind))
+    fun withUrl(kind: UpdateSourceKind, value: String): UpdateSources = when (kind) {
+        UpdateSourceKind.File -> copy(home = value)
+        UpdateSourceKind.GitHub -> copy(github = value)
+        UpdateSourceKind.Gitee -> copy(gitee = value)
+    }
 
-    /** True when the selected source is usable on this platform. */
-    fun selectedLooksUsable(): Boolean =
-        selected != UpdateSourceKind.File || (SmbUpdateAddress.looksLikeSmb(url()) && runCatching { SmbUpdateAddress.parse(url()) }.isSuccess) || runCatching {
+    fun feedUrl(kind: UpdateSourceKind = selected): String = ApkUpdate.feedUrl(url(kind))
+
+    fun selectedLooksUsable(): Boolean = when (selected) {
+        UpdateSourceKind.GitHub -> ApkUpdate.looksLikeGitHub(url())
+        UpdateSourceKind.Gitee -> ApkUpdate.looksLikeGitee(url())
+        UpdateSourceKind.File -> if (SmbUpdateAddress.looksLikeSmb(url())) {
+            runCatching { SmbUpdateAddress.parse(url()) }.isSuccess
+        } else runCatching {
             val uri = java.net.URI(url())
             uri.scheme?.lowercase() in listOf("http", "https") && !uri.host.isNullOrBlank()
         }.getOrDefault(false)
+    }
+
+    /** Only used once when the Gitee slot is first introduced. */
+    fun migrateOfficialSource(): UpdateSources =
+        if (selected == UpdateSourceKind.GitHub && ApkUpdate.isOfficialGitHub(github))
+            copy(selected = UpdateSourceKind.Gitee) else this
 }
 
 object UpdateSourceStore {
     const val PREF_HOME = "update_source_home"
     const val PREF_GITHUB = "update_source_github"
+    const val PREF_GITEE = "update_source_gitee"
     const val PREF_SELECTED = "update_source_selected"
-
-    /** The Windows PC reaches the LAN share by its UNC path. */
     const val DEFAULT_HOME = ApkUpdate.DEFAULT_HOME_DIR
-
-    /**
-     * GitHub remains the initial selection; the home share is ready to select.
-     */
-    val DEFAULT_SELECTED = UpdateSourceKind.GitHub
+    val DEFAULT_SELECTED = UpdateSourceKind.Gitee
 
     fun load(ctx: Context): UpdateSources {
         val p = ctx.getSharedPreferences("harness_portable", Context.MODE_PRIVATE)
-        val home = p.getString(PREF_HOME, "")?.trim().orEmpty().ifEmpty { DEFAULT_HOME }
-        val github = p.getString(PREF_GITHUB, "")?.trim().orEmpty().ifEmpty { ApkUpdate.DEFAULT_SERVER }
-        val selected = kindFromName(p.getString(PREF_SELECTED, null)) ?: DEFAULT_SELECTED
-        return UpdateSources(home, github, selected)
+        val sources = UpdateSources(
+            home = p.getString(PREF_HOME, "")?.trim().orEmpty().ifEmpty { DEFAULT_HOME },
+            github = p.getString(PREF_GITHUB, "")?.trim().orEmpty().ifEmpty { ApkUpdate.DEFAULT_GITHUB },
+            selected = kindFromName(p.getString(PREF_SELECTED, null)) ?: DEFAULT_SELECTED,
+            gitee = p.getString(PREF_GITEE, "")?.trim().orEmpty().ifEmpty { ApkUpdate.DEFAULT_SERVER }
+        )
+        if (p.contains(PREF_GITEE)) return sources
+        return sources.migrateOfficialSource().also { save(ctx, it) }
     }
 
     fun save(ctx: Context, sources: UpdateSources) {
-        ctx.getSharedPreferences("harness_portable", Context.MODE_PRIVATE)
-            .edit()
+        ctx.getSharedPreferences("harness_portable", Context.MODE_PRIVATE).edit()
             .putString(PREF_HOME, sources.home.trim())
             .putString(PREF_GITHUB, sources.github.trim())
+            .putString(PREF_GITEE, sources.gitee.trim())
             .putString(PREF_SELECTED, sources.selected.name)
             .apply()
     }
 
     fun select(ctx: Context, kind: UpdateSourceKind): UpdateSources = load(ctx).copy(selected = kind).also { save(ctx, it) }
 
-    /**
-     * One-time import of the single-source setting that predates the two-slot
-     * model, so an existing install keeps pointing where the user aimed it.
-     */
     fun migrateLegacy(ctx: Context, legacy: String) {
         val url = legacy.trim()
         if (url.isEmpty()) return
         val p = ctx.getSharedPreferences("harness_portable", Context.MODE_PRIVATE)
-        if (!p.getString(PREF_HOME, "").isNullOrEmpty() || !p.getString(PREF_GITHUB, "").isNullOrEmpty()) {
-            return
-        }
+        if (listOf(PREF_HOME, PREF_GITHUB, PREF_GITEE).any { !p.getString(it, "").isNullOrEmpty() }) return
         val kind = ApkUpdate.classify(url)
-        save(
-            ctx,
-            UpdateSources(
-                home = if (kind == UpdateSourceKind.File) url else DEFAULT_HOME,
-                github = if (kind == UpdateSourceKind.GitHub) url else ApkUpdate.DEFAULT_SERVER,
-                selected = kind
-            )
-        )
+        val sources = UpdateSources(DEFAULT_HOME, ApkUpdate.DEFAULT_GITHUB, kind).withUrl(kind, url)
+        save(ctx, sources.migrateOfficialSource())
     }
 
-    fun kindFromName(name: String?): UpdateSourceKind? = when (name) {
-        UpdateSourceKind.File.name -> UpdateSourceKind.File
-        UpdateSourceKind.GitHub.name -> UpdateSourceKind.GitHub
-        else -> null
-    }
+    fun kindFromName(name: String?): UpdateSourceKind? = UpdateSourceKind.entries.firstOrNull { it.name == name }
 }

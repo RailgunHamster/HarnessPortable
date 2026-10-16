@@ -37,7 +37,9 @@ public sealed class AppSettings
     /// <summary>GitHub repository the feed is pulled from.</summary>
     public string UpdateGitHubUrl { get; set; } = "";
 
-    /// <summary>"home" or "github" — which of the two a check uses.</summary>
+    public string UpdateGiteeUrl { get; set; } = "";
+
+    /// <summary>"home", "github" or "gitee".</summary>
     public string UpdateSourceSelected { get; set; } = "";
 
     public bool UpdateProxyEnabled { get; set; }

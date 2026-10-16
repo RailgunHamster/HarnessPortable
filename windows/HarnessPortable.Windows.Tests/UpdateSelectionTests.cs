@@ -11,14 +11,14 @@ namespace HarnessPortable.Windows.Tests;
 public sealed class UpdateSelectionTests
 {
     [Fact]
-    public void FreshSettings_DefaultsToOfficialGitHub_AndFillsBothSlots()
+    public void FreshSettings_DefaultsToGitee_AndFillsAllSlots()
     {
         var selection = UpdateSelection.From(new AppSettings());
 
-        Assert.Equal(UpdateSourceSlot.GitHub, selection.Slot);
+        Assert.Equal(UpdateSourceSlot.Gitee, selection.Slot);
         Assert.Equal(UpdateSourceFactory.DefaultServerUrl, selection.Url(UpdateSourceSlot.Home));
         Assert.Equal(UpdateSourceFactory.GitHubRepoUrl, selection.Url(UpdateSourceSlot.GitHub));
-        Assert.Equal(UpdateSourceFactory.GitHubRepoUrl, selection.Url());
+        Assert.Equal(UpdateSourceFactory.GiteeRepoUrl, selection.Url());
     }
 
     [Fact]
@@ -39,7 +39,8 @@ public sealed class UpdateSelectionTests
     [Theory]
     [InlineData(@"\\server-home\public\Software\HarnessPortable-Releases", UpdateSourceSlot.Home)]
     [InlineData(@"D:\releases", UpdateSourceSlot.Home)]
-    [InlineData("https://github.com/RailgunHamster/HarnessPortable", UpdateSourceSlot.GitHub)]
+    [InlineData("https://github.com/example/Custom", UpdateSourceSlot.GitHub)]
+    [InlineData("https://gitee.com/railgunhamster/HarnessPortable", UpdateSourceSlot.Gitee)]
     public void LegacySingleUrl_LandsInTheSlotItNames(string legacy, UpdateSourceSlot expected)
     {
         var selection = UpdateSelection.From(new AppSettings { UpdateServerUrl = legacy });
@@ -72,7 +73,7 @@ public sealed class UpdateSelectionTests
             UpdateSourceSelected = "github",
         });
 
-        Assert.Equal(UpdateSourceSlot.GitHub, selection.Slot);
+        Assert.Equal(UpdateSourceSlot.Gitee, selection.Slot);
         Assert.Equal(@"\\other\releases", selection.Url(UpdateSourceSlot.Home));
     }
 
@@ -97,11 +98,11 @@ public sealed class UpdateSelectionTests
     }
 
     [Fact]
-    public void UnknownSelectedValue_FallsBackToGitHub()
+    public void UnknownSelectedValue_FallsBackToGitee()
     {
         var selection = UpdateSelection.From(new AppSettings { UpdateSourceSelected = "nonsense" });
 
-        Assert.Equal(UpdateSourceSlot.GitHub, selection.Slot);
+        Assert.Equal(UpdateSourceSlot.Gitee, selection.Slot);
     }
 
     /// <summary>
@@ -121,14 +122,14 @@ public sealed class UpdateSelectionTests
 
         // Leaving "home" with the UNC still in the box → select github, keep UNC in home.
         var switched = UpdateSelection.MergeTyped(
-            stored, "home", @"\\server-home\public\Software\HarnessPortable-Releases");
+            stored, "home", @"\\server-home\public\Software\HarnessPortable-Releases", "github");
         Assert.Equal(UpdateSourceSlot.GitHub, switched.Slot);
         Assert.Equal(@"\\server-home\public\Software\HarnessPortable-Releases", switched.HomeUrl);
         Assert.Equal("https://github.com/RailgunHamster/HarnessPortable", switched.GitHubUrl);
         Assert.Equal("https://github.com/RailgunHamster/HarnessPortable", switched.Url());
 
         // Leaving "github" with a custom repo in the box → select home, keep repo in github.
-        var back = UpdateSelection.MergeTyped(switched, "github", "https://github.com/someone/Fork");
+        var back = UpdateSelection.MergeTyped(switched, "github", "https://github.com/someone/Fork", "home");
         Assert.Equal(UpdateSourceSlot.Home, back.Slot);
         Assert.Equal("https://github.com/someone/Fork", back.GitHubUrl);
         Assert.Equal(@"\\server-home\public\Software\HarnessPortable-Releases", back.HomeUrl);

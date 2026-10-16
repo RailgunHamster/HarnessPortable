@@ -167,10 +167,13 @@ struct ManagementView: View {
                     Picker("更新源", selection: updateSourceBinding) {
                         Text("家庭目录").tag("home")
                         Text("GitHub").tag("github")
+                        Text("Gitee").tag("gitee")
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 320)
                     TextField("家庭目录（smb:// 或已挂载路径）", text: updateHomeBinding)
+                        .dshInput()
+                    TextField("Gitee 静态更新目录", text: updateGiteeBinding)
                         .dshInput()
                     TextField("GitHub 发布下载基址", text: updateGithubBinding)
                         .dshInput()
@@ -414,7 +417,7 @@ struct ManagementView: View {
         Binding(
             get: { settings.value.updateSourceSelected },
             set: { newValue in
-                settings.update { $0.updateSourceSelected = newValue == "github" ? "github" : "home" }
+                settings.update { $0.updateSourceSelected = ["github", "home", "gitee"].contains(newValue) ? newValue : "gitee" }
             }
         )
     }
@@ -424,6 +427,10 @@ struct ManagementView: View {
             get: { settings.value.updateHomeUrl },
             set: { newValue in settings.update { $0.updateHomeUrl = newValue } }
         )
+    }
+
+    private var updateGiteeBinding: Binding<String> {
+        Binding(get: { settings.value.updateGiteeUrl }, set: { newValue in settings.update { $0.updateGiteeUrl = newValue } })
     }
 
     private var updateGithubBinding: Binding<String> {

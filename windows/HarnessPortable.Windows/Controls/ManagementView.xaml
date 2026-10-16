@@ -234,16 +234,17 @@
                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
                         </Grid>
 
-                        <TextBlock Text="更新源（两个地址都会保留，切换不丢）"
+                        <TextBlock Text="更新源（各地址都会保留，切换不丢）"
                                    Style="{StaticResource DshLabel}" Margin="0,16,0,6"/>
                         <ComboBox x:Name="UpdateSourceBox" Width="280" HorizontalAlignment="Left"
                                   Style="{StaticResource DshComboBox}"
                                   SelectionChanged="UpdateSourceBox_SelectionChanged">
                             <ComboBoxItem Content="家庭目录（局域网共享）" Tag="home"/>
                             <ComboBoxItem Content="GitHub" Tag="github"/>
+                            <ComboBoxItem Content="Gitee（默认）" Tag="gitee"/>
                         </ComboBox>
 
-                        <TextBlock Text="地址（家庭目录填 UNC 路径或 http 目录；GitHub 填仓库地址）"
+                        <TextBlock Text="地址（家庭目录填 UNC 路径或 http 目录；Gitee / GitHub 填仓库地址）"
                                    Style="{StaticResource DshLabel}" Margin="0,14,0,6"/>
                         <Grid>
                             <Grid.ColumnDefinitions>

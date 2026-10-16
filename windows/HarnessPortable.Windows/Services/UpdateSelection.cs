@@ -2,120 +2,93 @@ using HarnessPortable.Windows.Models;
 
 namespace HarnessPortable.Windows.Services;
 
-/// <summary>Which of the two known update feeds is in use.</summary>
-public enum UpdateSourceSlot
-{
-    Home,
-    GitHub,
-}
+public enum UpdateSourceSlot { Home, GitHub, Gitee }
 
-/// <summary>
-/// The two update feeds the app can pull from, held as a pair so switching
-/// between them never loses the other address.
-///
-/// New installs use the official GitHub feed. Existing LAN selections remain
-/// authoritative; both addresses are retained when the selection changes.
-/// </summary>
-public sealed class UpdateSelection
+/// <summary>Saved independent addresses; official GitHub installs migrate once to Gitee.</summary>
+public sealed record UpdateSelection
 {
     public const string Home = UpdateSourceFactory.DefaultServerUrl;
     public const string GitHub = UpdateSourceFactory.GitHubRepoUrl;
+    public const string Gitee = UpdateSourceFactory.GiteeRepoUrl;
 
-    public UpdateSourceSlot Slot { get; init; } = UpdateSourceSlot.GitHub;
+    public UpdateSourceSlot Slot { get; init; } = UpdateSourceSlot.Gitee;
     public string HomeUrl { get; init; } = Home;
     public string GitHubUrl { get; init; } = GitHub;
+    public string GiteeUrl { get; init; } = Gitee;
 
-    public string Url(UpdateSourceSlot slot) =>
-        (slot == UpdateSourceSlot.GitHub ? GitHubUrl : HomeUrl).Trim();
-
+    public string Url(UpdateSourceSlot slot) => (slot switch
+    {
+        UpdateSourceSlot.GitHub => GitHubUrl,
+        UpdateSourceSlot.Gitee => GiteeUrl,
+        _ => HomeUrl,
+    }).Trim();
     public string Url() => Url(Slot);
+    public string Label(UpdateSourceSlot slot) => slot switch
+    {
+        UpdateSourceSlot.GitHub => "GitHub",
+        UpdateSourceSlot.Gitee => "Gitee",
+        _ => "家庭目录",
+    };
+    public static string Tag(UpdateSourceSlot slot) => slot.ToString().ToLowerInvariant();
 
-    public string Label(UpdateSourceSlot slot) =>
-        slot == UpdateSourceSlot.GitHub ? "GitHub" : "家庭目录";
+    public UpdateSelection WithUrl(UpdateSourceSlot slot, string url) => slot switch
+    {
+        UpdateSourceSlot.GitHub => this with { GitHubUrl = url },
+        UpdateSourceSlot.Gitee => this with { GiteeUrl = url },
+        _ => this with { HomeUrl = url },
+    };
 
-    /// <summary>
-    /// Reads the pair out of settings, folding the pre-two-slot single URL
-    /// into the slot it names so an existing install keeps checking where the
-    /// user had aimed it. Fills both slots with the built-in defaults.
-    /// </summary>
     public static UpdateSelection From(AppSettings settings)
     {
         var home = settings.UpdateHomeUrl?.Trim() ?? "";
         var github = settings.UpdateGitHubUrl?.Trim() ?? "";
-        UpdateSourceSlot? slot = ParseSlot(settings.UpdateSourceSelected);
+        var gitee = settings.UpdateGiteeUrl?.Trim() ?? "";
+        var slot = ParseSlot(settings.UpdateSourceSelected);
         var legacy = settings.UpdateServerUrl?.Trim() ?? "";
-
-        if (home.Length == 0 && github.Length == 0 && legacy.Length > 0)
+        if (home.Length == 0 && github.Length == 0 && gitee.Length == 0 && legacy.Length > 0)
         {
-            // Nothing split out yet: this single URL is the source. Seed the
-            // slot it names, and let the selection follow it unless the
-            // settings already say otherwise.
-            if (UpdateSourceFactory.Classify(legacy) == UpdateSourceKind.GitHub)
+            switch (UpdateSourceFactory.Classify(legacy))
             {
-                github = legacy;
-                slot ??= UpdateSourceSlot.GitHub;
-            }
-            else
-            {
-                home = legacy;
-                slot ??= UpdateSourceSlot.Home;
+                case UpdateSourceKind.GitHub: github = legacy; slot ??= UpdateSourceSlot.GitHub; break;
+                case UpdateSourceKind.Gitee: gitee = legacy; slot ??= UpdateSourceSlot.Gitee; break;
+                default: home = legacy; slot ??= UpdateSourceSlot.Home; break;
             }
         }
-
-        if (home.Length == 0)
-        {
-            home = Home;
-        }
-
-        if (github.Length == 0)
-        {
-            github = GitHub;
-        }
-
+        // A populated Gitee slot marks completion, so choosing GitHub later is respected.
+        if (string.IsNullOrWhiteSpace(settings.UpdateGiteeUrl) && slot == UpdateSourceSlot.GitHub &&
+            (github.Length == 0 || IsOfficialGitHub(github))) slot = UpdateSourceSlot.Gitee;
         return new UpdateSelection
         {
-            Slot = slot ?? UpdateSourceSlot.GitHub,
-            HomeUrl = home,
-            GitHubUrl = github,
+            Slot = slot ?? UpdateSourceSlot.Gitee,
+            HomeUrl = home.Length == 0 ? Home : home,
+            GitHubUrl = github.Length == 0 ? GitHub : github,
+            GiteeUrl = gitee.Length == 0 ? Gitee : gitee,
         };
     }
 
-    /// <summary>
-    /// Applies the address the user just typed to the slot the picker was on
-    /// before it moved (<paramref name="leavingTag"/>: "home" / "github" /
-    /// null when unknown), and selects the slot the picker now shows. The
-    /// address box text always belongs to the slot being left, not the one
-    /// being entered.
-    /// </summary>
-    public static UpdateSelection MergeTyped(
-        UpdateSelection stored, string? leavingTag, string typed)
-    {
-        leavingTag = leavingTag?.Trim().ToLowerInvariant();
-        var slot = ParseSlot(leavingTag) ?? stored.Slot;
-        var other = slot == UpdateSourceSlot.GitHub ? UpdateSourceSlot.Home : UpdateSourceSlot.GitHub;
+    private static bool IsOfficialGitHub(string url) =>
+        UpdateSourceFactory.LooksLikeGitHub(url) && Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        (uri.AbsolutePath.Trim('/').Equals("RailgunHamster/HarnessPortable", StringComparison.OrdinalIgnoreCase) ||
+         uri.AbsolutePath.Trim('/').StartsWith("RailgunHamster/HarnessPortable/", StringComparison.OrdinalIgnoreCase));
 
-        return new UpdateSelection
-        {
-            Slot = other,
-            HomeUrl = slot == UpdateSourceSlot.Home ? typed : stored.HomeUrl,
-            GitHubUrl = slot == UpdateSourceSlot.GitHub ? typed : stored.GitHubUrl,
-        };
-    }
+    /// <summary>The typed address belongs to the slot being left.</summary>
+    public static UpdateSelection MergeTyped(UpdateSelection stored, string? leavingTag, string typed, string? enteringTag) =>
+        stored.WithUrl(ParseSlot(leavingTag) ?? stored.Slot, typed) with
+        { Slot = ParseSlot(enteringTag) ?? stored.Slot };
 
-    /// <summary>Writes the pair back, keeping the fresh fields authoritative.</summary>
     public void Store(AppSettings settings)
     {
         settings.UpdateHomeUrl = HomeUrl;
         settings.UpdateGitHubUrl = GitHubUrl;
-        settings.UpdateSourceSelected = Slot == UpdateSourceSlot.GitHub ? "github" : "home";
-        // Retired field: mirrored only so an older build reading the same file
-        // still finds the address it understands.
+        settings.UpdateGiteeUrl = GiteeUrl;
+        settings.UpdateSourceSelected = Tag(Slot);
         settings.UpdateServerUrl = Url();
     }
 
     public static UpdateSourceSlot? ParseSlot(string? value) => value?.Trim().ToLowerInvariant() switch
     {
         "github" => UpdateSourceSlot.GitHub,
+        "gitee" => UpdateSourceSlot.Gitee,
         "home" => UpdateSourceSlot.Home,
         _ => null,
     };

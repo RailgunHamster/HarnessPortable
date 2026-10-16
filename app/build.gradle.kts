@@ -30,7 +30,7 @@ android {
         minSdk = 24
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 29
+        versionCode = 30
         versionName = rootProject.file("VERSION").takeIf { it.exists() }?.readText()?.trim() ?: "2.5.0"
     }
 
@@ -69,6 +69,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     implementation("androidx.core:core-ktx:1.13.1")
@@ -84,3 +85,11 @@ dependencies {
     implementation("com.github.mwiede:jsch:0.2.21")
     implementation("com.hierynomus:smbj:0.14.0")
 }
+
+
+val prepareLicenseAssets by tasks.registering(Copy::class) {
+    from(rootProject.file("LICENSE"), rootProject.file("NOTICE"))
+    into(layout.buildDirectory.dir("generated/licenseAssets/licenses"))
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/licenseAssets"))
+tasks.named("preBuild").configure { dependsOn(prepareLicenseAssets) }
