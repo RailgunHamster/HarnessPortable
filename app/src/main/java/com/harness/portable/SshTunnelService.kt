@@ -22,7 +22,6 @@ import com.jcraft.jsch.JSchChangedHostKeyException
 import com.jcraft.jsch.JSchException
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.UserInfo
-import java.util.Properties
 
 /**
  * Foreground service that maintains an SSH local port forward
@@ -376,24 +375,6 @@ class SshTunnelService : Service() {
                     }
                 }
                 val sess = jsch.getSession(p.user, p.sshHost, p.sshPort)
-                if (!password.isNullOrEmpty()) {
-                    sess.setPassword(password)
-                }
-                val methods = buildList {
-                    if (identity.isNotEmpty()) add("publickey")
-                    if (!password.isNullOrEmpty()) {
-                        add("password")
-                        add("keyboard-interactive")
-                    }
-                    if (isEmpty()) add("publickey")
-                }.joinToString(",")
-                sess.setConfig(Properties().apply {
-                    // The TOFU repository decides: new key -> remember + OK,
-                    // matching key -> OK, changed key -> CHANGED -> rejected.
-                    put("StrictHostKeyChecking", "yes")
-                    put("PreferredAuthentications", methods)
-                    put("NumberOfPasswordPrompts", "1")
-                })
                 // Always own the TCP socket so we can enable SO_KEEPALIVE.
                 // Bare host names are resolved ourselves (NetBIOS / MagicDNS)
                 // instead of relying on the OS resolver.
@@ -413,7 +394,7 @@ class SshTunnelService : Service() {
                     sess.setServerAliveCountMax(SERVER_ALIVE_COUNT_MAX)
                 }
                 stage("ssh connect")
-                sess.connect(20_000)
+                SshAuthentication.connect(sess, password, identity.isNotEmpty(), 20_000)
                 stage("setting up forward")
 
                 var bound = -1
