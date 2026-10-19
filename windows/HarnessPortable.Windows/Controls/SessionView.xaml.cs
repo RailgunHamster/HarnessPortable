@@ -34,6 +34,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private bool _browserFailed;
     private bool _recoveringBrowser;
     private bool _pageParked;
+    private bool _discardingPage;
+    private CoreWebView2ScriptDialogOpeningEventArgs? _scriptDialog;
+    private CoreWebView2Deferral? _scriptDialogDeferral;
     private int _pageGeneration;
     private string? _currentUrl;
 
@@ -181,6 +184,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         _shutdown = true;
         _pageGeneration++;
+        CompleteScriptDialog(false, updateVisibility: false);
 
         if (_isTunnel)
         {
@@ -288,7 +292,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         // While the auth prompt is up, the TextBox must keep focus; pulling
         // it back into the page would cancel pasting/IME mid-entry.
-        if (AuthOverlay.Visibility == Visibility.Visible || StatusOverlay.Visibility == Visibility.Visible)
+        if (AuthOverlay.Visibility == Visibility.Visible || StatusOverlay.Visibility == Visibility.Visible || ScriptDialogOverlay.Visibility == Visibility.Visible)
         {
             return;
         }
@@ -446,11 +450,30 @@ public partial class SessionView : System.Windows.Controls.UserControl
             var core = WebView.CoreWebView2;
             _browserProcess = Process.GetProcessById(checked((int)core.BrowserProcessId));
             _ = _browserProcess.SafeHandle; // Pin this process identity; never target a reused PID.
+            // Keep page dialogs inside this tab; a native modal dialog can
+            // remain hidden while the tunnel is being disconnected.
+            core.Settings.AreDefaultScriptDialogsEnabled = false;
+            core.ScriptDialogOpening += (_, e) =>
+            {
+                if (_shutdown || !ReferenceEquals(WebView, browser)) return;
+                if (_discardingPage)
+                {
+                    if (e.Kind == CoreWebView2ScriptDialogKind.Beforeunload) e.Accept();
+                    return;
+                }
+                ShowScriptDialog(e);
+            };
+            core.ContentLoading += (_, _) =>
+            {
+                if (ReferenceEquals(WebView, browser) && (!_pageParked || core.Source == "about:blank"))
+                    _discardingPage = false;
+            };
             core.ProcessFailed += (_, e) =>
             {
                 if (_shutdown || !ReferenceEquals(WebView, browser) || e.ProcessFailedKind is not (CoreWebView2ProcessFailedKind.BrowserProcessExited or CoreWebView2ProcessFailedKind.RenderProcessExited)) return;
                 _browserFailed = true;
                 _coreReady = false;
+                CompleteScriptDialog(false, updateVisibility: false);
                 OverlayTitle.Text = "浏览器连接中断";
                 OverlayMessage.Text = "点击恢复网页重新打开当前标签。";
                 OverlayReconnectButton.Content = "恢复";
@@ -469,7 +492,6 @@ public partial class SessionView : System.Windows.Controls.UserControl
             core.NavigationStarting += (_, e) =>
             {
                 if (_shutdown || !ReferenceEquals(WebView, browser)) return;
-                if (!_pageParked) _currentUrl = e.Uri;
                 FlickerLog.Log("webview-nav", "start " + MaskUrl(e.Uri) + " (" + LogTag + ")");
             };
             core.SourceChanged += (_, _) =>
@@ -900,7 +922,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private void UpdateBrowserVisibility()
     {
         var visibility = StatusOverlay.Visibility == Visibility.Visible || AuthOverlay.Visibility == Visibility.Visible
-            ? Visibility.Hidden : Visibility.Visible;
+            || ScriptDialogOverlay.Visibility == Visibility.Visible ? Visibility.Hidden : Visibility.Visible;
         if (WebView.Visibility != visibility) GuardBrowserOperation(() => WebView.Visibility = visibility);
     }
 
@@ -914,13 +936,75 @@ public partial class SessionView : System.Windows.Controls.UserControl
         _webStateReapplied = false;
         AuthOverlay.Visibility = Visibility.Collapsed;
         if (!_coreReady || _browserFailed) return;
+        _discardingPage = true;
+        CompleteScriptDialog(false, updateVisibility: false);
         GuardBrowserOperation(() =>
         {
             WebView.CoreWebView2.Stop();
-            // Hiding a WebView does not stop WebSockets, SSE, or retry timers.
-            // Keep the tab/control and cookies, but unload the disconnected page.
+            // Keep the tab/control and cookies, but stop all page activity.
             WebView.CoreWebView2.Navigate("about:blank");
         });
+    }
+
+    private void ShowScriptDialog(CoreWebView2ScriptDialogOpeningEventArgs args)
+    {
+        CompleteScriptDialog(false, updateVisibility: false);
+        _scriptDialog = args;
+        _scriptDialogDeferral = args.GetDeferral();
+        ScriptDialogTitle.Text = args.Kind switch
+        {
+            CoreWebView2ScriptDialogKind.Beforeunload => "离开当前网页？",
+            CoreWebView2ScriptDialogKind.Confirm => "网页确认",
+            CoreWebView2ScriptDialogKind.Prompt => "网页输入",
+            _ => "网页提示",
+        };
+        ScriptDialogMessage.Text = args.Message;
+        ScriptDialogSource.Text = Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host)
+            ? "来自网页：" + uri.Host + (uri.IsDefaultPort ? "" : ":" + uri.Port) : "来自当前网页";
+        ScriptPromptBox.Text = args.DefaultText;
+        ScriptPromptBox.Visibility = args.Kind == CoreWebView2ScriptDialogKind.Prompt ? Visibility.Visible : Visibility.Collapsed;
+        ScriptDialogCancel.Visibility = args.Kind == CoreWebView2ScriptDialogKind.Alert ? Visibility.Collapsed : Visibility.Visible;
+        ScriptDialogAccept.Content = args.Kind == CoreWebView2ScriptDialogKind.Beforeunload ? "离开网页" : "确定";
+        ScriptDialogOverlay.Visibility = Visibility.Visible;
+        UpdateBrowserVisibility();
+        if (ScriptPromptBox.Visibility == Visibility.Visible) ScriptPromptBox.Focus(); else ScriptDialogAccept.Focus();
+    }
+
+    private void CompleteScriptDialog(bool accept, bool updateVisibility = true)
+    {
+        var args = _scriptDialog;
+        var deferral = _scriptDialogDeferral;
+        _scriptDialog = null;
+        _scriptDialogDeferral = null;
+        var input = ScriptPromptBox.Text;
+        ScriptDialogOverlay.Visibility = Visibility.Collapsed;
+        if (args is not null && deferral is not null)
+        {
+            GuardBrowserOperation(() =>
+            {
+                try
+                {
+                    if (accept)
+                    {
+                        if (args.Kind == CoreWebView2ScriptDialogKind.Prompt) args.ResultText = input;
+                        args.Accept();
+                    }
+                }
+                finally { deferral.Complete(); }
+            });
+        }
+        if (updateVisibility && !_shutdown) { UpdateBrowserVisibility(); FocusWebView(); }
+    }
+
+    private void ScriptDialogAccept_Click(object sender, RoutedEventArgs e) => CompleteScriptDialog(true);
+    private void ScriptDialogCancel_Click(object sender, RoutedEventArgs e) => CompleteScriptDialog(false);
+    private void ScriptDialog_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key is Key.Escape or Key.Enter)
+        {
+            e.Handled = true;
+            CompleteScriptDialog(e.Key == Key.Enter);
+        }
     }
 
     private void GuardBrowserOperation(Action operation)
@@ -945,6 +1029,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         if (_shutdown || _recoveringBrowser) return;
         _recoveringBrowser = true;
         _pageGeneration++;
+        CompleteScriptDialog(false, updateVisibility: false);
         try
         {
             InitialWebState = ViewStateUrls.Extract(CurrentUrl) ?? InitialWebState;
@@ -957,6 +1042,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             _browserProcess = null;
             _coreReady = false;
             _browserFailed = false;
+            _discardingPage = false;
             _authCheckedNavId = 0;
             OverlayReconnectButton.Content = "重连";
             StatusOverlay.Visibility = Visibility.Collapsed;

@@ -56,5 +56,25 @@
           </ScrollViewer>
         </Border>
 
+        <Border x:Name="ScriptDialogOverlay" Background="{DynamicResource DshScrim}" Visibility="Collapsed"
+                PreviewKeyDown="ScriptDialog_KeyDown">
+            <ScrollViewer MaxWidth="480" Margin="8" HorizontalAlignment="Center" VerticalAlignment="Center"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="16">
+                <StackPanel>
+                    <TextBlock x:Name="ScriptDialogTitle" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ScriptDialogSource" FontSize="11" Foreground="{DynamicResource DshTextSecondary}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+                        <TextBlock x:Name="ScriptDialogMessage" FontSize="13" Foreground="{DynamicResource DshTextPrimary}" TextWrapping="Wrap"/>
+                    </ScrollViewer>
+                    <TextBox x:Name="ScriptPromptBox" AutomationProperties.Name="网页输入内容" FontSize="13" Margin="0,12,0,0" Visibility="Collapsed" Style="{StaticResource ModernTextBox}"/>
+                    <WrapPanel HorizontalAlignment="Right" Margin="0,14,0,0">
+                        <Button x:Name="ScriptDialogCancel" Content="取消" Padding="8,6" Margin="0,0,8,0" Style="{StaticResource ModernButton}" Click="ScriptDialogCancel_Click"/>
+                        <Button x:Name="ScriptDialogAccept" Content="确定" Padding="8,6" Style="{StaticResource ModernPrimaryButton}" Click="ScriptDialogAccept_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+            </ScrollViewer>
+        </Border>
     </Grid>
 </UserControl>
