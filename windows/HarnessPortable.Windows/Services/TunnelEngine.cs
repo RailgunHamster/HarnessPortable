@@ -20,8 +20,7 @@ public sealed partial class TunnelEngine
 
     private readonly object _gate = new();
     private CancellationTokenSource? _cts;
-    private SshClient? _client;
-    private ForwardedPortLocal? _forward;
+    private TunnelResources? _resources;
     private int _generation;
 
     private TunnelProfile? _activeProfile;
@@ -88,6 +87,8 @@ public sealed partial class TunnelEngine
     private void StartCore(TunnelProfile profile, bool resetBackoff)
     {
         CancellationTokenSource cts;
+        CancellationTokenSource? previousCts;
+        TunnelResources? previousResources;
         int generation;
         lock (_gate)
         {
@@ -99,13 +100,17 @@ public sealed partial class TunnelEngine
 
             generation = ++_generation;
             _activeProfile = profile;
-            _cts?.Cancel();
+            previousCts = _cts;
+            previousResources = _resources;
+            _resources = null;
             _cts = new CancellationTokenSource();
             cts = _cts;
             // Several restored tabs must share the attempt before its worker runs.
             State.Set(new TunnelInfo(profile.Id, profile.DisplayName, TunnelStatus.Connecting, "正在连接 SSH…"));
         }
 
+        _ = RequestCancellationAsync(previousCts);
+        if (previousResources is not null) _ = Task.Run(previousResources.Dispose);
         _ = Task.Run(() => RunAsync(profile, generation, cts.Token));
     }
 
@@ -125,8 +130,8 @@ public sealed partial class TunnelEngine
     /// </summary>
     private void DetachCurrentForTeardown(bool publishStopped = false)
     {
-        SshClient? client;
-        ForwardedPortLocal? forward;
+        CancellationTokenSource? cts;
+        TunnelResources? resources;
 
         lock (_gate)
         {
@@ -135,26 +140,41 @@ public sealed partial class TunnelEngine
             var id = _activeProfile?.Id ?? previous.ProfileId;
             var name = _activeProfile?.DisplayName ?? previous.ProfileName;
             _activeProfile = null;
-            _cts?.Cancel();
+            cts = _cts;
             _cts = null;
-            client = _client;
-            forward = _forward;
-            _client = null;
-            _forward = null;
+            resources = _resources;
+            _resources = null;
             // Publish with identity under the generation lock, before a new start.
             if (publishStopped) State.Set(new TunnelInfo(id, name, TunnelStatus.Stopped, "隧道已停止"));
         }
 
-        if (client is null && forward is null)
-        {
-            return;
-        }
+        _ = RequestCancellationAsync(cts);
+        if (resources is not null) _ = Task.Run(resources.Dispose);
+    }
 
-        _ = Task.Run(() => TearDown(client, forward));
+    private static async Task RequestCancellationAsync(CancellationTokenSource? cts)
+    {
+        if (cts is null) return;
+        try { await cts.CancelAsync().ConfigureAwait(false); }
+        catch (Exception ex) { FlickerLog.Log("tunnel-stop", "cancel failed: " + ex.GetType().Name); }
+    }
+
+    private static void ConfigureTeardownTimeouts(SshClient? client)
+    {
+        if (client is null) return;
+        // Open pages can keep many forwarded channels alive. Disconnect is an
+        // explicit stop, so do not wait serially for remote channel-close ACKs.
+        try
+        {
+            client.ConnectionInfo.ChannelCloseTimeout = TimeSpan.Zero;
+            client.ConnectionInfo.Timeout = TimeSpan.FromSeconds(2);
+        }
+        catch (ObjectDisposedException) { }
     }
 
     private static void TearDown(SshClient? client, ForwardedPortLocal? forward)
     {
+        ConfigureTeardownTimeouts(client);
         try
         {
             forward?.Stop();
@@ -200,8 +220,13 @@ public sealed partial class TunnelEngine
         {
             while (generation == Volatile.Read(ref _generation) && !token.IsCancellationRequested)
             {
+                var resources = new TunnelResources();
+                lock (_gate)
+                {
+                    if (generation != _generation) return;
+                    _resources = resources;
+                }
                 SshClient? client = null;
-                ForwardedPortLocal? forward = null;
                 string? hostKeyProblem = null;
 
                 List<PrivateKeyFile> keyFiles = [];
@@ -281,6 +306,8 @@ public sealed partial class TunnelEngine
                     connectionInfo.Timeout = TimeSpan.FromSeconds(20);
 
                     client = new SshClient(connectionInfo);
+                    var ownedClient = client;
+                    resources.OwnClient(() => TearDown(ownedClient, null));
                     client.HostKeyReceived += (_, e) =>
                     {
                         try
@@ -303,8 +330,6 @@ public sealed partial class TunnelEngine
                         {
                             return;
                         }
-
-                        _client = client;
                     }
 
                     await Task.Run(() => client.Connect(), token).ConfigureAwait(false);
@@ -326,7 +351,11 @@ public sealed partial class TunnelEngine
                         {
                             client.AddForwardedPort(candidateForward);
                             candidateForward.Start();
-                            forward = candidateForward;
+                            resources.OwnForward(() =>
+                            {
+                                ConfigureTeardownTimeouts(ownedClient);
+                                TearDown(null, candidateForward);
+                            });
                             bound = candidate;
                             break;
                         }
@@ -364,14 +393,12 @@ public sealed partial class TunnelEngine
                         {
                             return;
                         }
-
-                        _forward = forward;
                     }
 
                     // A session exists: from here on a drop is a transient
                     // network event and may be retried, and the escalation
                     // starts over.
-                    MarkConnected();
+                    if (!MarkConnected(generation)) return;
 
                     // dsh-web style services gate the browser behind a
                     // launch token printed on the server. In NSSM mode grab
@@ -465,56 +492,10 @@ public sealed partial class TunnelEngine
                 }
                 finally
                 {
-                    try
-                    {
-                        forward?.Stop();
-                    }
-                    catch
-                    {
-                        // Ignore.
-                    }
-
-                    try
-                    {
-                        forward?.Dispose();
-                    }
-                    catch
-                    {
-                        // Ignore.
-                    }
-
+                    resources.Dispose();
                     lock (_gate)
                     {
-                        if (ReferenceEquals(_forward, forward))
-                        {
-                            _forward = null;
-                        }
-                    }
-
-                    try
-                    {
-                        client?.Disconnect();
-                    }
-                    catch
-                    {
-                        // Ignore.
-                    }
-
-                    try
-                    {
-                        client?.Dispose();
-                    }
-                    catch
-                    {
-                        // Ignore.
-                    }
-
-                    lock (_gate)
-                    {
-                        if (ReferenceEquals(_client, client))
-                        {
-                            _client = null;
-                        }
+                        if (ReferenceEquals(_resources, resources)) _resources = null;
                     }
 
                     foreach (var key in keyFiles)
@@ -604,12 +585,14 @@ public sealed partial class TunnelEngine
     /// Records that a session is up: drops from here on are transient network
     /// events that may be retried, and the escalation restarts at 3 seconds.
     /// </summary>
-    private void MarkConnected()
+    private bool MarkConnected(int generation)
     {
         lock (_gate)
         {
+            if (generation != _generation) return false;
             _connectedOnce = true;
             _backoff = InitialBackoff;
+            return true;
         }
     }
 

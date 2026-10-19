@@ -33,6 +33,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
     private Process? _browserProcess;
     private bool _browserFailed;
     private bool _recoveringBrowser;
+    private bool _pageParked;
+    private int _pageGeneration;
+    private string? _currentUrl;
 
     public event Action? CloseRequested;
     public event Action<string>? TitleChanged;
@@ -65,14 +68,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
     {
         get
         {
-            try
-            {
-                return _coreReady ? WebView.CoreWebView2?.Source : null;
-            }
-            catch
-            {
-                return null;
-            }
+            // Workspace saves must not make synchronous COM calls into a
+            // browser whose forwarded connection is being torn down.
+            return _pageParked ? null : _currentUrl;
         }
     }
 
@@ -182,6 +180,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
 
         _shutdown = true;
+        _pageGeneration++;
 
         if (_isTunnel)
         {
@@ -351,7 +350,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private void ApplyState(TunnelInfo info)
     {
-        if (!_isTunnel || _profile is null)
+        if (_shutdown || !_isTunnel || _profile is null)
         {
             return;
         }
@@ -360,6 +359,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
         if (info.Status == TunnelStatus.Connected)
         {
+            _pageParked = false;
             _profile = _services.Profiles.FindTunnel(_profile.Id) ?? _profile;
             if (!_initialized && IsLoaded)
             {
@@ -392,6 +392,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
 
         _tunnelWasDown = true;
+        if (info.Status == TunnelStatus.Stopped) ParkDisconnectedPage();
 
         OverlayTitle.Text = info.Status switch
         {
@@ -465,11 +466,21 @@ public partial class SessionView : System.Windows.Controls.UserControl
             // active on a real selection change.
             WebView.GotFocus += (_, _) => FlickerLog.Log("webview", "GotFocus (" + LogTag + ")");
             WebView.LostFocus += (_, _) => FlickerLog.Log("webview", "LostFocus (" + LogTag + ")");
-            core.NavigationStarting += (_, e) => FlickerLog.Log("webview-nav", "start " + MaskUrl(e.Uri) + " (" + LogTag + ")");
-            core.SourceChanged += (_, _) => WorkspaceStateChanged?.Invoke();
-            core.NavigationCompleted += async (_, e) =>
+            core.NavigationStarting += (_, e) =>
             {
                 if (_shutdown || !ReferenceEquals(WebView, browser)) return;
+                if (!_pageParked) _currentUrl = e.Uri;
+                FlickerLog.Log("webview-nav", "start " + MaskUrl(e.Uri) + " (" + LogTag + ")");
+            };
+            core.SourceChanged += (_, _) =>
+            {
+                if (_shutdown || !ReferenceEquals(WebView, browser)) return;
+                if (!_pageParked) _currentUrl = core.Source;
+                WorkspaceStateChanged?.Invoke();
+            };
+            core.NavigationCompleted += async (_, e) =>
+            {
+                if (_shutdown || _pageParked || !ReferenceEquals(WebView, browser)) return;
                 FlickerLog.Log("webview-nav", "complete navId=" + e.NavigationId + " ok=" + e.IsSuccess + " (" + LogTag + ")");
                 await CheckAuthRequiredAsync(e.NavigationId);
                 await ReapplyWebStateSoonAsync();
@@ -574,6 +585,8 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private void Navigate(string url)
     {
+        if (_shutdown || _isTunnel && _profile is not null &&
+            _services.Tunnels.GetState(_profile.Id).Status != TunnelStatus.Connected) return;
         url = MergeWebState(url);
         FlickerLog.Log("navigate", MaskUrl(url) + " (" + LogTag + ")");
 
@@ -618,11 +631,12 @@ public partial class SessionView : System.Windows.Controls.UserControl
     /// </summary>
     private async Task ReapplyWebStateSoonAsync()
     {
-        if (_webStateReapplied || InitialWebState is null || _shutdown)
+        if (_webStateReapplied || InitialWebState is null || _shutdown || _pageParked)
         {
             return;
         }
 
+        var generation = _pageGeneration;
         try
         {
             await Task.Delay(1500);
@@ -632,7 +646,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             // shutting down
         }
 
-        if (_webStateReapplied || InitialWebState is null || _shutdown)
+        if (_webStateReapplied || InitialWebState is null || _shutdown || _pageParked || generation != _pageGeneration)
         {
             return;
         }
@@ -679,7 +693,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
     /// </summary>
     private async Task CheckAuthRequiredAsync(ulong navigationId)
     {
-        if (_shutdown || AuthOverlay.Visibility == Visibility.Visible)
+        if (_shutdown || _pageParked || AuthOverlay.Visibility == Visibility.Visible)
         {
             return;
         }
@@ -691,6 +705,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         }
 
         _authCheckedNavId = navigationId;
+        var generation = _pageGeneration;
 
         try
         {
@@ -703,6 +718,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             var json = await WebView.CoreWebView2.ExecuteScriptAsync(
                 "document.body ? (document.body.innerText || '').slice(0, 4000) : ''");
             var text = JsonSerializer.Deserialize<string>(json) ?? string.Empty;
+            if (_shutdown || _pageParked || generation != _pageGeneration) return;
 
             if (LooksLikeAuthRequired(text))
             {
@@ -883,14 +899,52 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private void UpdateBrowserVisibility()
     {
-        WebView.Visibility = StatusOverlay.Visibility == Visibility.Visible || AuthOverlay.Visibility == Visibility.Visible
+        var visibility = StatusOverlay.Visibility == Visibility.Visible || AuthOverlay.Visibility == Visibility.Visible
             ? Visibility.Hidden : Visibility.Visible;
+        if (WebView.Visibility != visibility) GuardBrowserOperation(() => WebView.Visibility = visibility);
+    }
+
+    private void ParkDisconnectedPage()
+    {
+        if (_pageParked) return;
+        InitialWebState = ViewStateUrls.Extract(CurrentUrl) ?? InitialWebState;
+        _pageParked = true;
+        _pageGeneration++;
+        _currentUrl = null;
+        _webStateReapplied = false;
+        AuthOverlay.Visibility = Visibility.Collapsed;
+        if (!_coreReady || _browserFailed) return;
+        GuardBrowserOperation(() =>
+        {
+            WebView.CoreWebView2.Stop();
+            // Hiding a WebView does not stop WebSockets, SSE, or retry timers.
+            // Keep the tab/control and cookies, but unload the disconnected page.
+            WebView.CoreWebView2.Navigate("about:blank");
+        });
+    }
+
+    private void GuardBrowserOperation(Action operation)
+    {
+        var process = _browserProcess;
+        GuardedDisposal.Run(() =>
+        {
+            try { operation(); }
+            catch (Exception ex) { FlickerLog.Log("webview", "state change failed: " + ex.GetType().Name); }
+        }, () =>
+        {
+            if (process is not null && !process.HasExited)
+            {
+                FlickerLog.Log("webview", "state change exceeded the budget; recovering the app browser process");
+                process.Kill(entireProcessTree: true);
+            }
+        }, DisposalBudget);
     }
 
     private async Task RecoverBrowserAsync()
     {
         if (_shutdown || _recoveringBrowser) return;
         _recoveringBrowser = true;
+        _pageGeneration++;
         try
         {
             InitialWebState = ViewStateUrls.Extract(CurrentUrl) ?? InitialWebState;
