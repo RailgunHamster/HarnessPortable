@@ -83,7 +83,7 @@ if (!$release) {
     $notes = Get-Content -LiteralPath (Join-Path $root 'artifacts/release-notes.md') -Raw
     $release = Invoke-Gitee '/releases' 'Post' @{tag_name=$tag;name=('Harness Portable '+$Version);body=$notes;target_commitish=$commit;prerelease='true'}
 }
-$attachments = @(Invoke-Gitee ('/releases/'+$release.id+'/attach_files?per_page=100'))
+$attachments = Invoke-Gitee ('/releases/'+$release.id+'/attach_files?per_page=100')
 foreach ($file in $files) {
     $name = Split-Path -Leaf $file
     $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
