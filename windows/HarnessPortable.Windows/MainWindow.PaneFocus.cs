@@ -42,7 +42,6 @@ public partial class MainWindow
 
     private void UpdatePaneFocusPresentation()
     {
-        ApplySidebarVisibility();
         foreach (var view in AllSessionDocs().Select(d => d.Content).OfType<Controls.SessionView>()) view.PaneMaximized = IsPaneMaximized;
     }
 

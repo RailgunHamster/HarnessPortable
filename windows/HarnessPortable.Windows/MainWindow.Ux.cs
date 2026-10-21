@@ -72,7 +72,7 @@ public partial class MainWindow
 
     private void ApplySidebarVisibility()
     {
-        var collapsed = _isFullScreen || IsPaneMaximized || _services.Settings.Load().ConnectionSidebarCollapsed;
+        var collapsed = _isFullScreen || _services.Settings.Load().ConnectionSidebarCollapsed;
         SidebarColumn.Width = collapsed ? new GridLength(0) : new GridLength(260);
         SidebarBorder.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
         SidebarToggleButton.Content = collapsed ? "☰ 连接库" : "☰ 收起侧栏";
