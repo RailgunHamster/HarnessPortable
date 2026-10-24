@@ -1,0 +1,12 @@
+{
+  "MainWindow.DocumentTab_PreviewMouseLeftButtonDown": ["workspace.tab.select", "workspace.tab.move"],
+  "MainWindow.Window_PreviewMouseMove": ["workspace.tab.move"],
+  "MainWindow.Window_PreviewMouseLeftButtonUp": ["workspace.tab.move"],
+  "ConnectionSidebar.Blank_RightClick": ["library.addMenu"],
+  "ConnectionSidebar.Drag_Pressed": ["library.move"],
+  "ConnectionSidebar.Drag_Released": ["library.move"],
+  "ConnectionSidebar.Drag_Moved": ["library.move"],
+  "ConnectionSidebar.Connection_DragOver": ["library.move"],
+  "ConnectionSidebar.Connection_Drop": ["library.move"],
+  "ConnectionSidebar.Connection_DragLeave": ["library.move"]
+}

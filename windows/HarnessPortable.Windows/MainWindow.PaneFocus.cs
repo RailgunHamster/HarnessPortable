@@ -22,6 +22,14 @@ public partial class MainWindow
         DependencyObject? current = sender as DependencyObject;
         while (current is not null && current is not LayoutDocumentPaneControl) current = VisualTreeHelper.GetParent(current);
         if (current is not LayoutDocumentPaneControl paneControl || paneControl.Model is not LayoutDocumentPane pane) return;
+        MaximizePane(pane);
+    }
+
+    private void MaximizePane(LayoutDocumentPane pane)
+    {
+        if (ReferenceEquals(_maximizedPane, pane) && IsPaneMaximized) return;
+        RestorePaneFocus();
+        var paneControl = FindPaneControl(pane) ?? throw new Automation.AutomationFault("unavailable", "Pane has not been rendered yet.");
         if (pane.SelectedContent is LayoutDocument selected) selected.IsActive = true;
         if (!_paneFocus.Maximize(paneControl, DockManager, DockManager.Layout.Descendents())) return;
         _maximizedPane = pane;

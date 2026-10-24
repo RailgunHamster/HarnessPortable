@@ -461,7 +461,7 @@ public partial class ManagementView : System.Windows.Controls.UserControl
             return;
         }
 
-        var confirm = System.Windows.MessageBox.Show(
+        var confirm = HarnessPortable.Windows.Automation.AutomationDialogs.Show(
             Window.GetWindow(this),
             $"确定删除隧道“{item.Name}”吗？",
             "删除隧道",

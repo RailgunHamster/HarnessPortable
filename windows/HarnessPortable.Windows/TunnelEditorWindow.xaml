@@ -1,39 +1,40 @@
 <Window x:Class="HarnessPortable.Windows.TunnelEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:api="clr-namespace:HarnessPortable.Windows.Automation"
         Title="SSH 隧道" Icon="pack://application:,,,/HarnessPortable;component/Assets/HarnessPortable.png" Height="640" Width="520"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Background="{DynamicResource DshBgBase}"
-        FontFamily="{DynamicResource DshUiFont}">
+        FontFamily="{DynamicResource DshUiFont}" AutomationProperties.AutomationId="TunnelEditorWindow.Window">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="TunnelEditorWindow.ScrollViewer">
             <StackPanel>
                 <TextBlock Text="连接到服务器" Style="{StaticResource ModernGroupHeader}" Margin="0,0,0,14"/>
                 <TextBlock Text="名称（可选）" Margin="0,0,0,4" Style="{StaticResource ModernMutedText}"/>
-                <TextBox x:Name="NameBox" Style="{StaticResource ModernTextBox}"/>
+                <TextBox x:Name="NameBox" Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="TunnelEditorWindow.NameBox"/>
 
                 <TextBlock Text="服务器地址" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
                 <DockPanel>
                     <Button DockPanel.Dock="Right" Content="..." Padding="8,6" Margin="8,0,0,0"
                             Style="{StaticResource ModernToolbarButton}"
                             ToolTip="选择 SSH config 文件"
-                            Click="ChooseSshConfig_Click"/>
+                            Click="ChooseSshConfig_Click" AutomationProperties.AutomationId="TunnelEditorWindow.ChooseSshConfig_Click"/>
                     <Button DockPanel.Dock="Right" Content="↻" Padding="9,6" Margin="8,0,0,0"
                             Style="{StaticResource ModernToolbarButton}"
                             ToolTip="刷新 SSH 配置"
-                            Click="RefreshSshConfig_Click"/>
+                            Click="RefreshSshConfig_Click" AutomationProperties.AutomationId="TunnelEditorWindow.RefreshSshConfig_Click"/>
                     <ComboBox x:Name="HostBox"
                               Style="{StaticResource ModernEditableComboBox}"
                               ToolTip="输入 IP、机器名或域名；下拉可选择 SSH 配置别名"
                               DropDownOpened="HostBox_DropDownOpened"
-                              SelectionChanged="HostBox_SelectionChanged">
+                              SelectionChanged="HostBox_SelectionChanged" AutomationProperties.AutomationId="TunnelEditorWindow.HostBox">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="2">
@@ -48,54 +49,54 @@
                            FontSize="11" TextTrimming="CharacterEllipsis" Text="SSH 配置：~/.ssh/config"/>
 
                 <TextBlock Text="SSH 端口" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
-                <TextBox x:Name="SshPortBox" Style="{StaticResource ModernTextBox}" Text="22"/>
+                <TextBox x:Name="SshPortBox" Style="{StaticResource ModernTextBox}" Text="22" AutomationProperties.AutomationId="TunnelEditorWindow.SshPortBox"/>
 
                 <TextBlock Text="用户名" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
-                <TextBox x:Name="UserBox" Style="{StaticResource ModernTextBox}"/>
+                <TextBox x:Name="UserBox" Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="TunnelEditorWindow.UserBox"/>
 
                 <TextBlock x:Name="PasswordCaption" Text="密码（可稍后输入；密钥登录可留空）" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
-                <PasswordBox x:Name="PasswordInput" Style="{StaticResource ModernPasswordBox}"/>
+                <PasswordBox x:Name="PasswordInput" Style="{StaticResource ModernPasswordBox}" AutomationProperties.AutomationId="TunnelEditorWindow.PasswordInput"/>
 
                 <TextBlock Text="私钥文件（可选）" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
                 <DockPanel>
                     <Button DockPanel.Dock="Right" Content="清除" Padding="8,6" Margin="8,0,0,0"
                             Style="{StaticResource ModernToolbarButton}"
                             ToolTip="清除私钥路径，改用 ~/.ssh 默认身份文件"
-                            Click="ClearIdentityFile_Click"/>
+                            Click="ClearIdentityFile_Click" AutomationProperties.AutomationId="TunnelEditorWindow.ClearIdentityFile_Click"/>
                     <Button DockPanel.Dock="Right" Content="..." Padding="8,6" Margin="8,0,0,0"
                             Style="{StaticResource ModernToolbarButton}"
                             ToolTip="选择 SSH 私钥"
-                            Click="ChooseIdentityFile_Click"/>
+                            Click="ChooseIdentityFile_Click" AutomationProperties.AutomationId="TunnelEditorWindow.ChooseIdentityFile_Click"/>
                     <TextBox x:Name="IdentityFileBox" Style="{StaticResource ModernTextBox}"
-                             ToolTip="留空则尝试 ~/.ssh/id_ed25519、id_ecdsa、id_rsa"/>
+                             ToolTip="留空则尝试 ~/.ssh/id_ed25519、id_ecdsa、id_rsa" AutomationProperties.AutomationId="TunnelEditorWindow.IdentityFileBox"/>
                 </DockPanel>
 
                 <TextBlock Text="远程地址（服务器侧）" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
-                <TextBox x:Name="RemoteHostBox" Style="{StaticResource ModernTextBox}" Text="127.0.0.1"/>
+                <TextBox x:Name="RemoteHostBox" Style="{StaticResource ModernTextBox}" Text="127.0.0.1" AutomationProperties.AutomationId="TunnelEditorWindow.RemoteHostBox"/>
 
                 <TextBlock Text="远程端口" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
-                <TextBox x:Name="RemotePortBox" Style="{StaticResource ModernTextBox}" Text="3080"/>
+                <TextBox x:Name="RemotePortBox" Style="{StaticResource ModernTextBox}" Text="3080" AutomationProperties.AutomationId="TunnelEditorWindow.RemotePortBox"/>
 
                 <TextBlock Text="本地端口" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
-                <TextBox x:Name="LocalPortBox" Style="{StaticResource ModernTextBox}" Text="3080"/>
+                <TextBox x:Name="LocalPortBox" Style="{StaticResource ModernTextBox}" Text="3080" AutomationProperties.AutomationId="TunnelEditorWindow.LocalPortBox"/>
 
                 <TextBlock Text="Web 登录方式" Margin="0,12,0,4" Style="{StaticResource ModernMutedText}"/>
                 <ComboBox x:Name="AuthModeBox" Style="{StaticResource ModernComboBox}" SelectedIndex="0"
-                          SelectionChanged="AuthModeBox_SelectionChanged">
-                    <ComboBoxItem Content="NSSM 自动获取（服务器用 NSSM 托管 dsh web）" Tag="nssm"/>
-                    <ComboBoxItem Content="systemd 自动获取（Linux 服务器）" Tag="systemd"/>
-                    <ComboBoxItem Content="手动输入（连接时用下方填写的认证 URL/token）" Tag="manual"/>
+                          SelectionChanged="AuthModeBox_SelectionChanged" AutomationProperties.AutomationId="TunnelEditorWindow.AuthModeBox">
+                    <ComboBoxItem Content="NSSM 自动获取（服务器用 NSSM 托管 dsh web）" Tag="nssm" AutomationProperties.AutomationId="TunnelEditorWindow.ComboBoxItem.nssm.1"/>
+                    <ComboBoxItem Content="systemd 自动获取（Linux 服务器）" Tag="systemd" AutomationProperties.AutomationId="TunnelEditorWindow.ComboBoxItem.systemd.1"/>
+                    <ComboBoxItem Content="手动输入（连接时用下方填写的认证 URL/token）" Tag="manual" AutomationProperties.AutomationId="TunnelEditorWindow.ComboBoxItem.manual.1"/>
                 </ComboBox>
                 <StackPanel x:Name="SystemdPanel" Visibility="Collapsed" Margin="0,10,0,0">
                     <TextBlock Text="systemd 服务名" Margin="0,0,0,4" Style="{StaticResource ModernMutedText}"/>
-                    <TextBox x:Name="SystemdUnitBox" Text="dsh-web.service" Style="{StaticResource ModernTextBox}"/>
+                    <TextBox x:Name="SystemdUnitBox" Text="dsh-web.service" Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="TunnelEditorWindow.SystemdUnitBox"/>
                     <TextBlock Text="服务范围" Margin="0,10,0,4" Style="{StaticResource ModernMutedText}"/>
-                    <ComboBox x:Name="SystemdScopeBox" SelectedIndex="0" Style="{StaticResource ModernComboBox}">
-                        <ComboBoxItem Content="用户服务（SSH 登录用户）" Tag="user"/>
-                        <ComboBoxItem Content="系统服务" Tag="system"/>
+                    <ComboBox x:Name="SystemdScopeBox" SelectedIndex="0" Style="{StaticResource ModernComboBox}" AutomationProperties.AutomationId="TunnelEditorWindow.SystemdScopeBox">
+                        <ComboBoxItem Content="用户服务（SSH 登录用户）" Tag="user" AutomationProperties.AutomationId="TunnelEditorWindow.ComboBoxItem.user.1"/>
+                        <ComboBoxItem Content="系统服务" Tag="system" AutomationProperties.AutomationId="TunnelEditorWindow.ComboBoxItem.system.1"/>
                     </ComboBox>
                     <TextBlock Text="日志路径（可选）" Margin="0,10,0,4" Style="{StaticResource ModernMutedText}"/>
-                    <TextBox x:Name="SystemdLogPathBox" Style="{StaticResource ModernTextBox}"/>
+                    <TextBox x:Name="SystemdLogPathBox" Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="TunnelEditorWindow.SystemdLogPathBox"/>
                     <TextBlock Text="留空读取本次启动的 journal；服务将 stdout 重定向到文件时，填写该文件的完整路径。SSH 用户需要有日志读取权限。获取失败时回退到保存的认证输入或页面粘贴。"
                                Margin="0,4,0,0" TextWrapping="Wrap" Style="{StaticResource ModernMutedText}"/>
                 </StackPanel>
@@ -103,7 +104,7 @@
                 <StackPanel x:Name="AuthInputPanel" Visibility="Collapsed">
                     <TextBlock x:Name="AuthInputCaption" Text="认证 URL 或 token（可选）" Margin="0,12,0,4"
                                Style="{StaticResource ModernMutedText}"/>
-                    <TextBox x:Name="AuthInputBox" Style="{StaticResource ModernTextBox}"/>
+                    <TextBox x:Name="AuthInputBox" api:AutomationMetadata.Sensitive="True" Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="TunnelEditorWindow.AuthInputBox"/>
                     <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource DshTextSecondary}" FontSize="11" TextWrapping="Wrap"
                                Text="粘贴服务器上 dsh web 打印的带 token 的 URL，或直接粘贴 token 本身；保存后连接时会直接用它登录，NSSM 抓取失败时也会回退到它。留空则连接后在页面上粘贴；编辑时清空即删除已保存的值。值用 Windows DPAPI 加密存储，不写入 profiles.json。"/>
                 </StackPanel>
@@ -114,9 +115,9 @@
         </ScrollViewer>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="取消" Width="88" Margin="0,0,8,0" Style="{StaticResource ModernButton}" IsCancel="True"/>
-            <Button x:Name="SaveButton" Content="保存" Width="88" Style="{StaticResource ModernPrimaryButton}" IsDefault="True" Click="Save_Click"/>
-            <Button Content="保存并连接" Tag="connect" Margin="8,0,0,0" Style="{StaticResource ModernToolbarButton}" Click="Save_Click"/>
+            <Button Content="取消" Width="88" Margin="0,0,8,0" Style="{StaticResource ModernButton}" IsCancel="True" AutomationProperties.AutomationId="TunnelEditorWindow.Button"/>
+            <Button x:Name="SaveButton" Content="保存" Width="88" Style="{StaticResource ModernPrimaryButton}" IsDefault="True" Click="Save_Click" AutomationProperties.AutomationId="TunnelEditorWindow.SaveButton"/>
+            <Button Content="保存并连接" Tag="connect" Margin="8,0,0,0" Style="{StaticResource ModernToolbarButton}" Click="Save_Click" AutomationProperties.AutomationId="TunnelEditorWindow.Save_Click.connect"/>
         </StackPanel>
     </Grid>
 </Window>

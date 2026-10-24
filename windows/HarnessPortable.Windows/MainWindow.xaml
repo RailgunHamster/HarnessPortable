@@ -12,7 +12,7 @@
         FontFamily="{DynamicResource DshUiFont}"
         PreviewKeyDown="Window_PreviewKeyDown"
         PreviewMouseMove="Window_PreviewMouseMove"
-        PreviewMouseLeftButtonUp="Window_PreviewMouseLeftButtonUp">
+        PreviewMouseLeftButtonUp="Window_PreviewMouseLeftButtonUp" AutomationProperties.AutomationId="MainWindow.Window">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
@@ -36,7 +36,7 @@
                                     <controls:PaneActions Session="{Binding Model.SelectedContent.Content, RelativeSource={RelativeSource AncestorType={x:Type avalonDock:LayoutDocumentPaneControl}}}"
                                                           PaneWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type avalonDock:LayoutDocumentPaneControl}}}"/>
                                     <Button Width="32" Height="30" Margin="2,2,4,2" Padding="8"
-                                            AutomationProperties.Name="最大化或还原当前窗格" Click="TogglePaneFocus_Click">
+                                            AutomationProperties.Name="最大化或还原当前窗格" Click="TogglePaneFocus_Click" AutomationProperties.AutomationId="MainWindow.TogglePaneFocus_Click">
                                         <Button.Style>
                                             <Style TargetType="Button" BasedOn="{StaticResource ModernToolbarButton}">
                                                 <Setter Property="ToolTip" Value="最大化当前窗格"/>
@@ -87,7 +87,9 @@
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="TabItem">
-                                    <ContentPresenter ContentSource="Header"/>
+                                    <!-- AvalonDock's removal code searches for the nearest Panel.
+                                         Keep a non-items-host wrapper so it never edits the generated tab panel. -->
+                                    <Grid><ContentPresenter ContentSource="Header"/></Grid>
                                 </ControlTemplate>
                             </Setter.Value>
                         </Setter>
@@ -98,6 +100,7 @@
                 <Setter.Value>
                     <DataTemplate>
                         <avalonDock:LayoutDocumentTabItem Model="{Binding}"
+                                                          AutomationProperties.AutomationId="MainWindow.DocumentTab"
                                                           Style="{DynamicResource ModernDocumentTabItemStyle}"
                                                           PreviewMouseLeftButtonDown="DocumentTab_PreviewMouseLeftButtonDown"/>
                     </DataTemplate>
@@ -135,6 +138,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type avalonDock:LayoutDocumentTabItem}">
                         <avalonDock:DropDownControlArea
+                            AutomationProperties.AutomationId="MainWindow.TabMenuArea"
                             DropDownContextMenu="{Binding Root.Manager.DocumentContextMenu}"
                             DropDownContextMenuDataContext="{Binding LayoutItem, RelativeSource={RelativeSource TemplatedParent}}">
                             <Border x:Name="TabBorder"
@@ -163,7 +167,7 @@
                                             Focusable="False"
                                             Cursor="Hand"
                                             ToolTip="关闭标签"
-                                            Visibility="Hidden">
+                                            Visibility="Hidden" AutomationProperties.AutomationId="MainWindow.CloseButton">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
                                                 <Border x:Name="Bd" Background="Transparent" CornerRadius="8"
@@ -229,11 +233,11 @@
                     <ComboBox x:Name="LayoutPresetBox" Width="170"
                               Style="{StaticResource ModernComboBox}"
                               DisplayMemberPath="Name"
-                              SelectionChanged="LayoutPresetBox_SelectionChanged"/>
+                              SelectionChanged="LayoutPresetBox_SelectionChanged" AutomationProperties.AutomationId="MainWindow.LayoutPresetBox"/>
                     <Button Content="保存预设" Style="{StaticResource ModernToolbarButton}"
-                            Margin="6,0,0,0" Click="SaveLayout_Click"/>
+                            Margin="6,0,0,0" Click="SaveLayout_Click" AutomationProperties.AutomationId="MainWindow.SaveLayout_Click"/>
                     <Button Content="删除" Style="{StaticResource ModernToolbarButton}"
-                            Margin="6,0,0,0" Click="DeleteLayout_Click"/>
+                            Margin="6,0,0,0" Click="DeleteLayout_Click" AutomationProperties.AutomationId="MainWindow.DeleteLayout_Click"/>
                     <TextBlock Text="F11 全屏" Foreground="{DynamicResource DshTextTertiary}"
                                FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </StackPanel>
@@ -241,9 +245,9 @@
                     <TextBlock Text="Harness Portable" FontSize="17" FontWeight="SemiBold"
                                Foreground="{DynamicResource DshTextPrimary}" VerticalAlignment="Center"/>
                     <Button x:Name="SidebarToggleButton" Content="☰ 连接库" Style="{StaticResource ModernToolbarButton}"
-                            Margin="12,0,0,0" Padding="12,6" Click="ToggleSidebar_Click"/>
-                    <Button Content="分屏" Style="{StaticResource ModernToolbarButton}" Margin="6,0,0,0" Click="SplitWorkspace_Click"/>
-                    <Button Content="设置" Style="{StaticResource ModernToolbarButton}" Margin="6,0,0,0" Click="OpenManagement_Click"/>
+                            Margin="12,0,0,0" Padding="12,6" Click="ToggleSidebar_Click" AutomationProperties.AutomationId="MainWindow.SidebarToggleButton"/>
+                    <Button Content="分屏" Style="{StaticResource ModernToolbarButton}" Margin="6,0,0,0" Click="SplitWorkspace_Click" AutomationProperties.AutomationId="MainWindow.SplitWorkspace_Click"/>
+                    <Button Content="设置" Style="{StaticResource ModernToolbarButton}" Margin="6,0,0,0" Click="OpenManagement_Click" AutomationProperties.AutomationId="MainWindow.OpenManagement_Click"/>
                 </WrapPanel>
             </DockPanel>
         </Border>
@@ -255,7 +259,7 @@
             <StatusBarItem HorizontalAlignment="Right">
                 <Button x:Name="StopTunnelButton" Content="停止全部隧道"
                         Style="{StaticResource ModernToolbarButton}"
-                        Visibility="Collapsed" Click="StopAll_Click"/>
+                        Visibility="Collapsed" Click="StopAll_Click" AutomationProperties.AutomationId="MainWindow.StopTunnelButton"/>
             </StatusBarItem>
         </StatusBar>
 
@@ -279,18 +283,18 @@
                     </DataTemplate>
                 </avalonDock:DockingManager.DocumentHeaderTemplate>
                 <avalonDock:DockingManager.DocumentContextMenu>
-                    <ContextMenu Opened="DocumentContextMenu_Opened">
-                        <MenuItem Header="复制标签" Click="DuplicateTab_Click"/>
-                        <MenuItem Header="重命名" Click="RenameTab_Click"/>
+                    <ContextMenu Opened="DocumentContextMenu_Opened" AutomationProperties.AutomationId="MainWindow.ContextMenu.1">
+                        <MenuItem Header="复制标签" Click="DuplicateTab_Click" AutomationProperties.AutomationId="MainWindow.DuplicateTab_Click"/>
+                        <MenuItem Header="重命名" Click="RenameTab_Click" AutomationProperties.AutomationId="MainWindow.RenameTab_Click"/>
                         <Separator/>
-                        <MenuItem Header="向右拆分" Click="SplitRight_Click"/>
-                        <MenuItem Header="向左拆分" Click="SplitLeft_Click"/>
-                        <MenuItem Header="向上拆分" Click="SplitUp_Click"/>
-                        <MenuItem Header="向下拆分" Click="SplitDown_Click"/>
+                        <MenuItem Header="向右拆分" Click="SplitRight_Click" AutomationProperties.AutomationId="MainWindow.SplitRight_Click"/>
+                        <MenuItem Header="向左拆分" Click="SplitLeft_Click" AutomationProperties.AutomationId="MainWindow.SplitLeft_Click"/>
+                        <MenuItem Header="向上拆分" Click="SplitUp_Click" AutomationProperties.AutomationId="MainWindow.SplitUp_Click"/>
+                        <MenuItem Header="向下拆分" Click="SplitDown_Click" AutomationProperties.AutomationId="MainWindow.SplitDown_Click"/>
                         <Separator/>
-                        <MenuItem x:Name="SwitchToMenu" Header="切换为…"/>
+                        <MenuItem x:Name="SwitchToMenu" Header="切换为…" AutomationProperties.AutomationId="MainWindow.SwitchToMenu"/>
                         <Separator/>
-                        <MenuItem Header="关闭标签" Click="CloseTab_Click"/>
+                        <MenuItem Header="关闭标签" Click="CloseTab_Click" AutomationProperties.AutomationId="MainWindow.CloseTab_Click"/>
                     </ContextMenu>
                 </avalonDock:DockingManager.DocumentContextMenu>
             </avalonDock:DockingManager>
@@ -298,7 +302,7 @@
             <StackPanel x:Name="WorkspaceEmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="440">
                 <TextBlock Text="打开一个服务开始使用" Style="{StaticResource DshSectionHeader}" HorizontalAlignment="Center"/>
                 <TextBlock Text="从连接库打开 SSH 隧道或直连网页，再用标签和分屏组织工作区。" Style="{StaticResource DshMuted}" Margin="0,12,0,20" TextAlignment="Center"/>
-                <Button Content="添加连接" Style="{StaticResource ModernPrimaryButton}" HorizontalAlignment="Center" Click="AddConnection_Click"/>
+                <Button Content="添加连接" Style="{StaticResource ModernPrimaryButton}" HorizontalAlignment="Center" Click="AddConnection_Click" AutomationProperties.AutomationId="MainWindow.AddConnection_Click"/>
             </StackPanel>
 
             <Canvas x:Name="TabDragOverlay" Visibility="Collapsed" IsHitTestVisible="False"
@@ -327,15 +331,15 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Button x:Name="DropUpButton" Grid.Row="0" Grid.Column="1" Content="↑ 上"
-                                Style="{StaticResource ModernToolbarButton}"/>
+                                Style="{StaticResource ModernToolbarButton}" AutomationProperties.AutomationId="MainWindow.DropUpButton"/>
                         <Button x:Name="DropLeftButton" Grid.Row="1" Grid.Column="0" Content="← 左"
-                                Style="{StaticResource ModernToolbarButton}"/>
+                                Style="{StaticResource ModernToolbarButton}" AutomationProperties.AutomationId="MainWindow.DropLeftButton"/>
                         <Button x:Name="DropCenterButton" Grid.Row="1" Grid.Column="1" Content="⊙ 标签"
-                                Style="{StaticResource ModernPrimaryButton}"/>
+                                Style="{StaticResource ModernPrimaryButton}" AutomationProperties.AutomationId="MainWindow.DropCenterButton"/>
                         <Button x:Name="DropRightButton" Grid.Row="1" Grid.Column="2" Content="右 →"
-                                Style="{StaticResource ModernToolbarButton}"/>
+                                Style="{StaticResource ModernToolbarButton}" AutomationProperties.AutomationId="MainWindow.DropRightButton"/>
                         <Button x:Name="DropDownButton" Grid.Row="2" Grid.Column="1" Content="↓ 下"
-                                Style="{StaticResource ModernToolbarButton}"/>
+                                Style="{StaticResource ModernToolbarButton}" AutomationProperties.AutomationId="MainWindow.DropDownButton"/>
                     </Grid>
                 </Border>
             </Canvas>

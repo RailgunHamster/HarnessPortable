@@ -1,0 +1,55 @@
+name: Windows UI API contract
+
+on:
+  push:
+    paths: ['windows/**', 'scripts/*HarnessApi.ps1', 'scripts/test-fixtures/windows-automation/**', 'spec/windows-ui-api-gestures.json', '.github/workflows/windows-api.yml']
+  pull_request:
+    paths: ['windows/**', 'scripts/*HarnessApi.ps1', 'scripts/test-fixtures/windows-automation/**', 'spec/windows-ui-api-gestures.json', '.github/workflows/windows-api.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-api:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Unit tests and UI coverage gates
+        shell: pwsh
+        run: |
+          dotnet test windows/HarnessPortable.Windows.Tests/HarnessPortable.Windows.Tests.csproj -c Release --logger 'trx;LogFileName=windows.trx' --results-directory artifacts/test-results
+          if ($LASTEXITCODE -ne 0) { throw 'Windows tests or UI API coverage failed.' }
+      - name: Ensure WebView2 on the disposable CI runner
+        shell: pwsh
+        run: |
+          $paths=@("${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application", "$env:LOCALAPPDATA\Microsoft\EdgeWebView\Application")
+          if (!($paths | Where-Object { Test-Path -LiteralPath $_ })) {
+            $installer=Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $installer
+            $result=Start-Process -FilePath $installer -ArgumentList '/silent','/install' -Wait -PassThru -WindowStyle Hidden
+            if ($result.ExitCode -ne 0) { throw 'WebView2 runtime installation failed.' }
+          }
+      - name: Cross-process API regression against the real product
+        shell: pwsh
+        run: |
+          dotnet run --project scripts/test-fixtures/windows-automation/Smoke.csproj -c Release -- windows/HarnessPortable.Windows/bin/Release/net10.0-windows/HarnessPortable.exe artifacts/automation-ci
+          if ($LASTEXITCODE -ne 0) { throw 'Cross-process UI API regression failed.' }
+      - name: PowerShell API client regression
+        shell: pwsh
+        run: ./scripts/test-fixtures/windows-automation/cli-smoke.ps1 -ProductExe windows/HarnessPortable.Windows/bin/Release/net10.0-windows/HarnessPortable.exe -OutputDirectory artifacts/automation-cli-ci
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-api-verification
+          path: |
+            artifacts/test-results/*.trx
+            artifacts/automation-ci/api-catalog.json
+            artifacts/automation-ci/verification.json
+            artifacts/automation-ci/data/crash.log
+            artifacts/automation-cli-ci/cli-verification.json
+          if-no-files-found: warn

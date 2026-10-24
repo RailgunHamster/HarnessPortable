@@ -152,7 +152,7 @@ public partial class SettingsWindow : Window
     private void Export_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "连接配置 (*.json)|*.json", FileName = "harness-connections.json" };
-        if (dialog.ShowDialog(this) != true) return;
+        if (HarnessPortable.Windows.Automation.AutomationDialogs.ChooseFile(this, dialog) != true) return;
         try
         {
             File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(_services.Profiles.Load(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true }));

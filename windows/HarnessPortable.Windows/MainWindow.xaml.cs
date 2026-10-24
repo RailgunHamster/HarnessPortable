@@ -1001,6 +1001,7 @@ public partial class MainWindow : Window
 
     private void AttachDocumentTitle(LayoutDocument doc, SessionView view)
     {
+        view.AutomationTabId = doc.ContentId;
         view.TitleChanged += title =>
         {
             if (ReferenceEquals(doc.Content, view))
@@ -1177,11 +1178,7 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            var item = new System.Windows.Controls.MenuItem
-            {
-                Header = $"隧道：{profile.DisplayName}",
-                Tag = new LayoutTabRef { Kind = "tunnel", ProfileId = profile.Id },
-            };
+            var item = Automation.AutomationControls.Menu("workspace.switch.tunnel."+profile.Id, $"隧道：{profile.DisplayName}", new LayoutTabRef { Kind="tunnel",ProfileId=profile.Id });
             item.Click += SwitchTab_Click;
             SwitchToMenu.Items.Add(item);
         }
@@ -1193,11 +1190,7 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            var item = new System.Windows.Controls.MenuItem
-            {
-                Header = $"直连：{ProfileStore.HostOf(url)}",
-                Tag = new LayoutTabRef { Kind = "direct", Url = url },
-            };
+            var item = Automation.AutomationControls.Menu("workspace.switch.direct."+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url))), $"直连：{ProfileStore.HostOf(url)}", new LayoutTabRef { Kind="direct",Url=url });
             item.Click += SwitchTab_Click;
             SwitchToMenu.Items.Add(item);
         }
@@ -1225,9 +1218,15 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == true)
         {
             // An explicit user rename replaces any duplicate suffix like " (2)".
-            _docSuffixes[doc] = "";
-            view.SetCustomLabel(dialog.LayoutName);
+            RenameDocument(doc, dialog.LayoutName);
         }
+    }
+
+    private void RenameDocument(LayoutDocument doc, string label)
+    {
+        if (string.IsNullOrWhiteSpace(label)) throw new Automation.AutomationFault("invalid_arguments", "Tab label must not be empty.");
+        _docSuffixes[doc] = "";
+        ((SessionView)doc.Content).SetCustomLabel(label.Trim());
     }
 
     private void DuplicateTab_Click(object sender, RoutedEventArgs e)
@@ -1421,9 +1420,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        SaveLayoutPreset(dialog.LayoutName);
+    }
+
+    private void SaveLayoutPreset(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new Automation.AutomationFault("invalid_arguments", "Layout name must not be empty.");
         var layout = new WorkspaceLayout
         {
-            Name = dialog.LayoutName,
+            Name = name.Trim(),
             SavedAt = DateTime.UtcNow,
             Root = CaptureLayoutNode(DockManager.Layout.RootPanel) ?? new LayoutNode { Kind = "pane" },
         };
@@ -1442,7 +1447,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var confirm = System.Windows.MessageBox.Show(
+        DeleteLayoutPreset(selected);
+    }
+
+    private void DeleteLayoutPreset(WorkspaceLayout selected)
+    {
+
+        var confirm = HarnessPortable.Windows.Automation.AutomationDialogs.Show(
             this,
             $"删除布局预设“{selected.Name}”吗？",
             "删除布局",
@@ -1997,11 +2008,11 @@ public partial class MainWindow : Window
         if (!_trayHintShown)
         {
             _trayHintShown = true;
-            System.Windows.Forms.MessageBox.Show(
+            HarnessPortable.Windows.Automation.AutomationDialogs.Show(
                 "Harness Portable 仍在托盘运行，已连接的隧道不会中断。\n双击托盘图标可重新打开窗口；右键图标可打开「管理 / 设置」、检查更新或退出。",
                 "Harness Portable",
-                System.Windows.Forms.MessageBoxButtons.OK,
-                System.Windows.Forms.MessageBoxIcon.Information);
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
         }
     }
 }

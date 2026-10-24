@@ -39,7 +39,7 @@
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Expander">
                 <StackPanel>
                     <ToggleButton x:Name="GroupToggle" IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
-                                  Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch" FocusVisualStyle="{StaticResource DshFocus}">
+                                  Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch" FocusVisualStyle="{StaticResource DshFocus}" AutomationProperties.AutomationId="ConnectionSidebar.GroupToggle">
                         <ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
                             <Grid Margin="8,16,8,7">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -76,11 +76,11 @@
         <Grid Margin="7,0,0,13">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <TextBlock Text="连接" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}" VerticalAlignment="Center"/>
-            <Button Grid.Column="1" Content="＋" FontSize="19" Width="28" Height="28" Padding="0" Style="{StaticResource QuietButton}" Click="Add_Click" ToolTip="添加 SSH 隧道或直连网页" AutomationProperties.Name="添加连接"/>
+            <Button Grid.Column="1" Content="＋" FontSize="19" Width="28" Height="28" Padding="0" Style="{StaticResource QuietButton}" Click="Add_Click" ToolTip="添加 SSH 隧道或直连网页" AutomationProperties.Name="添加连接" AutomationProperties.AutomationId="ConnectionSidebar.Add_Click"/>
         </Grid>
         <Grid Grid.Row="1" Margin="0,0,0,10">
             <TextBox x:Name="SearchBox" Style="{StaticResource ModernTextBox}" Padding="30,7,8,7" FontSize="12"
-                     ToolTip="搜索名称、服务器或分组" TextChanged="Search_Changed" AutomationProperties.Name="搜索连接"/>
+                     ToolTip="搜索名称、服务器或分组" TextChanged="Search_Changed" AutomationProperties.Name="搜索连接" AutomationProperties.AutomationId="ConnectionSidebar.SearchBox"/>
             <Path Data="M 6,0 A 6,6 0 1 1 6,12 A 6,6 0 1 1 6,0 M 10,10 L 15,15" Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource DshTextTertiary}" StrokeThickness="1.4" Margin="10,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False"/>
             <TextBlock Text="搜索连接…" Margin="30,0,0,0" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource DshTextTertiary}" IsHitTestVisible="False">
                 <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
@@ -88,9 +88,9 @@
         </Grid>
         <Border Grid.Row="2" Background="{DynamicResource DshBgLayer2}" CornerRadius="7" Padding="3" Margin="0,0,0,7">
             <UniformGrid Columns="3">
-                <RadioButton x:Name="AllFilter" Content="全部" Tag="all" GroupName="LibraryFilter" Style="{StaticResource ViewFilter}" IsChecked="True" Checked="Filter_Changed"/>
-                <RadioButton x:Name="FavoritesFilter" Content="常用" Tag="favorites" GroupName="LibraryFilter" Style="{StaticResource ViewFilter}" Checked="Filter_Changed"/>
-                <RadioButton x:Name="RecentFilter" Content="最近" Tag="recent" ToolTip="按最近打开时间排列；在全部或常用中拖动排序" GroupName="LibraryFilter" Style="{StaticResource ViewFilter}" Checked="Filter_Changed"/>
+                <RadioButton x:Name="AllFilter" Content="全部" Tag="all" GroupName="LibraryFilter" Style="{StaticResource ViewFilter}" IsChecked="True" Checked="Filter_Changed" AutomationProperties.AutomationId="ConnectionSidebar.AllFilter.all"/>
+                <RadioButton x:Name="FavoritesFilter" Content="常用" Tag="favorites" GroupName="LibraryFilter" Style="{StaticResource ViewFilter}" Checked="Filter_Changed" AutomationProperties.AutomationId="ConnectionSidebar.FavoritesFilter.favorites"/>
+                <RadioButton x:Name="RecentFilter" Content="最近" Tag="recent" ToolTip="按最近打开时间排列；在全部或常用中拖动排序" GroupName="LibraryFilter" Style="{StaticResource ViewFilter}" Checked="Filter_Changed" AutomationProperties.AutomationId="ConnectionSidebar.RecentFilter.recent"/>
             </UniformGrid>
         </Border>
         <Grid Grid.Row="3">
@@ -99,27 +99,27 @@
                      PreviewDragOver="Connection_DragOver" PreviewDrop="Connection_Drop" DragLeave="Connection_DragLeave"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.IsVirtualizingWhenGrouping="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                     PreviewKeyDown="Connections_KeyDown" AutomationProperties.Name="连接列表">
+                     PreviewKeyDown="Connections_KeyDown" AutomationProperties.Name="连接列表" AutomationProperties.AutomationId="ConnectionSidebar.ConnectionList">
                 <ListBox.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
                 <ListBox.GroupStyle><GroupStyle>
                     <GroupStyle.Panel><ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate></GroupStyle.Panel>
                     <GroupStyle.ContainerStyle><Style TargetType="GroupItem"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="GroupItem">
-                        <Expander Style="{StaticResource LibraryGroup}" IsExpanded="True" Loaded="Group_Loaded" Expanded="Group_ExpansionChanged" Collapsed="Group_ExpansionChanged"><ItemsPresenter/></Expander>
+                        <Expander Style="{StaticResource LibraryGroup}" IsExpanded="True" Loaded="Group_Loaded" Expanded="Group_ExpansionChanged" Collapsed="Group_ExpansionChanged" AutomationProperties.AutomationId="ConnectionSidebar.Expander"><ItemsPresenter/></Expander>
                     </ControlTemplate></Setter.Value></Setter></Style></GroupStyle.ContainerStyle>
                 </GroupStyle></ListBox.GroupStyle>
                 <ListBox.ItemTemplate><DataTemplate>
                     <Grid>
-                        <Grid.ContextMenu><ContextMenu Opened="Menu_Opened">
-                            <MenuItem Header="编辑连接" Click="Edit_Click"/>
-                            <MenuItem Header="加入常用" Click="Favorite_Click"/>
-                            <MenuItem Header="设置分组…" Click="Group_Click"/>
+                        <Grid.ContextMenu><ContextMenu Opened="Menu_Opened" AutomationProperties.AutomationId="ConnectionSidebar.ContextMenu.1">
+                            <MenuItem Header="编辑连接" Click="Edit_Click" AutomationProperties.AutomationId="ConnectionSidebar.Edit_Click"/>
+                            <MenuItem Header="加入常用" Click="Favorite_Click" AutomationProperties.AutomationId="ConnectionSidebar.Favorite_Click"/>
+                            <MenuItem Header="设置分组…" Click="Group_Click" AutomationProperties.AutomationId="ConnectionSidebar.Group_Click"/>
                             <Separator/>
-                            <MenuItem Header="断开连接" Click="Disconnect_Click" Visibility="{Binding DisconnectVisibility}"/>
-                            <MenuItem Header="删除连接…" Click="Delete_Click"/>
+                            <MenuItem Header="断开连接" Click="Disconnect_Click" Visibility="{Binding DisconnectVisibility}" AutomationProperties.AutomationId="ConnectionSidebar.Disconnect_Click"/>
+                            <MenuItem Header="删除连接…" Click="Delete_Click" AutomationProperties.AutomationId="ConnectionSidebar.Delete_Click"/>
                         </ContextMenu></Grid.ContextMenu>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="26"/></Grid.ColumnDefinitions>
                         <Button x:Name="OpenConnectionButton" Style="{StaticResource QuietButton}" Tag="{Binding}" Click="Open_Click" Padding="8,10,3,10"
-                                HorizontalContentAlignment="Stretch" Background="Transparent" Focusable="False" ToolTip="{Binding Tooltip}">
+                                HorizontalContentAlignment="Stretch" Background="Transparent" Focusable="False" ToolTip="{Binding Tooltip}" AutomationProperties.AutomationId="ConnectionSidebar.OpenConnectionButton">
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="25"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <Path Data="{Binding Icon}" Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource DshTextSecondary}" StrokeThickness="1.3" StrokeLineJoin="Round" VerticalAlignment="Top" Margin="0,2,8,0"/>
@@ -132,7 +132,7 @@
                                 </StackPanel>
                             </Grid>
                         </Button>
-                        <Button Grid.Column="1" Content="⋯" Style="{StaticResource QuietButton}" Tag="{Binding}" Padding="0" Margin="0,8,2,8" Click="More_Click" ToolTip="连接菜单" AutomationProperties.Name="连接菜单"/>
+                        <Button Grid.Column="1" Content="⋯" Style="{StaticResource QuietButton}" Tag="{Binding}" Padding="0" Margin="0,8,2,8" Click="More_Click" ToolTip="连接菜单" AutomationProperties.Name="连接菜单" AutomationProperties.AutomationId="ConnectionSidebar.More_Click"/>
                     </Grid>
                 </DataTemplate></ListBox.ItemTemplate>
             </ListBox>
@@ -143,7 +143,7 @@
         </Grid>
         <Border Grid.Row="4" BorderBrush="{DynamicResource DshBorderL1}" BorderThickness="0,1,0,0" Padding="3,9,0,0" Margin="0,10,0,0">
             <DockPanel>
-                <Button DockPanel.Dock="Right" Content="设置" Style="{StaticResource QuietButton}" Padding="8,5" FontSize="12" Click="Settings_Click"/>
+                <Button DockPanel.Dock="Right" Content="设置" Style="{StaticResource QuietButton}" Padding="8,5" FontSize="12" Click="Settings_Click" AutomationProperties.AutomationId="ConnectionSidebar.Settings_Click"/>
                 <TextBlock x:Name="ConnectionCount" FontSize="11" Foreground="{DynamicResource DshTextTertiary}" VerticalAlignment="Center" Margin="5,0,0,0"/>
             </DockPanel>
         </Border>

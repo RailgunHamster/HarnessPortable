@@ -120,7 +120,7 @@ public partial class TunnelEditorWindow : Window
             dialog.FileName = Path.GetFileName(currentPath);
         }
 
-        if (dialog.ShowDialog(this) != true)
+        if (HarnessPortable.Windows.Automation.AutomationDialogs.ChooseFile(this, dialog) != true)
         {
             return;
         }
@@ -213,7 +213,7 @@ public partial class TunnelEditorWindow : Window
         var profile = BuildProfile();
         if (profile is null)
         {
-            System.Windows.MessageBox.Show(
+            HarnessPortable.Windows.Automation.AutomationDialogs.Show(
                 this,
                 "请检查：服务器地址、用户名、远程地址必填，端口必须是 1–65535。",
                 "Harness Portable",
@@ -293,7 +293,7 @@ public partial class TunnelEditorWindow : Window
             }
         }
 
-        if (dialog.ShowDialog(this) == true)
+        if (HarnessPortable.Windows.Automation.AutomationDialogs.ChooseFile(this, dialog) == true)
         {
             IdentityFileBox.Text = dialog.FileName;
         }

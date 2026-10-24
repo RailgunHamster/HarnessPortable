@@ -30,10 +30,10 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="HeaderUpdateButton" Content="检查更新"
                             Style="{StaticResource DshButton}" Padding="14,7" Margin="0"
-                            Click="HeaderUpdate_Click"/>
+                            Click="HeaderUpdate_Click" AutomationProperties.AutomationId="ManagementView.HeaderUpdateButton"/>
                     <Button x:Name="AddTunnelButton" Content="＋ 添加隧道"
                             Style="{StaticResource DshPrimaryButton}" Padding="14,7"
-                            Click="AddTunnel_Click"/>
+                            Click="AddTunnel_Click" AutomationProperties.AutomationId="ManagementView.AddTunnelButton"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Border Width="48" Height="48" CornerRadius="14" Margin="0,0,14,0"
@@ -54,9 +54,9 @@
             </DockPanel>
         </Border>
 
-        <TabControl x:Name="ManagementTabs" Style="{StaticResource DshTabs}">
-            <TabItem Header="SSH 隧道">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,22,24,28">
+        <TabControl x:Name="ManagementTabs" Style="{StaticResource DshTabs}" AutomationProperties.AutomationId="ManagementView.TabControl.1">
+            <TabItem Header="SSH 隧道" AutomationProperties.AutomationId="ManagementView.TabItem.1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,22,24,28" AutomationProperties.AutomationId="ManagementView.ScrollViewer">
                     <StackPanel MaxWidth="940" HorizontalAlignment="Stretch">
 
                 <Grid Margin="0,0,0,10">
@@ -72,7 +72,7 @@
                         <TextBlock Text="↗" Foreground="{DynamicResource DshAccent}" FontSize="32" HorizontalAlignment="Center"/>
                         <TextBlock Text="添加你的第一个隧道" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}" HorizontalAlignment="Center" Margin="0,12,0,8"/>
                         <TextBlock Text="通过 SSH 安全访问远程网页。添加服务器、用户名和转发端口即可开始。" Style="{StaticResource DshMuted}" TextAlignment="Center"/>
-                        <Button Content="＋ 添加隧道" Style="{StaticResource DshPrimaryButton}" HorizontalAlignment="Center" Margin="0,18,0,0" Click="AddTunnel_Click"/>
+                        <Button Content="＋ 添加隧道" Style="{StaticResource DshPrimaryButton}" HorizontalAlignment="Center" Margin="0,18,0,0" Click="AddTunnel_Click" AutomationProperties.AutomationId="ManagementView.AddTunnel_Click"/>
                     </StackPanel>
                 </Border>
 
@@ -104,14 +104,14 @@
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                         <Button Style="{StaticResource DshRowPrimaryButton}" Content="连接"
-                                                Tag="{Binding}" Click="TunnelConnect_Click"/>
+                                                Tag="{Binding}" Click="TunnelConnect_Click" AutomationProperties.AutomationId="ManagementView.TunnelConnect_Click"/>
                                         <Button Style="{StaticResource DshRowButton}" Content="停止"
                                                 Tag="{Binding}" Click="TunnelStop_Click"
-                                                Visibility="{Binding StopVisibility}"/>
+                                                Visibility="{Binding StopVisibility}" AutomationProperties.AutomationId="ManagementView.TunnelStop_Click"/>
                                         <Button Style="{StaticResource DshRowButton}" Content="编辑"
-                                                Tag="{Binding}" Click="TunnelEdit_Click"/>
+                                                Tag="{Binding}" Click="TunnelEdit_Click" AutomationProperties.AutomationId="ManagementView.TunnelEdit_Click"/>
                                         <Button Style="{StaticResource DshDangerButton}" Content="删除"
-                                                Padding="10,5" Tag="{Binding}" Click="TunnelDelete_Click"/>
+                                                Padding="10,5" Tag="{Binding}" Click="TunnelDelete_Click" AutomationProperties.AutomationId="ManagementView.TunnelDelete_Click"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -125,8 +125,8 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
-            <TabItem Header="直连地址">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,22,24,28">
+            <TabItem Header="直连地址" AutomationProperties.AutomationId="ManagementView.TabItem.2">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,22,24,28" AutomationProperties.AutomationId="ManagementView.ScrollViewer.2">
                     <StackPanel MaxWidth="940" HorizontalAlignment="Stretch">
 
                 <TextBlock Text="直连" Style="{StaticResource DshSectionHeader}" Margin="0,0,0,10"/>
@@ -141,7 +141,7 @@
                                   Style="{StaticResource DshEditableComboBox}"
                                   ToolTip="输入 IP、机器名或完整 URL；下拉可选择局域网机器"
                                   DropDownOpened="DirectInput_DropDownOpened"
-                                  SelectionChanged="DirectInput_SelectionChanged"/>
+                                  SelectionChanged="DirectInput_SelectionChanged" AutomationProperties.AutomationId="ManagementView.DirectInput"/>
                         <TextBlock Text="输入 IP、机器名或完整 URL…"
                                    IsHitTestVisible="False"
                                    Margin="11,0,0,0" VerticalAlignment="Center"
@@ -161,10 +161,10 @@
                     </Grid>
                     <Button Grid.Column="1" Content="刷新" Padding="12,7"
                             Style="{StaticResource DshButton}" ToolTip="刷新局域网机器"
-                            Click="RefreshDirectMachines_Click"/>
+                            Click="RefreshDirectMachines_Click" AutomationProperties.AutomationId="ManagementView.RefreshDirectMachines_Click"/>
                     <Button Grid.Column="2" Content="添加" Padding="14,7"
                             Style="{StaticResource DshPrimaryButton}"
-                            Click="AddDirect_Click"/>
+                            Click="AddDirect_Click" AutomationProperties.AutomationId="ManagementView.AddDirect_Click"/>
                 </Grid>
                 <TextBlock x:Name="EmptyDirectHint" Style="{StaticResource DshMuted}" Margin="0,0,0,10"
                            Text="也可直接添加 http(s) 地址，不经过 SSH 隧道访问；打开输入框下拉可选择局域网机器。"/>
@@ -187,11 +187,11 @@
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                         <Button Style="{StaticResource DshRowButton}" Content="{Binding AuthLabel}"
                                                 Tag="{Binding}" Click="DirectAuthToggle_Click"
-                                                ToolTip="认证模式：点击切换。「NSSM 自动」用于 dsh web 就跑在本机（NSSM 托管）的直连地址——打开标签时自动读本机 NSSM 日志取最新 token 并自动登录；失败或日志缺失则原样打开，仍可走页面上的粘贴框兜底。"/>
+                                                ToolTip="认证模式：点击切换。「NSSM 自动」用于 dsh web 就跑在本机（NSSM 托管）的直连地址——打开标签时自动读本机 NSSM 日志取最新 token 并自动登录；失败或日志缺失则原样打开，仍可走页面上的粘贴框兜底。" AutomationProperties.AutomationId="ManagementView.DirectAuthToggle_Click"/>
                                         <Button Style="{StaticResource DshRowPrimaryButton}" Content="连接"
-                                                Tag="{Binding}" Click="DirectConnect_Click"/>
+                                                Tag="{Binding}" Click="DirectConnect_Click" AutomationProperties.AutomationId="ManagementView.DirectConnect_Click"/>
                                         <Button Style="{StaticResource DshDangerButton}" Content="删除"
-                                                Padding="10,5" Tag="{Binding}" Click="DirectDelete_Click"/>
+                                                Padding="10,5" Tag="{Binding}" Click="DirectDelete_Click" AutomationProperties.AutomationId="ManagementView.DirectDelete_Click"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -205,8 +205,8 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
-            <TabItem Header="设置与更新">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,22,24,28">
+            <TabItem Header="设置与更新" AutomationProperties.AutomationId="ManagementView.TabItem.3">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,22,24,28" AutomationProperties.AutomationId="ManagementView.ScrollViewer.3">
                     <StackPanel MaxWidth="940" HorizontalAlignment="Stretch">
 
                 <TextBlock Text="设置" Style="{StaticResource DshSectionHeader}" Margin="0,0,0,10"/>
@@ -217,12 +217,12 @@
                         <ComboBox x:Name="CloseBehaviorBox" Width="240" Margin="0,7,0,0"
                                   HorizontalAlignment="Left"
                                   Style="{StaticResource DshComboBox}"
-                                  SelectionChanged="CloseBehaviorBox_SelectionChanged"/>
+                                  SelectionChanged="CloseBehaviorBox_SelectionChanged" AutomationProperties.AutomationId="ManagementView.CloseBehaviorBox"/>
                         <CheckBox x:Name="RestoreLayoutBox" Margin="0,14,0,0"
                                   Style="{StaticResource DshCheckBox}"
                                   Content="启动时自动恢复上次布局"
                                   Checked="RestoreLayoutBox_Changed"
-                                  Unchecked="RestoreLayoutBox_Changed"/>
+                                  Unchecked="RestoreLayoutBox_Changed" AutomationProperties.AutomationId="ManagementView.RestoreLayoutBox"/>
                     </StackPanel>
                 </Border>
 
@@ -238,10 +238,10 @@
                                    Style="{StaticResource DshLabel}" Margin="0,16,0,6"/>
                         <ComboBox x:Name="UpdateSourceBox" Width="280" HorizontalAlignment="Left"
                                   Style="{StaticResource DshComboBox}"
-                                  SelectionChanged="UpdateSourceBox_SelectionChanged">
-                            <ComboBoxItem Content="家庭目录（局域网共享）" Tag="home"/>
-                            <ComboBoxItem Content="GitHub" Tag="github"/>
-                            <ComboBoxItem Content="Gitee（默认）" Tag="gitee"/>
+                                  SelectionChanged="UpdateSourceBox_SelectionChanged" AutomationProperties.AutomationId="ManagementView.UpdateSourceBox">
+                            <ComboBoxItem Content="家庭目录（局域网共享）" Tag="home" AutomationProperties.AutomationId="ManagementView.ComboBoxItem.home.1"/>
+                            <ComboBoxItem Content="GitHub" Tag="github" AutomationProperties.AutomationId="ManagementView.ComboBoxItem.github.1"/>
+                            <ComboBoxItem Content="Gitee（默认）" Tag="gitee" AutomationProperties.AutomationId="ManagementView.ComboBoxItem.gitee.1"/>
                         </ComboBox>
 
                         <TextBlock Text="地址（家庭目录填 UNC 路径或 http 目录；Gitee / GitHub 填仓库地址）"
@@ -251,16 +251,16 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="UpdateServerBox" Style="{StaticResource DshMonoTextBox}"/>
+                            <TextBox x:Name="UpdateServerBox" Style="{StaticResource DshMonoTextBox}" AutomationProperties.AutomationId="ManagementView.UpdateServerBox"/>
                             <Button Grid.Column="1" Content="保存" Padding="12,7"
-                                    Style="{StaticResource DshButton}" Click="SaveUpdateServer_Click"/>
+                                    Style="{StaticResource DshButton}" Click="SaveUpdateServer_Click" AutomationProperties.AutomationId="ManagementView.SaveUpdateServer_Click"/>
                         </Grid>
 
                         <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                             <Button x:Name="CheckUpdateButton" Content="检查更新" Padding="14,7" Margin="0"
-                                    Style="{StaticResource DshPrimaryButton}" Click="CheckUpdate_Click"/>
+                                    Style="{StaticResource DshPrimaryButton}" Click="CheckUpdate_Click" AutomationProperties.AutomationId="ManagementView.CheckUpdateButton"/>
                             <Button x:Name="ApplyUpdateButton" Content="下载并重启" Padding="14,7"
-                                    Style="{StaticResource DshButton}" Click="ApplyUpdate_Click"/>
+                                    Style="{StaticResource DshButton}" Click="ApplyUpdate_Click" AutomationProperties.AutomationId="ManagementView.ApplyUpdateButton"/>
                         </StackPanel>
                         <ProgressBar x:Name="UpdateProgressBar" Margin="0,12,0,0"
                                      Visibility="Collapsed"
@@ -272,7 +272,7 @@
                                  IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
                                  VerticalScrollBarVisibility="Auto"
                                  Foreground="{DynamicResource DshTextSecondary}"
-                                 Style="{StaticResource DshMonoTextBox}"/>
+                                 Style="{StaticResource DshMonoTextBox}" AutomationProperties.AutomationId="ManagementView.ChangelogBox"/>
 
                         <TextBlock Style="{StaticResource DshLabel}" Margin="0,12,0,0"
                                    Text="支持安装版与便携版自动更新。连接和布局保存在当前用户目录，不会被更新覆盖。"/>

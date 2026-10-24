@@ -12,6 +12,8 @@ namespace HarnessPortable.Windows.Services;
 /// </summary>
 public sealed class TrayIconService : IDisposable
 {
+    public sealed record TrayAction(string Id,string Label,Func<Task> RunAsync,bool SeparatorBefore=false,bool VersionBefore=false);
+    public IReadOnlyList<TrayAction> Actions { get; }
     private readonly AppServices _services;
     private readonly NotifyIcon _icon;
     private readonly Action _showMainWindow;
@@ -30,18 +32,25 @@ public sealed class TrayIconService : IDisposable
         _showManagement = showManagement;
         _exit = exit;
 
+        Actions = [
+            new("tray.open","打开 Harness Portable",()=>{_showMainWindow();return Task.CompletedTask;}),
+            new("tray.settings","管理 / 设置",()=>{_showManagement();return Task.CompletedTask;}),
+            new("tray.update","检测并更新",CheckAndUpdateAsync,true,true),
+            new("tray.exit","退出",()=>{_exit();return Task.CompletedTask;},true)
+        ];
         _versionItem = new ToolStripMenuItem { Enabled = false };
-        _updateItem = new ToolStripMenuItem("检测并更新");
-        _updateItem.Click += OnCheckAndUpdate;
-
+        ToolStripMenuItem? updateItem=null;
         var menu = new ContextMenuStrip();
-        menu.Items.Add("打开 Harness Portable", null, (_, _) => _showMainWindow());
-        menu.Items.Add("管理 / 设置", null, (_, _) => _showManagement());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(_versionItem);
-        menu.Items.Add(_updateItem);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("退出", null, (_, _) => _exit());
+        foreach(var action in Actions)
+        {
+            if(action.SeparatorBefore)menu.Items.Add(new ToolStripSeparator());
+            if(action.VersionBefore)menu.Items.Add(_versionItem);
+            var item=new ToolStripMenuItem(action.Label){Name=action.Id};
+            item.Click+=async(_,_)=>await action.RunAsync();
+            if(action.Id=="tray.update")updateItem=item;
+            menu.Items.Add(item);
+        }
+        _updateItem=updateItem!;
 
         _icon = new NotifyIcon
         {
@@ -51,7 +60,7 @@ public sealed class TrayIconService : IDisposable
             ContextMenuStrip = menu,
         };
 
-        _icon.DoubleClick += (_, _) => _showMainWindow();
+        _icon.DoubleClick += async (_, _) => await Actions[0].RunAsync();
 
         _services.Updates.StateChanged += OnUpdateStateChanged;
         RefreshUpdateItems();
@@ -137,7 +146,7 @@ public sealed class TrayIconService : IDisposable
         ShowBalloon($"正在下载更新 {updates.Progress}%", "下载完成后会自动重启。", 3000);
     }
 
-    private async void OnCheckAndUpdate(object? sender, EventArgs e)
+    public async Task CheckAndUpdateAsync()
     {
         if (_updateRunning)
         {

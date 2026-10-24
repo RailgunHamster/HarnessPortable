@@ -1,27 +1,27 @@
 <Window x:Class="HarnessPortable.Windows.DirectConnectionWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="直连网页" Width="500" Height="540" MinWidth="460" MinHeight="510" WindowStartupLocation="CenterOwner"
-        ShowInTaskbar="False" Background="{DynamicResource DshBgBase}" FontFamily="{DynamicResource DshUiFont}">
+        ShowInTaskbar="False" Background="{DynamicResource DshBgBase}" FontFamily="{DynamicResource DshUiFont}" AutomationProperties.AutomationId="DirectConnectionWindow.Window">
     <Grid Margin="24"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="DirectConnectionWindow.ScrollViewer"><StackPanel>
             <TextBlock Text="直连网页" Style="{StaticResource DshSectionHeader}"/>
             <TextBlock Text="名称（可选）" Style="{StaticResource DshLabel}" Margin="0,20,0,6"/>
-            <TextBox x:Name="NameBox" Style="{StaticResource ModernTextBox}"/>
+            <TextBox x:Name="NameBox" Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="DirectConnectionWindow.NameBox"/>
             <TextBlock Text="网页地址" Style="{StaticResource DshLabel}" Margin="0,16,0,6"/>
-            <TextBox x:Name="UrlBox" Style="{StaticResource ModernTextBox}"/>
+            <TextBox x:Name="UrlBox" Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="DirectConnectionWindow.UrlBox"/>
             <TextBlock Text="分组（可选）" Style="{StaticResource DshLabel}" Margin="0,16,0,6"/>
-            <TextBox x:Name="GroupBox" Style="{StaticResource ModernTextBox}"/>
+            <TextBox x:Name="GroupBox" Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="DirectConnectionWindow.GroupBox"/>
             <TextBlock Text="登录网页" Style="{StaticResource DshLabel}" Margin="0,16,0,6"/>
-            <ComboBox x:Name="AuthBox" Style="{StaticResource ModernComboBox}" SelectedIndex="0">
-                <ComboBoxItem Content="在网页中登录" Tag="none"/><ComboBoxItem Content="本机 NSSM 自动登录" Tag="nssm"/>
+            <ComboBox x:Name="AuthBox" Style="{StaticResource ModernComboBox}" SelectedIndex="0" AutomationProperties.AutomationId="DirectConnectionWindow.AuthBox">
+                <ComboBoxItem Content="在网页中登录" Tag="none" AutomationProperties.AutomationId="DirectConnectionWindow.ComboBoxItem.none.1"/><ComboBoxItem Content="本机 NSSM 自动登录" Tag="nssm" AutomationProperties.AutomationId="DirectConnectionWindow.ComboBoxItem.nssm.1"/>
             </ComboBox>
-            <CheckBox x:Name="FavoriteBox" Content="加入常用连接" Style="{StaticResource DshCheckBox}" Margin="0,18,0,0"/>
+            <CheckBox x:Name="FavoriteBox" Content="加入常用连接" Style="{StaticResource DshCheckBox}" Margin="0,18,0,0" AutomationProperties.AutomationId="DirectConnectionWindow.FavoriteBox"/>
             <TextBlock x:Name="Hint" Style="{StaticResource DshMuted}" Margin="0,16,0,0"/>
         </StackPanel></ScrollViewer>
         <WrapPanel Grid.Row="1" HorizontalAlignment="Right" Margin="0,20,0,0">
-            <Button Content="取消" IsCancel="True" Style="{StaticResource ModernToolbarButton}"/>
-            <Button Content="保存" Style="{StaticResource ModernPrimaryButton}" Margin="8,0,0,0" Click="Save_Click"/>
-            <Button Content="保存并打开" Tag="connect" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="Save_Click"/>
+            <Button Content="取消" IsCancel="True" Style="{StaticResource ModernToolbarButton}" AutomationProperties.AutomationId="DirectConnectionWindow.Button"/>
+            <Button Content="保存" Style="{StaticResource ModernPrimaryButton}" Margin="8,0,0,0" Click="Save_Click" AutomationProperties.AutomationId="DirectConnectionWindow.Save_Click"/>
+            <Button Content="保存并打开" Tag="connect" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="Save_Click" AutomationProperties.AutomationId="DirectConnectionWindow.Save_Click.connect"/>
         </WrapPanel>
     </Grid>
 </Window>

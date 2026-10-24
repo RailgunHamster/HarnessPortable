@@ -7,7 +7,7 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Background="{DynamicResource DshBgBase}"
-        FontFamily="{DynamicResource DshUiFont}">
+        FontFamily="{DynamicResource DshUiFont}" AutomationProperties.AutomationId="LayoutNameWindow.Window">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -17,14 +17,14 @@
         </Grid.RowDefinitions>
         <TextBlock Text="预设名称" FontWeight="SemiBold"/>
         <TextBox x:Name="NameBox" Grid.Row="1" Margin="0,8,0,0"
-                 Style="{StaticResource ModernTextBox}"/>
+                 Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="LayoutNameWindow.NameBox"/>
         <TextBlock Grid.Row="2" Margin="0,8,0,0" Foreground="{DynamicResource DshTextSecondary}" FontSize="12"
                    Text="保存当前所有分屏、标签顺序，以及每个标签对应的隧道或直连地址。密码不会保存。"/>
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button Content="取消" Width="88" Margin="0,0,8,0"
-                    Style="{StaticResource ModernButton}" IsCancel="True"/>
+                    Style="{StaticResource ModernButton}" IsCancel="True" AutomationProperties.AutomationId="LayoutNameWindow.Button"/>
             <Button x:Name="SaveButton" Content="保存" Width="88"
-                    Style="{StaticResource ModernPrimaryButton}" IsDefault="True" Click="Save_Click"/>
+                    Style="{StaticResource ModernPrimaryButton}" IsDefault="True" Click="Save_Click" AutomationProperties.AutomationId="LayoutNameWindow.SaveButton"/>
         </StackPanel>
     </Grid>
 </Window>

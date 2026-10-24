@@ -21,6 +21,8 @@
   <ItemGroup>
     <ProjectReference Include="..\HarnessPortable.Windows\HarnessPortable.Windows.csproj" />
     <Content Include="..\HarnessPortable.Windows\MainWindow.xaml" Link="Fixtures\MainWindow.xaml" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\HarnessPortable.Windows\**\*.xaml;..\HarnessPortable.Windows\**\*.cs" Exclude="..\HarnessPortable.Windows\obj\**;..\HarnessPortable.Windows\bin\**" Link="AutomationSources\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\spec\windows-ui-api-gestures.json" Link="Fixtures\windows-ui-api-gestures.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

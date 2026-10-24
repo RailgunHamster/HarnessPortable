@@ -4,14 +4,14 @@
     <StackPanel Orientation="Horizontal">
         <Button x:Name="RefreshButton" Width="32" Height="30" Margin="2,2,0,2" Padding="8"
                 Style="{StaticResource ModernToolbarButton}"
-                ToolTip="刷新当前网页" AutomationProperties.Name="刷新当前网页" Click="Refresh_Click">
+                ToolTip="刷新当前网页" AutomationProperties.Name="刷新当前网页" Click="Refresh_Click" AutomationProperties.AutomationId="PaneActions.RefreshButton">
             <Path Data="M12,5 A6,6 0 1 0 13,10 M12,0 V5 H7" Stretch="Uniform"
                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                   StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
         </Button>
         <Button x:Name="MoreButton" Width="32" Height="30" Margin="2,2,0,2" Padding="8"
                 Style="{StaticResource ModernToolbarButton}"
-                ToolTip="当前标签的更多操作" AutomationProperties.Name="当前标签的更多操作" Click="More_Click">
+                ToolTip="当前标签的更多操作" AutomationProperties.Name="当前标签的更多操作" Click="More_Click" AutomationProperties.AutomationId="PaneActions.MoreButton">
             <Path Data="M1,6 A1,1 0 1 0 3,6 A1,1 0 1 0 1,6 M6,6 A1,1 0 1 0 8,6 A1,1 0 1 0 6,6 M11,6 A1,1 0 1 0 13,6 A1,1 0 1 0 11,6"
                   Width="14" Height="14" Stretch="Uniform"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>

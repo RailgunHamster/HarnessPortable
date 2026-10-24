@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using HarnessPortable.Windows.Services;
+using HarnessPortable.Windows.Automation;
 
 namespace HarnessPortable.Windows;
 
@@ -9,6 +10,8 @@ public partial class App : System.Windows.Application
 {
     private AppServices _services = null!;
     private TrayIconService? _tray;
+    private AutomationPipeServer? _automationServer;
+    public UiAutomationService? Automation { get; private set; }
 
     public bool IsExiting { get; private set; }
 
@@ -36,12 +39,31 @@ public partial class App : System.Windows.Application
                 showManagement: main.ShowManagementPanel,
                 exit: ExitApplication);
 
+            var apiIndex = Array.IndexOf(e.Args, "--automation-api");
+            if (apiIndex >= 0 && e.Args.Contains("--automation-offscreen"))
+            {
+                main.WindowStartupLocation=WindowStartupLocation.Manual;
+                main.Left=-30000; main.Top=0; main.ShowActivated=false;
+            }
             main.Show();
+            if (apiIndex >= 0)
+            {
+                if (apiIndex + 1 >= e.Args.Length || e.Args.Count(a => a == "--automation-api") != 1)
+                    throw new ArgumentException("Use --automation-api followed by a new absolute endpoint descriptor path.");
+                Automation = new UiAutomationService(Dispatcher, () => Windows.Cast<System.Windows.Window>());
+                main.RegisterAutomation(Automation);
+                Automation.RegisterCommand("app.exit", "Exit through the same application shutdown path as the tray menu.", [], _ => ExitApplication());
+                foreach(var action in _tray.Actions)
+                    Automation.RegisterCommand(action.Id, action.Label, [], async _ =>
+                    { await action.RunAsync(); return new System.Text.Json.Nodes.JsonObject { ["returned"] = true }; });
+                AutomationDialogs.Enabled = true;
+                _automationServer = new AutomationPipeServer(Automation.Api, e.Args[apiIndex + 1]);
+            }
         }
         catch (Exception ex)
         {
             WriteCrash("startup", ex);
-            System.Windows.MessageBox.Show(
+            if (!e.Args.Contains("--automation-api")) System.Windows.MessageBox.Show(
                 $"Harness Portable 启动失败。\n\n{ex.Message}\n\n详细信息已写入：\n{AppPaths.CrashLogFile}",
                 "Harness Portable",
                 MessageBoxButton.OK,
@@ -113,6 +135,8 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _automationServer?.Stop();
+        Automation?.Dispose();
         _services?.Tunnels.StopAll();
         _tray?.Dispose();
         base.OnExit(e);

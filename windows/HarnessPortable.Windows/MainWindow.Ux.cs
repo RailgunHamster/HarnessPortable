@@ -100,8 +100,8 @@ public partial class MainWindow
     private void ShowAddMenu()
     {
         var menu = new ContextMenu { PlacementTarget = ConnectionLibraryView, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint };
-        var ssh = new MenuItem { Header = "SSH 隧道" }; ssh.Click += (_, _) => EditTunnel(null);
-        var direct = new MenuItem { Header = "直连网页" }; direct.Click += (_, _) => EditDirect(null);
+        var ssh = Automation.AutomationControls.Menu("library.create.tunnel", "SSH 隧道"); ssh.Click += (_, _) => EditTunnel(null);
+        var direct = Automation.AutomationControls.Menu("library.create.direct", "直连网页"); direct.Click += (_, _) => EditDirect(null);
         menu.Items.Add(ssh); menu.Items.Add(direct); menu.IsOpen = true;
     }
     private void AddConnection_Click(object sender, RoutedEventArgs e) => ShowAddMenu();
@@ -155,7 +155,7 @@ public partial class MainWindow
     }
     private void DeleteConnection(ConnectionEntry entry)
     {
-        if (System.Windows.MessageBox.Show(this, $"删除“{entry.Name}”的连接配置和已保存凭据？该连接的网页也会关闭。", "删除连接",
+        if (HarnessPortable.Windows.Automation.AutomationDialogs.Show(this, $"删除“{entry.Name}”的连接配置和已保存凭据？该连接的网页也会关闭。", "删除连接",
             MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         if (entry.Tunnel is { } profile)
         {
@@ -179,7 +179,7 @@ public partial class MainWindow
         { StatusText.Text = "先打开一个服务，然后选择分屏方向"; return; }
         var menu = new ContextMenu { PlacementTarget = sender as UIElement };
         foreach (var (title, direction) in new[] { ("向右分屏", SplitDirection.Right), ("向左分屏", SplitDirection.Left), ("向下分屏", SplitDirection.Down), ("向上分屏", SplitDirection.Up) })
-        { var item = new MenuItem { Header = title }; item.Click += (_, _) => SplitDocument(doc, view, direction); menu.Items.Add(item); }
+        { var item = Automation.AutomationControls.Menu("workspace.split." + direction.ToString().ToLowerInvariant(), title); item.Click += (_, _) => SplitDocument(doc, view, direction); menu.Items.Add(item); }
         menu.IsOpen = true;
     }
     private void SaveWorkspaceSnapshot()

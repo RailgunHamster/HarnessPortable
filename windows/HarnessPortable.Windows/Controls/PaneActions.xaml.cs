@@ -64,9 +64,9 @@ public partial class PaneActions : System.Windows.Controls.UserControl
         if (_menu?.IsOpen == true) { CloseMenu(); return; }
         if (Session is not { } session || !IsLoaded || !IsVisible || _owner is null || !_owner.IsVisible || _owner.WindowState == WindowState.Minimized) return;
         var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = MoreButton, Placement = PlacementMode.Bottom, StaysOpen = false };
-        void Add(string label, Action action, bool danger = false)
+        void Add(string id, string label, Action action, bool danger = false)
         {
-            var item = new MenuItem { Header = label };
+            var item = Automation.AutomationControls.Menu("pane.action." + id, label);
             if (danger) item.SetResourceReference(ForegroundProperty, "DshDangerText");
             item.Click += (_, _) =>
             {
@@ -77,13 +77,13 @@ public partial class PaneActions : System.Windows.Controls.UserControl
             };
             menu.Items.Add(item);
         }
-        if (IsCompact) Add("刷新", async () => await RefreshAsync(session));
-        Add("认证", session.RequestAuthentication);
+        if (IsCompact) Add("reload", "刷新", async () => await RefreshAsync(session));
+        Add("authenticate", "认证", session.RequestAuthentication);
         if (session.IsTunnel)
         {
             menu.Items.Add(new Separator());
-            Add("重连", session.RequestReconnect);
-            Add("断开", session.RequestDisconnect, danger: true);
+            Add("reconnect", "重连", session.RequestReconnect);
+            Add("disconnect", "断开", session.RequestDisconnect, danger: true);
         }
         _menu = menu;
         menu.Closed += (_, _) => { if (ReferenceEquals(_menu, menu)) _menu = null; };

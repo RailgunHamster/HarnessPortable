@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="设置 · Harness Portable" Width="760" Height="660" MinWidth="650" MinHeight="520"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
-        Background="{DynamicResource DshBgBase}" FontFamily="{DynamicResource DshUiFont}">
+        Background="{DynamicResource DshBgBase}" FontFamily="{DynamicResource DshUiFont}" AutomationProperties.AutomationId="SettingsWindow.Window">
     <Window.Resources>
         <Style TargetType="ListBoxItem">
             <Setter Property="Margin" Value="0,0,0,5"/>
@@ -28,31 +28,31 @@
         <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <ListBox x:Name="Categories" Background="Transparent" BorderThickness="0" Margin="12,18,8,0"
-                     Foreground="{DynamicResource DshTextPrimary}" SelectedIndex="0" SelectionChanged="Category_Changed">
-                <ListBoxItem Content="通用" Padding="10,12"/>
-                <ListBoxItem Content="工作区" Padding="10,12"/>
-                <ListBoxItem Content="数据与安全" Padding="10,12"/>
-                <ListBoxItem Content="更新与关于" Padding="10,12"/>
+                     Foreground="{DynamicResource DshTextPrimary}" SelectedIndex="0" SelectionChanged="Category_Changed" AutomationProperties.AutomationId="SettingsWindow.Categories">
+                <ListBoxItem Content="通用" Padding="10,12" AutomationProperties.AutomationId="SettingsWindow.ListBoxItem.1"/>
+                <ListBoxItem Content="工作区" Padding="10,12" AutomationProperties.AutomationId="SettingsWindow.ListBoxItem.2"/>
+                <ListBoxItem Content="数据与安全" Padding="10,12" AutomationProperties.AutomationId="SettingsWindow.ListBoxItem.3"/>
+                <ListBoxItem Content="更新与关于" Padding="10,12" AutomationProperties.AutomationId="SettingsWindow.ListBoxItem.4"/>
             </ListBox>
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="20,22,24,24">
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="20,22,24,24" AutomationProperties.AutomationId="SettingsWindow.ScrollViewer">
                 <Grid>
                     <StackPanel x:Name="GeneralPage">
                         <TextBlock Text="通用" Style="{StaticResource DshSectionHeader}"/>
                         <TextBlock Text="外观" Style="{StaticResource DshLabel}" Margin="0,22,0,7"/>
-                        <ComboBox x:Name="AppearanceBox" Style="{StaticResource ModernComboBox}" SelectionChanged="Preference_Changed">
-                            <ComboBoxItem Content="跟随系统" Tag="system"/><ComboBoxItem Content="浅色" Tag="light"/><ComboBoxItem Content="深色" Tag="dark"/>
+                        <ComboBox x:Name="AppearanceBox" Style="{StaticResource ModernComboBox}" SelectionChanged="Preference_Changed" AutomationProperties.AutomationId="SettingsWindow.AppearanceBox">
+                            <ComboBoxItem Content="跟随系统" Tag="system" AutomationProperties.AutomationId="SettingsWindow.ComboBoxItem.system.1"/><ComboBoxItem Content="浅色" Tag="light" AutomationProperties.AutomationId="SettingsWindow.ComboBoxItem.light.1"/><ComboBoxItem Content="深色" Tag="dark" AutomationProperties.AutomationId="SettingsWindow.ComboBoxItem.dark.1"/>
                         </ComboBox>
                         <TextBlock Text="关闭主窗口时" Style="{StaticResource DshLabel}" Margin="0,24,0,7"/>
-                        <ComboBox x:Name="CloseBox" Style="{StaticResource ModernComboBox}" SelectionChanged="Preference_Changed">
-                            <ComboBoxItem Content="退出并断开连接" Tag="exit"/><ComboBoxItem Content="收起到托盘，保持连接" Tag="tray"/>
+                        <ComboBox x:Name="CloseBox" Style="{StaticResource ModernComboBox}" SelectionChanged="Preference_Changed" AutomationProperties.AutomationId="SettingsWindow.CloseBox">
+                            <ComboBoxItem Content="退出并断开连接" Tag="exit" AutomationProperties.AutomationId="SettingsWindow.ComboBoxItem.exit.1"/><ComboBoxItem Content="收起到托盘，保持连接" Tag="tray" AutomationProperties.AutomationId="SettingsWindow.ComboBoxItem.tray.1"/>
                         </ComboBox>
                         <TextBlock Text="关闭网页标签只关闭此网页。服务器连接可以在连接库中单独断开。" Style="{StaticResource DshMuted}" Margin="0,20,0,0"/>
                     </StackPanel>
                     <StackPanel x:Name="WorkspacePage" Visibility="Collapsed">
                         <TextBlock Text="工作区" Style="{StaticResource DshSectionHeader}"/>
-                        <CheckBox x:Name="RestoreBox" Content="启动时恢复上次工作区" Style="{StaticResource DshCheckBox}" Margin="0,24,0,8" Checked="Preference_Changed" Unchecked="Preference_Changed"/>
+                        <CheckBox x:Name="RestoreBox" Content="启动时恢复上次工作区" Style="{StaticResource DshCheckBox}" Margin="0,24,0,8" Checked="Preference_Changed" Unchecked="Preference_Changed" AutomationProperties.AutomationId="SettingsWindow.RestoreBox"/>
                         <TextBlock Text="自动记录标签、网页状态和分屏比例，不需要先保存预设。" Style="{StaticResource DshMuted}"/>
-                        <CheckBox x:Name="ReconnectBox" Content="恢复工作区时自动连接服务器" Style="{StaticResource DshCheckBox}" Margin="0,24,0,8" Checked="Preference_Changed" Unchecked="Preference_Changed"/>
+                        <CheckBox x:Name="ReconnectBox" Content="恢复工作区时自动连接服务器" Style="{StaticResource DshCheckBox}" Margin="0,24,0,8" Checked="Preference_Changed" Unchecked="Preference_Changed" AutomationProperties.AutomationId="SettingsWindow.ReconnectBox"/>
                         <TextBlock Text="关闭时仅恢复布局，点击连接后再建立 SSH 隧道。" Style="{StaticResource DshMuted}"/>
                         <Border Style="{StaticResource DshDivider}"/>
                         <TextBlock Text="工作区预设" Style="{StaticResource DshSectionHeader}"/>
@@ -62,46 +62,46 @@
                         <TextBlock Text="数据与安全" Style="{StaticResource DshSectionHeader}"/>
                         <TextBlock Text="连接凭据" Style="{StaticResource DshLabel}" Margin="0,24,0,8"/>
                         <TextBlock Text="在连接库的菜单中编辑对应连接。SSH 登录与网页登录分别配置，修改下次连接生效。密码、私钥和服务令牌不会写入工作区快照。" Style="{StaticResource DshMuted}"/>
-                        <Button Content="返回连接库" Style="{StaticResource ModernToolbarButton}" HorizontalAlignment="Left" Margin="0,14,0,0" Click="ReturnToLibrary_Click"/>
+                        <Button Content="返回连接库" Style="{StaticResource ModernToolbarButton}" HorizontalAlignment="Left" Margin="0,14,0,0" Click="ReturnToLibrary_Click" AutomationProperties.AutomationId="SettingsWindow.ReturnToLibrary_Click"/>
                         <Border Style="{StaticResource DshDivider}"/>
                         <TextBlock Text="导出连接配置" Style="{StaticResource DshSectionHeader}"/>
                         <TextBlock Text="只导出服务器和端口等连接信息，不包含密码、私钥内容和登录令牌。" Style="{StaticResource DshMuted}" Margin="0,12,0,12"/>
-                        <Button Content="导出配置…" Style="{StaticResource ModernToolbarButton}" HorizontalAlignment="Left" Click="Export_Click"/>
+                        <Button Content="导出配置…" Style="{StaticResource ModernToolbarButton}" HorizontalAlignment="Left" Click="Export_Click" AutomationProperties.AutomationId="SettingsWindow.Export_Click"/>
                     </StackPanel>
                     <StackPanel x:Name="UpdatesPage" Visibility="Collapsed">
                         <TextBlock Text="更新与关于" Style="{StaticResource DshSectionHeader}"/>
                         <TextBlock x:Name="VersionLabel" Style="{StaticResource DshMono}" Margin="0,16,0,12"/>
                         <TextBlock x:Name="CurrentSourceLabel" Style="{StaticResource DshMuted}"/>
                         <WrapPanel Margin="0,14,0,0">
-                            <Button x:Name="CheckButton" Content="检查更新" Style="{StaticResource ModernPrimaryButton}" Click="Check_Click"/>
-                            <Button x:Name="InstallButton" Content="下载并重启" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="Install_Click" Visibility="Collapsed"/>
+                            <Button x:Name="CheckButton" Content="检查更新" Style="{StaticResource ModernPrimaryButton}" Click="Check_Click" AutomationProperties.AutomationId="SettingsWindow.CheckButton"/>
+                            <Button x:Name="InstallButton" Content="下载并重启" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="Install_Click" Visibility="Collapsed" AutomationProperties.AutomationId="SettingsWindow.InstallButton"/>
                         </WrapPanel>
                         <ProgressBar x:Name="Progress" Maximum="100" Height="5" Margin="0,14,0,0" Visibility="Collapsed"/>
                         <TextBlock x:Name="UpdateStatusLabel" Style="{StaticResource DshMuted}" Margin="0,14,0,0"/>
                         <Border Style="{StaticResource DshDivider}"/>
-                        <CheckBox x:Name="ProxyEnabledBox" Content="更新使用代理" Style="{StaticResource DshCheckBox}" Checked="ProxyDraft_Changed" Unchecked="ProxyDraft_Changed"/>
+                        <CheckBox x:Name="ProxyEnabledBox" Content="更新使用代理" Style="{StaticResource DshCheckBox}" Checked="ProxyDraft_Changed" Unchecked="ProxyDraft_Changed" AutomationProperties.AutomationId="SettingsWindow.ProxyEnabledBox"/>
                         <TextBlock Text="仅用于检查更新和下载安装包 · 默认关闭" Style="{StaticResource DshMuted}" Margin="0,8,0,10"/>
-                        <TextBox x:Name="ProxyAddressBox" Style="{StaticResource ModernTextBox}" Text="localhost:7890" IsEnabled="False" TextChanged="ProxyAddress_Changed" ToolTip="HTTP 代理地址，例如 localhost:7890 或 http://127.0.0.1:7890"/>
+                        <TextBox x:Name="ProxyAddressBox" Style="{StaticResource ModernTextBox}" Text="localhost:7890" IsEnabled="False" TextChanged="ProxyAddress_Changed" ToolTip="HTTP 代理地址，例如 localhost:7890 或 http://127.0.0.1:7890" AutomationProperties.AutomationId="SettingsWindow.ProxyAddressBox"/>
                         <TextBlock x:Name="ProxyHint" Style="{StaticResource DshMuted}" Margin="0,8,0,0"/>
                         <WrapPanel Margin="0,10,0,0">
-                            <Button x:Name="SaveProxyButton" Content="保存代理设置" Style="{StaticResource ModernToolbarButton}" Click="SaveProxy_Click"/>
-                            <Button x:Name="ResetProxyButton" Content="撤销" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="ResetProxy_Click"/>
+                            <Button x:Name="SaveProxyButton" Content="保存代理设置" Style="{StaticResource ModernToolbarButton}" Click="SaveProxy_Click" AutomationProperties.AutomationId="SettingsWindow.SaveProxyButton"/>
+                            <Button x:Name="ResetProxyButton" Content="撤销" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="ResetProxy_Click" AutomationProperties.AutomationId="SettingsWindow.ResetProxyButton"/>
                         </WrapPanel>
-                        <Expander Header="高级：局域网目录或自定义更新源" Foreground="{DynamicResource DshTextSecondary}" Margin="0,24,0,0">
+                        <Expander Header="高级：局域网目录或自定义更新源" Foreground="{DynamicResource DshTextSecondary}" Margin="0,24,0,0" AutomationProperties.AutomationId="SettingsWindow.Expander">
                             <StackPanel Margin="0,12,0,0">
-                                <ComboBox x:Name="SourceBox" Style="{StaticResource ModernComboBox}" SelectionChanged="Source_Changed">
-                                    <ComboBoxItem Content="官方 / Gitee" Tag="gitee"/><ComboBoxItem Content="GitHub" Tag="github"/><ComboBoxItem Content="局域网目录 / HTTP" Tag="home"/>
+                                <ComboBox x:Name="SourceBox" Style="{StaticResource ModernComboBox}" SelectionChanged="Source_Changed" AutomationProperties.AutomationId="SettingsWindow.SourceBox">
+                                    <ComboBoxItem Content="官方 / Gitee" Tag="gitee" AutomationProperties.AutomationId="SettingsWindow.ComboBoxItem.gitee.1"/><ComboBoxItem Content="GitHub" Tag="github" AutomationProperties.AutomationId="SettingsWindow.ComboBoxItem.github.1"/><ComboBoxItem Content="局域网目录 / HTTP" Tag="home" AutomationProperties.AutomationId="SettingsWindow.ComboBoxItem.home.1"/>
                                 </ComboBox>
-                                <TextBox x:Name="SourceAddressBox" Style="{StaticResource ModernTextBox}" Margin="0,10,0,0" TextChanged="SourceAddress_Changed"/>
+                                <TextBox x:Name="SourceAddressBox" Style="{StaticResource ModernTextBox}" Margin="0,10,0,0" TextChanged="SourceAddress_Changed" AutomationProperties.AutomationId="SettingsWindow.SourceAddressBox"/>
                                 <TextBlock x:Name="DraftHint" Style="{StaticResource DshMuted}" Margin="0,8,0,0" Text="修改后需要保存"/>
                                 <WrapPanel Margin="0,12,0,0">
-                                    <Button Content="保存并使用" Style="{StaticResource ModernPrimaryButton}" Click="SaveSource_Click"/>
-                                    <Button Content="撤销修改" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="ResetSource_Click"/>
-                                    <Button Content="官方源" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="OfficialSource_Click"/>
+                                    <Button Content="保存并使用" Style="{StaticResource ModernPrimaryButton}" Click="SaveSource_Click" AutomationProperties.AutomationId="SettingsWindow.SaveSource_Click"/>
+                                    <Button Content="撤销修改" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="ResetSource_Click" AutomationProperties.AutomationId="SettingsWindow.ResetSource_Click"/>
+                                    <Button Content="官方源" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="OfficialSource_Click" AutomationProperties.AutomationId="SettingsWindow.OfficialSource_Click"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Expander>
-                        <Expander Header="版本说明" Foreground="{DynamicResource DshTextSecondary}" Margin="0,20,0,0">
+                        <Expander Header="版本说明" Foreground="{DynamicResource DshTextSecondary}" Margin="0,20,0,0" AutomationProperties.AutomationId="SettingsWindow.Expander.2">
                             <TextBlock x:Name="ReleaseNotes" Style="{StaticResource DshMuted}" Margin="0,12,0,0"/>
                         </Expander>
                     </StackPanel>

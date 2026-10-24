@@ -433,6 +433,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
 
     private async Task InitializeWebViewAsync()
     {
+        _automationNavigating=false; _automationNavigationSucceeded=null;
         var browser = WebView;
         try
         {
@@ -492,6 +493,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
             core.NavigationStarting += (_, e) =>
             {
                 if (_shutdown || !ReferenceEquals(WebView, browser)) return;
+                _automationNavigating=true; _automationNavigationSucceeded=null;
                 FlickerLog.Log("webview-nav", "start " + MaskUrl(e.Uri) + " (" + LogTag + ")");
             };
             core.SourceChanged += (_, _) =>
@@ -502,7 +504,9 @@ public partial class SessionView : System.Windows.Controls.UserControl
             };
             core.NavigationCompleted += async (_, e) =>
             {
-                if (_shutdown || _pageParked || !ReferenceEquals(WebView, browser)) return;
+                if (_shutdown || !ReferenceEquals(WebView, browser)) return;
+                _automationNavigating=false; _automationNavigationSucceeded=e.IsSuccess;
+                if (_pageParked) return;
                 FlickerLog.Log("webview-nav", "complete navId=" + e.NavigationId + " ok=" + e.IsSuccess + " (" + LogTag + ")");
                 await CheckAuthRequiredAsync(e.NavigationId);
                 await ReapplyWebStateSoonAsync();

@@ -1,6 +1,7 @@
 <UserControl x:Class="HarnessPortable.Windows.Controls.SessionView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:api="clr-namespace:HarnessPortable.Windows.Automation"
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
              FontFamily="{DynamicResource DshUiFont}">
     <Grid x:Name="BrowserGrid">
@@ -8,7 +9,7 @@
 
         <Border x:Name="StatusOverlay" Background="{DynamicResource DshScrim}" Visibility="Collapsed">
           <ScrollViewer MaxWidth="440" Margin="8" HorizontalAlignment="Center" VerticalAlignment="Center"
-                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="SessionView.ScrollViewer">
             <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="16">
                 <StackPanel>
                     <TextBlock x:Name="OverlayTitle" FontSize="16" FontWeight="SemiBold"
@@ -18,10 +19,10 @@
                     <WrapPanel HorizontalAlignment="Center" Margin="0,14,0,0">
                         <Button x:Name="OverlayReconnectButton" Content="重连" Padding="8,6" Margin="0,0,8,6"
                                 Style="{StaticResource ModernPrimaryButton}"
-                                Click="OverlayReconnect_Click"/>
+                                Click="OverlayReconnect_Click" AutomationProperties.AutomationId="SessionView.OverlayReconnectButton"/>
                         <Button x:Name="OverlayReturnButton" Content="关闭" Padding="8,6" ToolTip="关闭当前标签"
                                 Style="{StaticResource ModernButton}"
-                                Click="OverlayReturn_Click"/>
+                                Click="OverlayReturn_Click" AutomationProperties.AutomationId="SessionView.OverlayReturnButton"/>
                     </WrapPanel>
                 </StackPanel>
             </Border>
@@ -30,7 +31,7 @@
 
         <Border x:Name="AuthOverlay" Background="{DynamicResource DshScrim}" Visibility="Collapsed">
           <ScrollViewer MaxWidth="480" Margin="8" HorizontalAlignment="Center" VerticalAlignment="Center"
-                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="SessionView.ScrollViewer.2">
             <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="16">
                 <StackPanel>
                     <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}"
@@ -38,39 +39,39 @@
                     <TextBlock FontSize="12" Foreground="{DynamicResource DshTextSecondary}" TextWrapping="Wrap"
                                Margin="0,8,0,0" HorizontalAlignment="Center"
                                Text="粘贴服务器上 dsh web 输出的完整登录 URL，或直接粘贴 token。将在当前网页内完成认证。"/>
-                    <TextBox x:Name="AuthUrlBox" FontSize="13" Margin="0,12,0,0"
+                    <TextBox x:Name="AuthUrlBox" api:AutomationMetadata.Sensitive="True" FontSize="13" Margin="0,12,0,0"
                                  Style="{StaticResource ModernTextBox}"
-                                 KeyDown="AuthUrlBox_KeyDown" TextChanged="AuthUrlBox_TextChanged"/>
+                                 KeyDown="AuthUrlBox_KeyDown" TextChanged="AuthUrlBox_TextChanged" AutomationProperties.AutomationId="SessionView.AuthUrlBox"/>
                     <TextBlock x:Name="AuthHint" FontSize="11" Foreground="{DynamicResource DshDangerText}" Margin="0,6,0,0"
                                TextWrapping="Wrap" Visibility="Collapsed"/>
                     <WrapPanel HorizontalAlignment="Center" Margin="0,14,0,0">
                         <Button Content="登录" Padding="8,6" Margin="0,0,8,6"
                                     Style="{StaticResource ModernPrimaryButton}"
-                                    Click="AuthOpen_Click"/>
+                                    Click="AuthOpen_Click" AutomationProperties.AutomationId="SessionView.AuthOpen_Click"/>
                         <Button Content="取消" Padding="8,6"
                                     Style="{StaticResource ModernButton}"
-                                    Click="AuthCancel_Click"/>
+                                    Click="AuthCancel_Click" AutomationProperties.AutomationId="SessionView.AuthCancel_Click"/>
                     </WrapPanel>
                 </StackPanel>
             </Border>
           </ScrollViewer>
         </Border>
 
-        <Border x:Name="ScriptDialogOverlay" Background="{DynamicResource DshScrim}" Visibility="Collapsed"
+        <Border x:Name="ScriptDialogOverlay" Background="{DynamicResource DshScrim}" Visibility="Collapsed" api:AutomationMetadata.KeyTarget="True" AutomationProperties.AutomationId="SessionView.ScriptDialogOverlay"
                 PreviewKeyDown="ScriptDialog_KeyDown">
             <ScrollViewer MaxWidth="480" Margin="8" HorizontalAlignment="Center" VerticalAlignment="Center"
-                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.AutomationId="SessionView.ScrollViewer.3">
             <Border Background="{DynamicResource DshBgLayer1}" CornerRadius="16" Padding="16">
                 <StackPanel>
                     <TextBlock x:Name="ScriptDialogTitle" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}" TextWrapping="Wrap"/>
                     <TextBlock x:Name="ScriptDialogSource" FontSize="11" Foreground="{DynamicResource DshTextSecondary}" TextWrapping="Wrap" Margin="0,6,0,0"/>
-                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0" AutomationProperties.AutomationId="SessionView.ScrollViewer.4">
                         <TextBlock x:Name="ScriptDialogMessage" FontSize="13" Foreground="{DynamicResource DshTextPrimary}" TextWrapping="Wrap"/>
                     </ScrollViewer>
-                    <TextBox x:Name="ScriptPromptBox" AutomationProperties.Name="网页输入内容" FontSize="13" Margin="0,12,0,0" Visibility="Collapsed" Style="{StaticResource ModernTextBox}"/>
+                    <TextBox x:Name="ScriptPromptBox" AutomationProperties.Name="网页输入内容" FontSize="13" Margin="0,12,0,0" Visibility="Collapsed" Style="{StaticResource ModernTextBox}" AutomationProperties.AutomationId="SessionView.ScriptPromptBox"/>
                     <WrapPanel HorizontalAlignment="Right" Margin="0,14,0,0">
-                        <Button x:Name="ScriptDialogCancel" Content="取消" Padding="8,6" Margin="0,0,8,0" Style="{StaticResource ModernButton}" Click="ScriptDialogCancel_Click"/>
-                        <Button x:Name="ScriptDialogAccept" Content="确定" Padding="8,6" Style="{StaticResource ModernPrimaryButton}" Click="ScriptDialogAccept_Click"/>
+                        <Button x:Name="ScriptDialogCancel" Content="取消" Padding="8,6" Margin="0,0,8,0" Style="{StaticResource ModernButton}" Click="ScriptDialogCancel_Click" AutomationProperties.AutomationId="SessionView.ScriptDialogCancel"/>
+                        <Button x:Name="ScriptDialogAccept" Content="确定" Padding="8,6" Style="{StaticResource ModernPrimaryButton}" Click="ScriptDialogAccept_Click" AutomationProperties.AutomationId="SessionView.ScriptDialogAccept"/>
                     </WrapPanel>
                 </StackPanel>
             </Border>
