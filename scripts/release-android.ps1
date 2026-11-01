@@ -1,12 +1,8 @@
-# Build the signed Android APK, write android.json, copy into
-# \\server-home\public\Software\HarnessPortable-Releases, and attach the
-# APK + feed to the GitHub release for this VERSION.
-#
-#   pwsh -File scripts/release-android.ps1
+# Build android packages and publish to CNB (default) and optional GitHub.
+# Use -SkipCnb / -SkipGitHub for a local build.
 param(
     [switch]$SkipGitHub,
-    [switch]$SkipGitee,
-    [switch]$SkipShare
+    [switch]$SkipCnb
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,7 +46,6 @@ function Get-GitHubToken {
 
 $changelog = Get-Content -Raw (Join-Path $root "CHANGELOG.md")
 $notes = Get-ChangelogSection $changelog $version
-$share = "\\server-home\public\Software\HarnessPortable-Releases"
 $artifacts = Join-Path $root "artifacts\android"
 New-Item -ItemType Directory -Force $artifacts | Out-Null
 
@@ -98,13 +93,7 @@ $feedJson = $feed | ConvertTo-Json -Compress
 $utf8 = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText((Join-Path $artifacts "android.json"), $feedJson, $utf8)
 
-if (-not $SkipShare) {
-    Write-Host "Copying APK feed to $share"
-    New-Item -ItemType Directory -Force $share | Out-Null
-    Copy-Item $apkDest (Join-Path $share $apkName) -Force
-    Copy-Item (Join-Path $artifacts "android.json") (Join-Path $share "android.json") -Force
-    Copy-Item $apkDest (Join-Path $share "HarnessPortable-android.apk") -Force
-}
+
 
 if (-not $SkipGitHub) {
     $token = Get-GitHubToken
@@ -158,9 +147,9 @@ if (-not $SkipGitHub) {
 
 Write-Host "Done. Android $version (versionCode $versionCode)"
 Write-Host "  apk   $apkDest"
-if (-not $SkipShare) { Write-Host "  share $share" }
 
-if (-not $SkipGitee) {
-    & (Join-Path $PSScriptRoot "release-gitee.ps1") -Platform Android -Version $version
-    if ($LASTEXITCODE -ne 0) { throw "Gitee publication failed" }
+
+if (-not $SkipCnb) {
+    & (Join-Path $PSScriptRoot "release-cnb.ps1") -Platform Android -Version $version
+    if ($LASTEXITCODE -ne 0) { throw "CNB publication failed" }
 }

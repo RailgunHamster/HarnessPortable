@@ -22,7 +22,7 @@ public sealed class AppSettingsStoreTests : IDisposable
         Assert.Equal("exit", settings.CloseBehavior);
         Assert.True(settings.RestoreLastLayoutOnStartup);
         Assert.Equal("", settings.LastLayoutName);
-        Assert.Equal("", settings.UpdateServerUrl);
+        Assert.Equal(UpdateSourceFactory.CnbRepoUrl, settings.UpdateServerUrl);
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public sealed class AppSettingsStoreTests : IDisposable
         Assert.Equal("tray", settings.CloseBehavior);
         Assert.False(settings.RestoreLastLayoutOnStartup);
         Assert.Equal("三列", settings.LastLayoutName);
-        Assert.Equal(@"\\server-home\public\Software\HarnessPortable-Releases", settings.UpdateServerUrl);
+        Assert.Equal(UpdateSourceFactory.CnbRepoUrl, settings.UpdateServerUrl);
     }
 
     public void Dispose()

@@ -35,6 +35,9 @@ public sealed class AppSettingsStore
             settings.ConnectionOrder ??= [];
             // 2.7.1 persisted false during layout restore without a user choice.
             settings.ReconnectRestoredWorkspace = settings.StartupReconnectPreference ?? true;
+            var migrate=string.IsNullOrWhiteSpace(settings.UpdateCnbUrl) || UpdateSelection.ParseSlot(settings.UpdateSourceSelected) is null;
+            UpdateSelection.From(settings).Store(settings);
+            if(migrate && File.Exists(_path)) JsonFile.Write(_path,settings,JsonOptions);
             return settings;
         }
     }

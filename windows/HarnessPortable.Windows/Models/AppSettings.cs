@@ -27,19 +27,16 @@ public sealed class AppSettings
     /// <summary>
     /// Velopack update feed selected by <see cref="UpdateSourceSelected"/>.
     /// Kept for settings files written before the two-slot model; on load it
-    /// is folded into <see cref="UpdateHomeUrl"/> or <see cref="UpdateGitHubUrl"/>.
+    /// is folded into the surviving CNB / GitHub selection.
     /// </summary>
     public string UpdateServerUrl { get; set; } = "";
-
-    /// <summary>LAN release share the PC reads directly.</summary>
-    public string UpdateHomeUrl { get; set; } = "";
 
     /// <summary>GitHub repository the feed is pulled from.</summary>
     public string UpdateGitHubUrl { get; set; } = "";
 
-    public string UpdateGiteeUrl { get; set; } = "";
+    public string UpdateCnbUrl { get; set; } = "";
 
-    /// <summary>"home", "github" or "gitee".</summary>
+    /// <summary>"cnb" or "github". Retired selections migrate to CNB.</summary>
     public string UpdateSourceSelected { get; set; } = "";
 
     public bool UpdateProxyEnabled { get; set; }

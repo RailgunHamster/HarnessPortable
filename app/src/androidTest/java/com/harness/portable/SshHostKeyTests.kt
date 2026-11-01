@@ -101,25 +101,6 @@ class SshHostKeyTests {
         } finally { clean() }
     }
 
-    @Test fun sharedPasswordWritesLeaveExistingSshPasswordAndWebTokenIntact() {
-        val id = "credential-regression"
-        val priorSharePassword = SecureStore.getUpdateSharePassword(ctx)
-        try {
-            SecureStore.setPassword(ctx, id, "existing-ssh-password")
-            SecureStore.setAuthInput(ctx, id, "existing-web-token")
-            val encrypted = ctx.getSharedPreferences("harness_portable_secure", 0).getString("pw_$id", null)
-            SecureStore.setUpdateSharePassword(ctx, "new-share-password")
-            assertEquals("existing-ssh-password", SecureStore.getPassword(ctx, id))
-            assertEquals("existing-web-token", SecureStore.getAuthInput(ctx, id))
-            assertEquals(encrypted, ctx.getSharedPreferences("harness_portable_secure", 0).getString("pw_$id", null))
-            SecureStore.setUpdateSharePassword(ctx, "")
-            assertEquals("existing-ssh-password", SecureStore.getPassword(ctx, id))
-        } finally {
-            SecureStore.clearPassword(ctx, id); SecureStore.clearAuthInput(ctx, id)
-            SecureStore.setUpdateSharePassword(ctx, priorSharePassword)
-        }
-    }
-
     @Test fun malformedStoredPinRemainsRejected() {
         clean()
         try {

@@ -1,127 +1,29 @@
 package com.harness.portable
 
-import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.Assume.assumeNotNull
-import org.junit.runner.RunWith
-import java.io.File
+import java.util.UUID
 
-@RunWith(AndroidJUnit4::class)
 class UpdateSourcesTests {
-    private fun fixtureServer(argument: String = "smb_fixture"): String {
-        val address = InstrumentationRegistry.getArguments().getString(argument)
-        assumeNotNull(address)
-        return "smb://$address/public/releases"
-    }
-    @Test fun defaultHomeShareIsUsableAndBuildsFeedAndApkAddresses() {
-        val sources = UpdateSources(UpdateSourceStore.DEFAULT_HOME, ApkUpdate.DEFAULT_SERVER, UpdateSourceKind.File)
-        assertTrue(sources.selectedLooksUsable())
-        assertEquals("smb://server-home/public/Software/HarnessPortable-Releases/android.json", sources.feedUrl())
-        assertEquals("smb://server-home/public/Software/HarnessPortable-Releases/test.apk", ApkUpdate.apkUrl(sources.feedUrl(), "test.apk"))
-        assertEquals(sources.feedUrl(), ApkUpdate.feedUrl("smb://server-home/public/Software/HarnessPortable-Releases/"))
-    }
-
-    @Test fun selectionPersistsWithoutChangingEitherSavedAddress() {
-        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val prior = UpdateSourceStore.load(ctx)
-        val original = UpdateSources(UpdateSourceStore.DEFAULT_HOME, "https://github.com/example/repo", UpdateSourceKind.GitHub)
+    @Test fun legacyPreferencesMigrateAndManualGithubSelectionSurvives() {
+        val base=ApplicationProvider.getApplicationContext<Context>()
+        val fixture="update-fixture-${UUID.randomUUID()}"
+        val isolated=object:ContextWrapper(base){override fun getSharedPreferences(name:String,mode:Int)=base.getSharedPreferences(fixture,mode)}
         try {
-            UpdateSourceStore.save(ctx, original)
-            assertEquals(original.copy(selected = UpdateSourceKind.File), UpdateSourceStore.select(ctx, UpdateSourceKind.File))
-            assertEquals(UpdateSourceKind.File, UpdateSourceStore.load(ctx).selected)
-            assertEquals(original, UpdateSourceStore.select(ctx, UpdateSourceKind.GitHub))
-        } finally { UpdateSourceStore.save(ctx, prior) }
-    }
-
-    @Test fun sharePathsEncodeNamesAndRejectCredentialOrTraversalAddresses() {
-        assertEquals("smb://host:1445/public/Release%20files/android.json", ApkUpdate.feedUrl("smb://host:1445/public/Release%20files"))
-        assertEquals("smb://host/public/Release%20files/android.json", ApkUpdate.feedUrl("\\\\host\\public\\Release files"))
-        listOf("smb://host", "smb://user:password@host/public", "smb://host/public/../secret", "smb://host:99999/public").forEach {
-            assertTrue(it, runCatching { SmbUpdateAddress.parse(it) }.isFailure)
-        }
-        val feed = "smb://host/public/releases/android.json"
-        listOf("../secret.apk", "smb://other/public/test.apk", "smb://host/private/test.apk").forEach {
-            assertTrue(it, runCatching { ApkUpdate.apkUrl(feed, it) }.isFailure)
-        }
-    }
-
-    @Test fun sharePasswordIsEncryptedAndDomainAccountIsParsed() {
-        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val prior = UpdateShareStore.load(ctx)
-        try {
-            val credentials = UpdateShareCredentials("DOMAIN\\fixture", "fixture-secret")
-            UpdateShareStore.save(ctx, credentials)
-            assertEquals(credentials, UpdateShareStore.load(ctx))
-            assertFalse(ctx.getSharedPreferences("harness_portable_secure", 0).getString("update_share_password", "").orEmpty().contains("fixture-secret"))
-            assertEquals("DOMAIN", credentials.authentication().domain)
-            assertEquals("fixture", credentials.authentication().username)
-            assertTrue(UpdateShareCredentials().authentication().isAnonymous)
-        } finally { UpdateShareStore.save(ctx, prior) }
-    }
-
-    @Test fun authenticatedShareReadsFeedAndDownloadsCompletePackage() {
-        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val credentials = UpdateShareCredentials("fixture", "fixture-password")
-        val server = fixtureServer()
-        val feed = ApkUpdate.fetchFeed(server, UpdateProxy(true, "invalid proxy"), credentials)
-        assertEquals("9.0.0", feed.versionName)
-        assertEquals("$server/test.apk", feed.apkUrl)
-        val destination = File(ctx.cacheDir, "smb-test.apk")
-        val progress = mutableListOf<Int>()
-        try {
-            ApkUpdate.download(feed.apkUrl, destination, UpdateProxy(true, "invalid proxy"), credentials) { progress.add(it) }
-            assertEquals("smb-update-fixture", destination.readText())
-            assertEquals(100, progress.last())
-        } finally { destination.delete() }
-    }
-
-    @Test fun incorrectSharePasswordFailsWithoutDownloading() {
-        val server = fixtureServer()
-        val error = runCatching { ApkUpdate.fetchFeed(server, shareCredentials = UpdateShareCredentials("fixture", "wrong")) }.exceptionOrNull()
-        assertNotNull(error)
-        assertTrue(error!!.message.orEmpty(), error.message.orEmpty().contains("共享账号登录失败"))
-    }
-
-    @Test fun blankCredentialsCanReadGuestOnlyShare() {
-        val server = fixtureServer()
-        val feed = ApkUpdate.fetchFeed(server)
-        assertEquals("9.0.0", feed.versionName)
-        val destination = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "guest-test.apk")
-        try {
-            ApkUpdate.download(feed.apkUrl, destination) {}
-            assertEquals("smb-update-fixture", destination.readText())
-        } finally { destination.delete() }
-    }
-
-    @Test fun negotiationEofRetriesWithCompatibleDialectBeforeSendingCredentials() {
-        val feed = ApkUpdate.fetchFeed(fixtureServer("smb_compat_fixture"), shareCredentials = UpdateShareCredentials("fixture", "fixture-password"))
-        assertEquals("9.0.0", feed.versionName)
-    }
-
-    @Test fun serverRequiringLoginGetsActionableGuestError() {
-        val error = runCatching { ApkUpdate.fetchFeed(fixtureServer("smb_denied_fixture")) }.exceptionOrNull()
-        assertNotNull(error)
-        assertTrue(error!!.message.orEmpty(), error.message.orEmpty().contains("保存共享账号和密码"))
-        assertTrue(error.message.orEmpty().contains("Everyone"))
-    }
-
-    @Test fun connectionClosedBeforeNegotiationReportsPhaseWithoutPasswordError() {
-        val error = runCatching { ApkUpdate.fetchFeed(fixtureServer("smb_closed_fixture")) }.exceptionOrNull()
-        assertNotNull(error)
-        assertTrue(error!!.message.orEmpty(), error.message.orEmpty().contains("协商连接"))
-        assertTrue(error.message.orEmpty().contains("EOF"))
-        assertFalse(error.message.orEmpty().contains("密码"))
-    }
-
-    @Test fun eofMessageIncludesPhaseAndDoesNotClaimPasswordIsWrong() {
-        val cause = java.io.IOException(java.io.EOFException("EOF while reading packet"))
-        val guestMessage = SmbUpdate.failureMessage(SmbUpdate.Stage.AUTHENTICATE, true, cause)
-        assertTrue(guestMessage, guestMessage.contains("访客登录"))
-        assertFalse(guestMessage.contains("密码错误"))
-        val readMessage = SmbUpdate.failureMessage(SmbUpdate.Stage.READ, false, cause)
-        assertTrue(readMessage, readMessage.contains("读取更新文件"))
-        assertTrue(readMessage, readMessage.contains("EOF"))
+            val prefs=isolated.getSharedPreferences("harness_portable",Context.MODE_PRIVATE)
+            prefs.edit().putString("update_source_selected","File").putString("update_source_home","\\\\old\\share").putString("update_source_gitee","https://gitee.com/g/r").putString("update_source_github","https://github.com/example/custom").commit()
+            SecureStore.setPassword(isolated,"fixture","existing-ssh-password")
+            SecureStore.setAuthInput(isolated,"fixture","existing-web-token")
+            val migrated=UpdateSourceStore.load(isolated)
+            assertEquals(UpdateSourceKind.CNB,migrated.selected);assertEquals(ApkUpdate.DEFAULT_SERVER,migrated.cnb)
+            assertFalse(prefs.contains("update_source_home"));assertFalse(prefs.contains("update_source_gitee"))
+            assertEquals("existing-ssh-password",SecureStore.getPassword(isolated,"fixture"))
+            assertEquals("existing-web-token",SecureStore.getAuthInput(isolated,"fixture"))
+            UpdateSourceStore.select(isolated,UpdateSourceKind.GitHub)
+            val saved=UpdateSourceStore.load(isolated);assertEquals(UpdateSourceKind.GitHub,saved.selected);assertEquals(migrated.github,saved.github)
+        } finally { base.deleteSharedPreferences(fixture) }
     }
 }

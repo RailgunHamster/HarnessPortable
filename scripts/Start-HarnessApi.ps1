@@ -19,7 +19,7 @@ $updates=Join-Path $data 'empty-updates'
 [void][IO.Directory]::CreateDirectory($updates)
 $sshConfig=Join-Path $data 'ssh-config'
 [IO.File]::WriteAllText($sshConfig,'')
-$settings=@{RestoreLastLayoutOnStartup=$false;StartupReconnectPreference=$false;CloseBehavior='exit';UpdateSourceSelected='home';UpdateHomeUrl=$updates;SshConfigPath=$sshConfig} | ConvertTo-Json
+$settings=@{RestoreLastLayoutOnStartup=$false;StartupReconnectPreference=$false;CloseBehavior='exit';UpdateSourceSelected='cnb';SshConfigPath=$sshConfig} | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $data 'settings.json'),$settings)
 $endpoint=Join-Path $OutputDirectory 'endpoint.json'
 $start=[Diagnostics.ProcessStartInfo]::new($ProductExe)

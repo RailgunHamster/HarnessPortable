@@ -69,7 +69,7 @@ public partial class SettingsWindow : Window
     {
         if (_loading) return;
         var typed = TypedDraft();
-        _draft = typed with { Slot = UpdateSelection.ParseSlot(SelectedTag(SourceBox)) ?? UpdateSourceSlot.Gitee };
+        _draft = typed with { Slot = UpdateSelection.ParseSlot(SelectedTag(SourceBox)) ?? UpdateSourceSlot.Cnb };
         SourceAddressBox.Text = _draft.Url();
         DraftHint.Text = "有未保存的修改 · 切换分类或检查更新不会保存草稿";
     }
@@ -81,9 +81,9 @@ public partial class SettingsWindow : Window
     {
         if (_services.Updates.Busy) { SaveStatus.Text = "检查或下载结束后再保存更新源"; return; }
         var next = TypedDraft();
-        if (!UpdateSourceFactory.IsValid(next.Url(), next.Slot == UpdateSourceSlot.GitHub, next.Slot == UpdateSourceSlot.Gitee))
+        if (!UpdateSourceFactory.IsValid(next.Url(), next.Slot == UpdateSourceSlot.GitHub, next.Slot == UpdateSourceSlot.Cnb))
         {
-            DraftHint.Text = "请输入完整的 Gitee / GitHub 仓库地址、HTTP(S) 地址或绝对目录路径。";
+            DraftHint.Text = "请输入完整的 CNB / GitHub 仓库地址。";
             return;
         }
         var settings = _services.Settings.Load(); next.Store(settings); _services.Settings.Save(settings);
@@ -96,8 +96,8 @@ public partial class SettingsWindow : Window
         if (_services.Updates.Busy) return;
         var stored = UpdateSelection.From(_services.Settings.Load());
         var settings = _services.Settings.Load();
-        (stored with { Slot = UpdateSourceSlot.Gitee, GiteeUrl = UpdateSelection.Gitee }).Store(settings);
-        _services.Settings.Save(settings); _services.Updates.ResetSourceResult(); ResetDraft(); RefreshUpdates(); SaveStatus.Text = "已保存 · 使用官方 Gitee 更新源";
+        (stored with { Slot = UpdateSourceSlot.Cnb, CnbUrl = UpdateSelection.Cnb }).Store(settings);
+        _services.Settings.Save(settings); _services.Updates.ResetSourceResult(); ResetDraft(); RefreshUpdates(); SaveStatus.Text = "已保存 · 使用官方 CNB 更新源";
     }
     private async void Check_Click(object sender, RoutedEventArgs e) => await _services.Updates.CheckAsync(UpdateSelection.From(_services.Settings.Load()).Url());
     private void ResetProxyDraft()

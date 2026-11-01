@@ -1,13 +1,8 @@
-# Pack Harness Portable with Velopack, copy the feed to the LAN share, and
-# optionally publish a GitHub release. Version comes from the repo VERSION file.
-#
-#   pwsh -File scripts/release-windows.ps1
-#   pwsh -File scripts/release-windows.ps1 -SkipGitHub
-#   pwsh -File scripts/release-windows.ps1 -SkipShare
+# Build windows packages and publish to CNB (default) and optional GitHub.
+# Use -SkipCnb / -SkipGitHub for a local build.
 param(
     [switch]$SkipGitHub,
-    [switch]$SkipGitee,
-    [switch]$SkipShare
+    [switch]$SkipCnb
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,7 +43,6 @@ $notes = Get-ChangelogSection $changelog $version
 $publishDir = Join-Path $root "artifacts\win-publish"
 $packDir = Join-Path $root "artifacts\velopack"
 $notesFile = Join-Path $root "artifacts\release-notes.md"
-$share = "\\server-home\public\Software\HarnessPortable-Releases"
 $icon = Join-Path $root "windows\HarnessPortable.Windows\Assets\HarnessPortable.ico"
 
 New-Item -ItemType Directory -Force (Join-Path $root "artifacts") | Out-Null
@@ -69,17 +63,7 @@ dotnet publish (Join-Path $root "windows\HarnessPortable.Windows\HarnessPortable
     -o $publishDir
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
 
-if (-not $SkipShare -and (Test-Path $share)) {
-    Write-Host "Seeding pack output from $share so Velopack can build a delta..."
-    Get-ChildItem $share -Filter "*.nupkg" -ErrorAction SilentlyContinue |
-        Copy-Item -Destination $packDir -Force
-    foreach ($name in @("releases.win.json", "RELEASES", "release-history.json", "assets.win.json")) {
-        $from = Join-Path $share $name
-        if (Test-Path $from) {
-            Copy-Item $from $packDir -Force
-        }
-    }
-}
+
 
 Write-Host "Packing Velopack release..."
 vpk pack `
@@ -96,12 +80,7 @@ vpk pack `
     --framework webview2
 if ($LASTEXITCODE -ne 0) { throw "vpk pack failed" }
 
-if (-not $SkipShare) {
-    Write-Host "Uploading feed to $share"
-    New-Item -ItemType Directory -Force $share | Out-Null
-    vpk upload local --yes --outputDir $packDir --path $share --keepMaxReleases 30
-    if ($LASTEXITCODE -ne 0) { throw "vpk upload local failed" }
-}
+
 
 if (-not $SkipGitHub) {
     $token = $env:GITHUB_TOKEN
@@ -130,11 +109,11 @@ if (-not $SkipGitHub) {
 
 Write-Host "Done. Version $version"
 Write-Host "  pack   $packDir"
-if (-not $SkipShare) { Write-Host "  share  $share" }
+
 Write-Host "  setup  $(Join-Path $packDir 'HarnessPortable-win-Setup.exe')"
 Write-Host "  portable $(Join-Path $packDir 'HarnessPortable-win-Portable.zip')"
 
-if (-not $SkipGitee) {
-    & (Join-Path $PSScriptRoot "release-gitee.ps1") -Platform Windows -Version $version
-    if ($LASTEXITCODE -ne 0) { throw "Gitee publication failed" }
+if (-not $SkipCnb) {
+    & (Join-Path $PSScriptRoot "release-cnb.ps1") -Platform Windows -Version $version
+    if ($LASTEXITCODE -ne 0) { throw "CNB publication failed" }
 }

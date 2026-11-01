@@ -71,55 +71,30 @@ final class UpdateService: NSObject, ObservableObject {
         return false
     }
 
-    /// Maps `smb://server/share/path…` onto its mounted volume under
-    /// `/Volumes`. macOS mounts `\\server\share` either as `/Volumes/share` or,
-    /// when several servers expose the same share name, as
-    /// `/Volumes/share@server` (or `-server`); the first existing match wins.
-    /// Plain paths and http(s) URLs pass through unchanged.
+    /// Only network feeds remain supported; retired mounted-share paths are rejected.
     nonisolated static func resolveReadableURL(_ raw: String) -> URL? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host != nil,
+              url.user == nil, url.password == nil else { return nil }
+        return url
+    }
 
-        if let url = URL(string: trimmed), let scheme = url.scheme?.lowercased() {
-            if scheme == "http" || scheme == "https" || scheme == "file" { return url }
-            if scheme == "smb" || scheme == "cifs" {
-                // smb://server/share/rest -> /Volumes[/share@server | /share]/rest
-                let server = url.host ?? ""
-                var parts = url.pathComponents.filter { $0 != "/" }
-                guard let share = parts.first else { return nil }
-                let rest = parts.dropFirst()
-                let candidates = [
-                    "/Volumes/\(share)@\(server)",
-                    "/Volumes/\(share)-\(server)",
-                    "/Volumes/\(share)",
-                ]
-                let fm = FileManager.default
-                for base in candidates where fm.fileExists(atPath: base) {
-                    let path = rest.isEmpty ? base : base + "/" + rest.joined(separator: "/")
-                    return URL(fileURLWithPath: path)
-                }
-                return nil
-            }
-            return nil
-        }
-
-        // Bare path: assume the user typed a mount point or local folder.
-        return URL(fileURLWithPath: trimmed)
+    nonisolated static func repositoryBase(_ raw: String, source: String) -> URL? {
+        guard let url = resolveReadableURL(raw), url.scheme == "https", url.query == nil, url.fragment == nil,
+              url.port == nil || url.port == 443 else { return nil }
+        let domain = source == "github" ? "github.com" : "cnb.cool"
+        guard url.host?.lowercased() == domain else { return nil }
+        var path = url.path.components(separatedBy: "/-/")[0].trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if path.hasSuffix(".git") { path = String(path.dropLast(4)) }
+        let parts = path.split(separator: "/")
+        guard parts.count >= 2 else { return nil }
+        if source == "github" { return URL(string: "https://github.com/\(parts[0])/\(parts[1])/releases/latest/download") }
+        return URL(string: "https://cnb.cool/\(path)/-/git/raw/updates")
     }
 
     private var feedBase: URL? {
-        let value: String
-        switch settings.value.updateSourceSelected {
-        case "github": value = settings.value.updateGithubUrl
-        case "home": value = settings.value.updateHomeUrl
-        default: value = settings.value.updateGiteeUrl
-        }
-        guard let base = Self.resolveReadableURL(value) else { return nil }
-        if base.scheme?.lowercased() == "http" || base.scheme?.lowercased() == "https" {
-            return base
-        }
-        guard FileManager.default.fileExists(atPath: base.path) else { return nil }
-        return base
+        let source=settings.value.updateSourceSelected
+        return Self.repositoryBase(source == "github" ? settings.value.updateGithubUrl : settings.value.updateCnbUrl, source: source)
     }
 
     func check() {
@@ -132,7 +107,7 @@ final class UpdateService: NSObject, ObservableObject {
         phase = .checking
 
         guard let base = feedBase else {
-            phase = .failed("更新源不可用：请检查地址，或先在访达中连接共享（⌘K → smb://server-home/public）。")
+            phase = .failed("更新源不可用：请检查 CNB / GitHub 仓库地址。")
             return
         }
 
@@ -239,7 +214,8 @@ final class UpdateService: NSObject, ObservableObject {
             }
             let destination = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
                 ?? FileManager.default.temporaryDirectory
-            let target = destination.appendingPathComponent(feed?.dmg ?? "HarnessPortable.dmg")
+            let name = URL(string: feed?.dmg ?? "")?.lastPathComponent
+            let target = destination.appendingPathComponent(name?.isEmpty == false ? name! : "HarnessPortable.dmg")
             try? FileManager.default.removeItem(at: target)
             try FileManager.default.moveItem(at: location, to: target)
             phase = .readyToInstall(version: installVersion)

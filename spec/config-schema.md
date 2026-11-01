@@ -102,21 +102,13 @@ Windows 与 macOS 桌面版允许**同一进程内同时运行多个隧道**：
 - 桌面 `workspace.json` 保存自动快照，`layouts.json` 仍保存手动命名的预设。
   标签可带 `Selected` / `Active`（Windows）或 `selected` / `active`（macOS），旧配置缺失时按首个标签恢复。
   连接库偏好以 `tunnel:<id>` / `direct:<url>` 为键，包含名称、常用、分组与最近打开时间，保存在桌面应用设置中。
-- 更新源是**两个槽位加一个选择**，两个地址都会保留，切换不丢：
-  - Windows：`UpdateHomeUrl`（局域网共享，默认
-    `\\server-home\public\Software\HarnessPortable-Releases`）与
-    `UpdateGitHubUrl`（默认仓库地址），`UpdateSourceSelected` 取 `home` / `github`
-    决定实际用哪个；新安装默认选 `github`。
-  - Android：`update_source_home` / `update_source_github` /
-    `update_source_selected`，默认选 `github`（手机读不了 UNC）。
-  - macOS：`updateHomeUrl` / `updateGithubUrl` / `updateSourceSelected`，默认选
-    `github`；home 默认值 `smb://server-home/public/Software/HarnessPortable-Releases`，
-    运行时映射到 `/Volumes/public[…]` 挂载点（`macos.json` feed，与 android.json
-    同族，多一个 `sha256` 校验字段）；github 槽位默认
-    `https://github.com/RailgunHamster/HarnessPortable/releases/latest/download`。
-  - 两者都存在时旧字段 `UpdateServerUrl` / `update_server_url` 只作镜像，
-    不再决定行为；首次升级它会被折进对应的槽位，不丢用户原本填的地址；
-- 更新源草稿不会自动落盘，明确保存后生效；已有的槽位选择及旧字段迁移保留用户原本使用的源。
+- 更新源保留 CNB 和 GitHub 两个独立槽位，默认 CNB：
+  - Windows：`UpdateCnbUrl` / `UpdateGitHubUrl` / `UpdateSourceSelected`（`cnb` / `github`）。
+  - Android：`update_source_cnb` / `update_source_github` / `update_source_selected`（`CNB` / `GitHub`）。
+  - macOS：`updateCnbUrl` / `updateGithubUrl` / `updateSourceSelected`（`cnb` / `github`）。
+  - 官方 CNB 仓库为 `https://cnb.cool/railgunhamster/HarnessPortable`；匿名读取 `/-/git/raw/updates/` 下的平台索引，下载 `/-/releases/download/v<version>/` 下的版本附件。
+  - 家庭服务器和 Gitee 槽位已移除，旧选择迁移到 CNB；官方 GitHub 旧配置迁移一次，迁移后明确选择 GitHub 会保留；自定义 GitHub 仓库保留。
+- 更新源草稿明确保存后生效，不再读取共享账号。客户端与平台索引均不保存维护者 CNB 令牌。
 - 关闭标签不停止隧道，停止隧道保留对应标签，删除配置才关闭对应标签；
 - 直连重复打开聚焦已有标签，通过“复制标签”可打开独立网页；
 - 停止/删除某一条隧道不得影响其他隧道；

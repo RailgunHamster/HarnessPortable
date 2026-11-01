@@ -8,25 +8,25 @@ public enum UpdateSourceKind
     File,
     Web,
     GitHub,
-    Gitee,
+    Cnb,
 }
 
 public static class UpdateSourceFactory
 {
-    public const string DefaultServerUrl = @"\\server-home\public\Software\HarnessPortable-Releases";
+    public const string DefaultServerUrl = CnbRepoUrl;
     public const string GitHubRepoUrl = "https://github.com/RailgunHamster/HarnessPortable";
-    public const string GiteeRepoUrl = "https://gitee.com/railgunhamster/HarnessPortable";
+    public const string CnbRepoUrl = "https://cnb.cool/railgunhamster/HarnessPortable";
 
     public static string Normalize(string? url)
     {
         var trimmed = url?.Trim() ?? "";
-        return trimmed.Length == 0 ? GiteeRepoUrl : trimmed.TrimEnd('/');
+        return trimmed.Length == 0 ? CnbRepoUrl : trimmed.TrimEnd('/');
     }
 
     public static UpdateSourceKind Classify(string? url)
     {
         var value = Normalize(url);
-        if (LooksLikeGitee(value)) return UpdateSourceKind.Gitee;
+        if (LooksLikeCnb(value)) return UpdateSourceKind.Cnb;
         if (LooksLikeGitHub(value))
         {
             return UpdateSourceKind.GitHub;
@@ -48,25 +48,34 @@ public static class UpdateSourceFactory
         return Classify(value) switch
         {
             UpdateSourceKind.GitHub => new GithubSource(GitHubRepoUrlFrom(value), accessToken: null, prerelease: false, downloader: downloader),
-            UpdateSourceKind.Gitee => new GiteeUpdateSource(value, downloader),
+            UpdateSourceKind.Cnb => new CnbUpdateSource(value, downloader),
             UpdateSourceKind.Web => new SimpleWebSource(value, downloader),
             _ => new SimpleFileSource(new DirectoryInfo(value)),
         };
     }
 
-    public static bool IsValid(string? value, bool githubOnly = false, bool giteeOnly = false)
+    public static bool IsValid(string? value, bool githubOnly = false, bool cnbOnly = false)
     {
         if (string.IsNullOrWhiteSpace(value)) return false;
+        if(cnbOnly && (!LooksLikeCnb(value) || !ValidCnbPath(new Uri(value))))return false;
         if (Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
             return !string.IsNullOrWhiteSpace(uri.Host) &&
-                (!githubOnly || LooksLikeGitHub(value)) && (!giteeOnly || LooksLikeGitee(value)) &&
-                (!(githubOnly || giteeOnly) || uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries).Length >= 2);
-        return !githubOnly && !giteeOnly && Path.IsPathFullyQualified(value.Trim());
+                string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) &&
+                (!githubOnly || LooksLikeGitHub(value)) && (!cnbOnly || LooksLikeCnb(value)) &&
+                (!(githubOnly || cnbOnly) || uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries).Length >= 2);
+        return !githubOnly && !cnbOnly && Path.IsPathFullyQualified(value.Trim());
     }
 
-    public static bool LooksLikeGitee(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
-        uri.Scheme is "http" or "https" &&
-        (uri.Host.Equals("gitee.com", StringComparison.OrdinalIgnoreCase) || uri.Host.Equals("www.gitee.com", StringComparison.OrdinalIgnoreCase));
+    public static bool LooksLikeCnb(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        uri.Scheme == "https" && uri.IsDefaultPort && uri.Host.Equals("cnb.cool",StringComparison.OrdinalIgnoreCase);
+
+    private static bool ValidCnbPath(Uri uri)
+    {
+        var path=uri.AbsolutePath.Split("/-/",StringSplitOptions.None)[0].Trim('/');
+        if(path.EndsWith(".git",StringComparison.OrdinalIgnoreCase))path=path[..^4];
+        var parts=path.Split('/');
+        return parts.Length>=2 && parts.All(p=>p is not ("." or "..") && System.Text.RegularExpressions.Regex.IsMatch(p,"^[A-Za-z0-9_.-]+$"));
+    }
 
     public static bool LooksLikeGitHub(string url)
     {

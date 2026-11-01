@@ -14,7 +14,7 @@ $api = ./scripts/Start-HarnessApi.ps1 -Offscreen
 $endpoint = $api.EndpointFile
 ```
 
-`--automation-api` 后必须是新的绝对路径。文件原子写入，包含协议、进程 ID 和随机管道名；已有文件不会覆盖。正常退出会删除本实例的描述文件。测试可额外传 `--automation-offscreen`，让初始主窗口在屏幕外显示且不主动激活。它不会安装应用或改动正式配置。
+`--automation-api` 后必须是新的绝对路径。文件原子写入，包含协议、进程 ID 和随机管道名；已有文件不会覆盖。正常退出会删除本实例的描述文件。测试可额外传 `--automation-offscreen`，让初始主窗口在屏幕外显示且不主动激活。它不会安装应用或改动正式配置。API 模式不自动检查外部更新源；测试可显式调用 `updates.check`。
 
 已有正式实例不受上述环境变量影响。测试应始终使用新数据目录，避免读写个人配置和真实连接。
 

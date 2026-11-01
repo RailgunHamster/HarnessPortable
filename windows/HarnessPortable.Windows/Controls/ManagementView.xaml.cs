@@ -213,7 +213,7 @@ public partial class ManagementView : System.Windows.Controls.UserControl
     private UpdateSelection LoadUpdateSelection()
     {
         var stored = UpdateSelection.From(_services.Settings.Load());
-        var slot = UpdateSelection.ParseSlot((UpdateSourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? UpdateSourceSlot.Gitee;
+        var slot = UpdateSelection.ParseSlot((UpdateSourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? UpdateSourceSlot.Cnb;
         var typed = UpdateServerBox.Text.Trim();
         return stored.WithUrl(slot, typed) with { Slot = slot };
     }
@@ -301,21 +301,25 @@ public partial class ManagementView : System.Windows.Controls.UserControl
 
     private void SaveUpdateServer_Click(object sender, RoutedEventArgs e)
     {
+        var next=LoadUpdateSelection();
+        if(!UpdateSourceFactory.IsValid(next.Url(),next.Slot==UpdateSourceSlot.GitHub,next.Slot==UpdateSourceSlot.Cnb))
+        {
+            Automation.AutomationDialogs.Show(Window.GetWindow(this),"请输入完整的 CNB / GitHub 仓库地址。","更新源",MessageBoxButton.OK,MessageBoxImage.Warning);
+            return;
+        }
         var settings = _services.Settings.Load();
-        LoadUpdateSelection().Store(settings);
+        next.Store(settings);
         _services.Settings.Save(settings);
     }
 
     private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
     {
-        SaveUpdateServer_Click(sender, e);
-        await _services.Updates.CheckAsync(CurrentUpdateServerUrl());
+        await _services.Updates.CheckAsync(UpdateSelection.From(_services.Settings.Load()).Url());
     }
 
     private async void ApplyUpdate_Click(object sender, RoutedEventArgs e)
     {
-        SaveUpdateServer_Click(sender, e);
-        await _services.Updates.ApplyAsync(CurrentUpdateServerUrl());
+        await _services.Updates.ApplyAsync(UpdateSelection.From(_services.Settings.Load()).Url());
     }
 
     private void CloseBehaviorBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

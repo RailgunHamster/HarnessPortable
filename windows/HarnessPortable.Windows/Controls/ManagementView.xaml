@@ -239,12 +239,11 @@
                         <ComboBox x:Name="UpdateSourceBox" Width="280" HorizontalAlignment="Left"
                                   Style="{StaticResource DshComboBox}"
                                   SelectionChanged="UpdateSourceBox_SelectionChanged" AutomationProperties.AutomationId="ManagementView.UpdateSourceBox">
-                            <ComboBoxItem Content="家庭目录（局域网共享）" Tag="home" AutomationProperties.AutomationId="ManagementView.ComboBoxItem.home.1"/>
                             <ComboBoxItem Content="GitHub" Tag="github" AutomationProperties.AutomationId="ManagementView.ComboBoxItem.github.1"/>
-                            <ComboBoxItem Content="Gitee（默认）" Tag="gitee" AutomationProperties.AutomationId="ManagementView.ComboBoxItem.gitee.1"/>
+                            <ComboBoxItem Content="CNB（默认）" Tag="cnb" AutomationProperties.AutomationId="ManagementView.ComboBoxItem.cnb.1"/>
                         </ComboBox>
 
-                        <TextBlock Text="地址（家庭目录填 UNC 路径或 http 目录；Gitee / GitHub 填仓库地址）"
+                        <TextBlock Text="地址（CNB / GitHub 仓库地址）"
                                    Style="{StaticResource DshLabel}" Margin="0,14,0,6"/>
                         <Grid>
                             <Grid.ColumnDefinitions>

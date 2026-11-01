@@ -30,7 +30,7 @@ android {
         minSdk = 24
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 34
+        versionCode = 35
         versionName = rootProject.file("VERSION").takeIf { it.exists() }?.readText()?.trim() ?: "2.5.0"
     }
 
@@ -83,7 +83,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     // Actively maintained JSch fork: modern OpenSSH kex + signature algorithms
     implementation("com.github.mwiede:jsch:0.2.21")
-    implementation("com.hierynomus:smbj:0.14.0")
 }
 
 

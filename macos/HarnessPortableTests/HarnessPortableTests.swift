@@ -185,65 +185,27 @@ final class HarnessPortableTests: XCTestCase {
     }
 
     func testUpdateSourceURLResolution() {
-        XCTAssertEqual(
-            UpdateService.resolveReadableURL("https://example.com/releases")?.absoluteString,
-            "https://example.com/releases"
-        )
-        XCTAssertEqual(
-            UpdateService.resolveReadableURL("  https://example.com/releases  ")?.absoluteString,
-            "https://example.com/releases"
-        )
-        // An smb share maps to its /Volumes mount when one exists; whether
-        // this test host has any mount is environment-specific, so both
-        // outcomes are valid for shares we did not mount ourselves.
-        if let mapped = UpdateService.resolveReadableURL("smb://server-not-mounted.example/public/Releases") {
-            XCTAssertTrue(
-                mapped.path == "/Volumes/public/Releases" ||
-                mapped.path.hasPrefix("/Volumes/public@") ||
-                mapped.path.hasPrefix("/Volumes/public-"),
-                "unexpected mapping: \(mapped.path)"
-            )
-        }
-        XCTAssertNil(UpdateService.resolveReadableURL("ftp://example.com/x"))
-        XCTAssertNil(UpdateService.resolveReadableURL("   "))
-        // A plain path is accepted as-is (mount point or local folder).
-        XCTAssertEqual(
-            UpdateService.resolveReadableURL("/tmp")?.path,
-            "/tmp"
-        )
-        if let mapped = UpdateService.resolveReadableURL("smb://server-home/public/Software/HarnessPortable-Releases") {
-            // When the share is mounted on this machine the smb URL resolves
-            // to one of the /Volumes spellings; otherwise the test host has no
-            // mount and the call returns nil, which the guard below accepts.
-            XCTAssertTrue(
-                mapped.path == "/Volumes/public/Software/HarnessPortable-Releases" ||
-                mapped.path.hasPrefix("/Volumes/public@") ||
-                mapped.path.hasPrefix("/Volumes/public-"),
-                "unexpected mapping: \(mapped.path)"
-            )
-        }
+        XCTAssertEqual(UpdateService.repositoryBase("https://cnb.cool/railgunhamster/HarnessPortable.git", source: "cnb")?.absoluteString,
+                       "https://cnb.cool/railgunhamster/HarnessPortable/-/git/raw/updates")
+        XCTAssertEqual(UpdateService.repositoryBase("https://github.com/example/repo", source: "github")?.absoluteString,
+                       "https://github.com/example/repo/releases/latest/download")
+        XCTAssertNil(UpdateService.resolveReadableURL("smb://server/share"))
+        XCTAssertNil(UpdateService.resolveReadableURL("/tmp"))
+        XCTAssertNil(UpdateService.repositoryBase("https://cnb.cool.evil.example/g/r", source: "cnb"))
+        XCTAssertNil(UpdateService.repositoryBase("https://token@cnb.cool/g/r", source: "cnb"))
     }
-
     func testAppSettingsDecodeLegacyUpdateServerUrl() throws {
-        // The pre-slot field folds into the matching slot instead of being lost.
-        let legacySmb = try JSONDecoder().decode(
-            AppSettings.self,
-            from: Data(#"{ "updateServerUrl": "smb://nas/public/Releases" }"#.utf8)
-        )
-        XCTAssertEqual(legacySmb.updateHomeUrl, "smb://nas/public/Releases")
-        XCTAssertEqual(legacySmb.updateSourceSelected, "home")
-
-        let legacyHttp = try JSONDecoder().decode(
-            AppSettings.self,
-            from: Data(#"{ "updateServerUrl": "https://example.com/feed", "updateSourceSelected": "github" }"#.utf8)
-        )
-        XCTAssertEqual(legacyHttp.updateGithubUrl, "https://example.com/feed")
-        XCTAssertEqual(legacyHttp.updateSourceSelected, "github")
-
-        let defaults = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
-        XCTAssertEqual(defaults.updateSourceSelected, "gitee")
-        XCTAssertTrue(defaults.updateGiteeUrl.contains("gitee.com"))
-        XCTAssertTrue(defaults.updateGithubUrl.contains("github.com"))
+        for old in ["home", "gitee"] {
+            let data=Data("{\"updateSourceSelected\":\"\(old)\",\"updateHomeUrl\":\"smb://old/share\",\"appearance\":\"dark\"}".utf8)
+            let settings=try JSONDecoder().decode(AppSettings.self,from:data)
+            XCTAssertEqual(settings.updateSourceSelected,"cnb");XCTAssertEqual(settings.updateCnbUrl,AppSettings.defaultCnb)
+            XCTAssertEqual(settings.appearance,"dark")
+            let encoded=String(data:try JSONEncoder().encode(settings),encoding:.utf8)!
+            XCTAssertFalse(encoded.contains("updateHomeUrl"));XCTAssertFalse(encoded.contains("updateGiteeUrl"))
+        }
+        var settings=AppSettings();settings.updateSourceSelected="github"
+        let restored=try JSONDecoder().decode(AppSettings.self,from:JSONEncoder().encode(settings))
+        XCTAssertEqual(restored.updateSourceSelected,"github")
     }
 
     func testProfileAuthModeSupportsLaunchdAndNormalizesUnknownValues() throws {

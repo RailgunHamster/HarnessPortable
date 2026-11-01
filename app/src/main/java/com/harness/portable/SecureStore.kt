@@ -84,13 +84,6 @@ object SecureStore {
         prefs(ctx).edit().remove(authPrefKey(profileId)).apply()
     }
 
-    fun setUpdateSharePassword(ctx: Context, password: String) {
-        if (password.isEmpty()) prefs(ctx).edit().remove("update_share_password").apply()
-        else writeEncrypted(ctx, "update_share_password", password)
-    }
-
-    fun getUpdateSharePassword(ctx: Context): String = readEncrypted(ctx, "update_share_password").orEmpty()
-
     private fun writeEncrypted(ctx: Context, key: String, value: String) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, obtainKey())

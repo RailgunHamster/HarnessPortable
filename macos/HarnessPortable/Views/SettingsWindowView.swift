@@ -11,9 +11,8 @@ struct SettingsWindowView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var category = "general"
     @State private var draftSource: String
-    @State private var draftHome: String
     @State private var draftGithub: String
-    @State private var draftGitee: String
+    @State private var draftCnb: String
     @State private var draftProxy: UpdateProxy
     @State private var proxyStatus = ""
     @State private var status = "偏好立即保存；地址修改需要明确保存。"
@@ -21,9 +20,8 @@ struct SettingsWindowView: View {
     init(settings: SettingsStore, profiles: ProfileStore, updater: UpdateService) {
         self.settings = settings; self.profiles = profiles; self.updater = updater
         _draftSource = State(initialValue: settings.value.updateSourceSelected)
-        _draftHome = State(initialValue: settings.value.updateHomeUrl)
         _draftGithub = State(initialValue: settings.value.updateGithubUrl)
-        _draftGitee = State(initialValue: settings.value.updateGiteeUrl)
+        _draftCnb = State(initialValue: settings.value.updateCnbUrl)
         _draftProxy = State(initialValue: UpdateProxy(settings: settings.value))
     }
     var body: some View {
@@ -71,7 +69,7 @@ struct SettingsWindowView: View {
                         } else {
                             Text("更新与关于").font(.headline)
                             Text("Harness Portable · \(UpdateService.currentVersion)").font(Dsh.mono(12))
-                            Text("正在使用：\(settings.value.updateSourceSelected == "gitee" ? "Gitee" : settings.value.updateSourceSelected == "github" ? "GitHub" : "局域网目录")").foregroundStyle(dsh.textSecondary)
+                            Text("正在使用：\(settings.value.updateSourceSelected == "github" ? "GitHub" : "CNB")").foregroundStyle(dsh.textSecondary)
                             Button("检查更新") { updater.check() }.buttonStyle(DshPrimaryButtonStyle()).disabled(busy)
                             Text(updateStatus).font(.callout).foregroundStyle(dsh.textSecondary)
                             if case .available = updater.phase { Button("下载并安装") { updater.download() }.buttonStyle(DshPrimaryButtonStyle()) }
@@ -86,12 +84,11 @@ struct SettingsWindowView: View {
                                 Button("保存代理设置") { saveProxy() }.disabled(busy)
                                 Button("撤销") { draftProxy = UpdateProxy(settings: settings.value); proxyStatus = "" }.disabled(busy)
                             }
-                            DisclosureGroup("高级：局域网目录或自定义更新源") {
+                            DisclosureGroup("高级：自定义更新源") {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Picker("更新源", selection: $draftSource) { Text("Gitee（默认）").tag("gitee"); Text("GitHub").tag("github"); Text("局域网目录 / HTTP").tag("home") }
-                                    if draftSource == "gitee" { TextField("Gitee 静态更新目录", text: $draftGitee).dshInput() }
-                                    else if draftSource == "github" { TextField("GitHub 发布下载基址", text: $draftGithub).dshInput() }
-                                    else { TextField("smb://、已挂载目录或 HTTP 地址", text: $draftHome).dshInput() }
+                                    Picker("更新源", selection: $draftSource) { Text("CNB（默认）").tag("cnb"); Text("GitHub").tag("github") }
+                                    if draftSource == "cnb" { TextField("CNB 仓库地址", text: $draftCnb).dshInput() }
+                                    else if draftSource == "github" { TextField("GitHub 仓库地址", text: $draftGithub).dshInput() }
                                     Text("切换或检查不会保存草稿。").font(.callout).foregroundStyle(dsh.textSecondary)
                                     HStack { Button("保存并使用") { saveSource() }.disabled(busy); Button("撤销") { resetDraft() }; Button("官方源") { useOfficialSource() }.disabled(busy) }
                                 }.padding(.top, 12)
@@ -127,13 +124,9 @@ struct SettingsWindowView: View {
         }
     }
     private func saveSource() {
-        let value = (draftSource == "gitee" ? draftGitee : draftSource == "github" ? draftGithub : draftHome).trimmingCharacters(in: .whitespacesAndNewlines)
-        let url = URL(string: value)
-        let valid = draftSource == "gitee" ? url?.host == "gitee.com" && ["http", "https"].contains(url?.scheme ?? "")
-            : draftSource == "github" ? url?.host == "github.com" && ["http", "https"].contains(url?.scheme ?? "")
-            : value.hasPrefix("/") || ["smb", "http", "https"].contains(url?.scheme ?? "")
-        guard !value.isEmpty, valid else { status = "地址未保存：请输入完整地址或绝对目录路径。"; return }
-        settings.update { $0.updateGiteeUrl = draftGitee.trimmingCharacters(in: .whitespacesAndNewlines); $0.updateSourceSelected = draftSource; $0.updateHomeUrl = draftHome.trimmingCharacters(in: .whitespacesAndNewlines); $0.updateGithubUrl = draftGithub.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let value = (draftSource == "github" ? draftGithub : draftCnb).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard UpdateService.repositoryBase(value, source: draftSource) != nil else { status = "地址未保存：请输入完整 CNB / GitHub 仓库地址。"; return }
+        settings.update { $0.updateCnbUrl = draftCnb.trimmingCharacters(in: .whitespacesAndNewlines); $0.updateSourceSelected = draftSource; $0.updateGithubUrl = draftGithub.trimmingCharacters(in: .whitespacesAndNewlines) }
         updater.resetSourceResult(); status = "已保存 · 下次检查使用此更新源"
     }
     private func saveProxy() {
@@ -147,10 +140,10 @@ struct SettingsWindowView: View {
         proxyStatus = "已保存 · \(next.enabled ? "代理已启用" : "代理已关闭")"
         status = "已保存代理设置 · 下次检查与下载生效"
     }
-    private func resetDraft() { draftSource = settings.value.updateSourceSelected; draftHome = settings.value.updateHomeUrl; draftGithub = settings.value.updateGithubUrl; draftGitee = settings.value.updateGiteeUrl; status = "已撤销地址修改" }
+    private func resetDraft() { draftSource = settings.value.updateSourceSelected; draftGithub = settings.value.updateGithubUrl; draftCnb = settings.value.updateCnbUrl; status = "已撤销地址修改" }
     private func useOfficialSource() {
-        settings.update { $0.updateSourceSelected = "gitee"; $0.updateGiteeUrl = AppSettings.defaultGitee }
-        updater.resetSourceResult(); resetDraft(); status = "已保存 · 使用官方 Gitee 更新源"
+        settings.update { $0.updateSourceSelected = "cnb"; $0.updateCnbUrl = AppSettings.defaultCnb }
+        updater.resetSourceResult(); resetDraft(); status = "已保存 · 使用官方 CNB 更新源"
     }
     private func exportConfig() {
         let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "harness-connections.json"

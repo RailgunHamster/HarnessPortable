@@ -55,7 +55,7 @@ public sealed class WorkspaceUxTests : IDisposable
         File.WriteAllText(Path.Combine(_root, "settings.json"), "{\"CloseBehavior\":\"tray\",\"UpdateSourceSelected\":\"home\",\"UpdateHomeUrl\":\"D:\\\\releases\"}");
         var settings = _settings.Load();
         Assert.Equal("tray", settings.CloseBehavior); Assert.True(settings.ReconnectRestoredWorkspace);
-        Assert.Equal(UpdateSourceSlot.Home, UpdateSelection.From(settings).Slot);
+        Assert.Equal(UpdateSourceSlot.Cnb, UpdateSelection.From(settings).Slot);
         Assert.Empty(settings.Connections);
     }
     [Fact]

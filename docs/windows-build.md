@@ -98,19 +98,17 @@ pwsh -File scripts/release-windows.ps1
 
 1. `dotnet publish`（self-contained，非单文件）
 2. `vpk pack`（带当前版本的更新日志，并安装 WebView2 引导）
-3. 把更新源同步到 `\\server-home\public\Software\HarnessPortable-Releases`
+3. 将安装包和索引发布到公开 CNB 仓库，匿名下载 SHA-256 校验通过后推进 `updates` 分支
 4. 若有 `GITHUB_TOKEN` / `GH_TOKEN` / git credential，则发布 GitHub Release `v<version>`
 
 跳过某一步：
 
 ```powershell
 pwsh -File scripts/release-windows.ps1 -SkipGitHub
-pwsh -File scripts/release-windows.ps1 -SkipShare
+pwsh -File scripts/release-windows.ps1 -SkipCnb
 ```
 
-应用设置里的更新源是**两个槽位加一个选择**：家庭目录（默认局域网共享，PC 能直接读）
-与 GitHub 仓库，两个地址都保留，用下拉切换实际用哪个。安装包发布在两处，所以随便哪个
-通都能更新。旁边可查看更新日志。
+应用设置保留 CNB（默认）与 GitHub 两个独立地址。家庭服务器、Gitee 及共享账号入口已移除。维护者在本机提供 `CNB_TOKEN` 或 `CNB_TOKEN_FILE`，客户端不需要令牌。可单独执行 `scripts/release-cnb.ps1 -Platform All` 发布已构建的 Windows / Android 包。
 
 开发时直接 `dotnet run` 不会走更新（Velopack 未安装）。
 

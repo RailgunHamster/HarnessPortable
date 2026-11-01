@@ -21,11 +21,9 @@ data class ApkFeed(
 
 object ApkUpdate {
     const val PREF_SERVER = "update_server_url"
-    const val DEFAULT_SERVER = "https://gitee.com/railgunhamster/HarnessPortable"
+    const val DEFAULT_SERVER = "https://cnb.cool/railgunhamster/HarnessPortable"
     const val DEFAULT_GITHUB = "https://github.com/RailgunHamster/HarnessPortable"
 
-    /** LAN release directory: native filesystem on Windows, SMB on Android. */
-    const val DEFAULT_HOME_DIR = "\\\\server-home\\public\\Software\\HarnessPortable-Releases"
 
     fun currentVersionName(ctx: Context): String =
         ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0"
@@ -40,30 +38,10 @@ object ApkUpdate {
      * `releases/latest/download/`) rather than a plain path or directory URL.
      */
     fun looksLikeGitHub(url: String): Boolean = repository(url, "github.com") != null
-    fun looksLikeGitee(url: String): Boolean = repository(url, "gitee.com") != null
-    fun isOfficialGitHub(url: String): Boolean = repository(url, "github.com")?.let {
-        it.first.equals("RailgunHamster", true) && it.second.equals("HarnessPortable", true)
+    fun looksLikeCnb(url: String): Boolean = cnbRepository(url) != null
+    fun isOfficialGitHub(url: String): Boolean = repository(url,"github.com")?.let {
+        it.first.equals("RailgunHamster",true) && it.second.equals("HarnessPortable",true)
     } == true
-
-    /**
-     * Whether an address is a filesystem path — the UNC form of the home
-     * directory, or any Windows / POSIX path. UNC shares are read over SMB.
-     */
-    fun looksLikeReadablePath(url: String): Boolean {
-        val v = url.trim()
-        if (v.isEmpty()) return false
-        if (v.startsWith("http://", true) || v.startsWith("https://", true)) return false
-        return v.startsWith("\\\\") || v.startsWith("//") ||
-            v.matches(Regex("^[A-Za-z]:[\\\\/].*")) || v.startsWith("/")
-    }
-
-    /** Classifies an address the way the update feed expects to read it. */
-    fun classify(url: String): UpdateSourceKind =
-        when {
-            looksLikeGitee(url) -> UpdateSourceKind.Gitee
-            looksLikeGitHub(url) -> UpdateSourceKind.GitHub
-            else -> UpdateSourceKind.File
-        }
 
     fun storedServer(ctx: Context): String =
         ctx.getSharedPreferences("harness_portable", Context.MODE_PRIVATE)
@@ -79,35 +57,33 @@ object ApkUpdate {
 
     fun feedUrl(server: String): String {
         val raw = server.trim().ifEmpty { DEFAULT_SERVER }.trimEnd('/')
-        if (SmbUpdateAddress.looksLikeSmb(raw)) return SmbUpdateAddress.parse(raw).feed().url()
-        val gitee = repository(raw, "gitee.com")
-        if (gitee != null) return "https://gitee.com/${gitee.first}/${gitee.second}/raw/updates/android.json"
+        cnbRepository(raw)?.let { return "https://cnb.cool/$it/-/git/raw/updates/android.json" }
         val github = repository(raw, "github.com")
         if (github != null) {
             return "https://github.com/${github.first}/${github.second}/releases/latest/download/android.json"
         }
+        val uri=java.net.URI(raw)
+        require(uri.scheme?.lowercase() in listOf("http","https") && !uri.host.isNullOrBlank()) { "更新只支持 CNB / GitHub 或 HTTP(S)" }
         if (raw.endsWith("android.json", ignoreCase = true)) return raw
-        // A directory path (UNC or local) or a plain http directory both just
-        // get the feed name appended, with the right separator.
-        return if (looksLikeReadablePath(raw)) "$raw\\android.json" else "$raw/android.json"
+        return "$raw/android.json"
     }
 
     fun apkUrl(feedUrl: String, apkField: String): String {
-        val apk = apkField.trim()
-        if (SmbUpdateAddress.looksLikeSmb(feedUrl)) return SmbUpdateAddress.parse(feedUrl).apk(apk)
-        if (apk.startsWith("http://", true) || apk.startsWith("https://", true)) return apk
-        // Resolve a bare file name next to the feed. A UNC feed is
-        // backslash-separated, so cutting at '/' alone would yield the whole
-        // path rather than its directory and double the file name.
-        val sep = if (looksLikeReadablePath(feedUrl)) maxOf(feedUrl.lastIndexOf('\\'), feedUrl.lastIndexOf('/'))
-        else feedUrl.lastIndexOf('/')
-        val base = if (sep >= 0) feedUrl.substring(0, sep + 1) else feedUrl
-        return base + apk.trimStart('/', '\\')
+        val uri=java.net.URI(feedUrl).resolve(apkField.trim())
+        require(uri.scheme?.lowercase() in listOf("http","https") && !uri.host.isNullOrBlank() && uri.userInfo==null) { "无效的安装包下载地址" }
+        return uri.toString()
     }
 
-    fun fetchFeed(server: String, proxy: UpdateProxy = UpdateProxy(), shareCredentials: UpdateShareCredentials = UpdateShareCredentials()): ApkFeed {
+    private fun cnbRepository(url: String): String? {
+        val uri=runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return null
+        if(uri.scheme != "https" || !uri.host.orEmpty().equals("cnb.cool",true) || uri.port !in listOf(-1,443) || uri.userInfo!=null || uri.query!=null || uri.fragment!=null) return null
+        val path=uri.path.orEmpty().substringBefore("/-/").trim('/').removeSuffix(".git")
+        return path.takeIf { it.split('/').size>=2 && it.split('/').all { part -> part.matches(Regex("[A-Za-z0-9_.-]+")) && part !in listOf(".","..") } }
+    }
+
+    fun fetchFeed(server: String, proxy: UpdateProxy = UpdateProxy()): ApkFeed {
         val url = feedUrl(server)
-        val body = if (SmbUpdateAddress.looksLikeSmb(url)) SmbUpdate.readText(url, shareCredentials) else httpGet(url, proxy)
+        val body = httpGet(url, proxy)
         val json = JSONObject(body)
         val apk = json.optString("apk").ifBlank {
             throw IllegalStateException("android.json 缺少 apk")
@@ -120,8 +96,7 @@ object ApkUpdate {
         )
     }
 
-    fun download(apkUrl: String, dest: File, proxy: UpdateProxy = UpdateProxy(), shareCredentials: UpdateShareCredentials = UpdateShareCredentials(), onProgress: (Int) -> Unit) {
-        if (SmbUpdateAddress.looksLikeSmb(apkUrl)) { SmbUpdate.download(apkUrl, dest, shareCredentials, onProgress); return }
+    fun download(apkUrl: String, dest: File, proxy: UpdateProxy = UpdateProxy(), onProgress: (Int) -> Unit) {
         dest.parentFile?.mkdirs()
         val tmp = File(dest.parentFile, dest.name + ".part")
         val conn = open(apkUrl, proxy)
@@ -180,6 +155,7 @@ object ApkUpdate {
         val uri = runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return null
         val host = uri.host ?: return null
         if (uri.scheme?.lowercase() !in listOf("http", "https")) return null
+        if (uri.userInfo!=null || uri.query!=null || uri.fragment!=null) return null
         if (!host.equals(domain, true) && !host.equals("www.$domain", true)) return null
         val parts = uri.path.orEmpty().trim('/').split('/').filter { it.isNotEmpty() }
         if (parts.size < 2) return null

@@ -1,18 +1,10 @@
-# Build the macOS app on the remote Mac (SSH), package it into an
-# ad-hoc signed dmg, write the macos.json update feed, pull the artifacts
-# back into artifacts\macos\, and (unless skipped) publish them to the LAN
-# share and the GitHub release for this VERSION.
-#
-#   pwsh -File scripts/release-macos.ps1
-#
-# Requirements on the Mac (see docs/mac-setup.md): full Xcode, xcodegen,
-# Remote Login with the harness_mac_ed25519 key installed.
+# Build macos packages and publish to CNB (default) and optional GitHub.
+# Use -SkipCnb / -SkipGitHub for a local build.
 param(
     [string]$MacTarget = "RailgunHamster@macair",
     [string]$Version = "",
     [switch]$SkipGitHub,
-    [switch]$SkipGitee,
-    [switch]$SkipShare
+    [switch]$SkipCnb
 )
 
 $ErrorActionPreference = "Stop"
@@ -114,14 +106,7 @@ $feedJson = $feed | ConvertTo-Json -Compress
 $utf8 = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText((Join-Path $outDir "macos.json"), $feedJson, $utf8)
 
-$share = "\\server-home\public\Software\HarnessPortable-Releases"
-if (-not $SkipShare) {
-    Write-Host "==> copying dmg + feed to $share"
-    New-Item -ItemType Directory -Force -Path $share | Out-Null
-    Copy-Item $dmgPath (Join-Path $share $dmgName) -Force
-    Copy-Item (Join-Path $outDir "macos.json") (Join-Path $share "macos.json") -Force
-    Copy-Item $dmgPath (Join-Path $share "HarnessPortable-macos.dmg") -Force
-}
+
 
 if (-not $SkipGitHub) {
     $token = $env:GITHUB_TOKEN
@@ -177,7 +162,7 @@ if (-not $SkipGitHub) {
 
 Write-Host "Done: $dmgPath (+ macos.json feed)"
 
-if (-not $SkipGitee) {
-    & (Join-Path $PSScriptRoot "release-gitee.ps1") -Platform macOS -Version $version
-    if ($LASTEXITCODE -ne 0) { throw "Gitee publication failed" }
+if (-not $SkipCnb) {
+    & (Join-Path $PSScriptRoot "release-cnb.ps1") -Platform macOS -Version $version
+    if ($LASTEXITCODE -ne 0) { throw "CNB publication failed" }
 }

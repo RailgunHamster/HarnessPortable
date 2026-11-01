@@ -1,7 +1,7 @@
 import Foundation
 
 struct AppSettings: Codable {
-    static let defaultGitee = "https://gitee.com/railgunhamster/HarnessPortable/raw/updates"
+    static let defaultCnb = "https://cnb.cool/railgunhamster/HarnessPortable"
     var version: Int = 1
     var closeBehavior: String = "exit"
     var restoreLastLayoutOnStartup: Bool = true
@@ -12,17 +12,9 @@ struct AppSettings: Codable {
     var appearance: String = "system"
     var connections: [String: ConnectionPreference] = [:]
     var connectionOrder: [String] = []
-    /// Update feed slot: LAN share the Mac reaches through a mounted SMB
-    /// volume (or any readable path/URL). Default mirrors the Windows home
-    /// share; the smb:// form is mapped onto its /Volumes mount at use time.
-    var updateHomeUrl: String = "smb://server-home/public/Software/HarnessPortable-Releases"
-    /// Update feed slot: GitHub release download base; macos.json is fetched
-    /// from `<base>/macos.json` and the dmg from `<base>/<name-in-feed>`.
     var updateGithubUrl: String = "https://github.com/RailgunHamster/HarnessPortable/releases/latest/download"
-    /// `home` / `github`; both slots are always kept so switching never loses
-    /// the other address.
-    var updateSourceSelected: String = "gitee"
-    var updateGiteeUrl: String = AppSettings.defaultGitee
+    var updateSourceSelected: String = "cnb"
+    var updateCnbUrl: String = AppSettings.defaultCnb
     var updateProxyEnabled: Bool = false
     var updateProxyAddress: String = "localhost:7890"
     /// Per-direct-URL auth mode (macOS only; tunnels carry their own field).
@@ -34,7 +26,7 @@ struct AppSettings: Codable {
         case version, closeBehavior, restoreLastLayoutOnStartup, lastLayoutName
         case reconnectRestoredWorkspace, connectionSidebarCollapsed, appearance, connections
         case startupReconnectPreference, connectionOrder
-        case updateHomeUrl, updateGithubUrl, updateGiteeUrl, updateSourceSelected
+        case updateGithubUrl, updateCnbUrl, updateSourceSelected
         case updateProxyEnabled, updateProxyAddress
         case directAuthModes
         case legacyUpdateServerUrl = "updateServerUrl"
@@ -54,29 +46,16 @@ struct AppSettings: Codable {
         connectionSidebarCollapsed = try container.decodeIfPresent(Bool.self, forKey: .connectionSidebarCollapsed) ?? false
         appearance = try container.decodeIfPresent(String.self, forKey: .appearance) ?? "system"
         connections = try container.decodeIfPresent([String: ConnectionPreference].self, forKey: .connections) ?? [:]
-        updateHomeUrl = try container.decodeIfPresent(String.self, forKey: .updateHomeUrl)
-            ?? "smb://server-home/public/Software/HarnessPortable-Releases"
-        updateGithubUrl = try container.decodeIfPresent(String.self, forKey: .updateGithubUrl)
-            ?? "https://github.com/RailgunHamster/HarnessPortable/releases/latest/download"
         let legacy = try container.decodeIfPresent(String.self, forKey: .legacyUpdateServerUrl)
-        // The pre-slot field is folded into the matching slot instead of being
-        // lost on first upgrade (same rule as the Windows/Android ports).
-        if let legacy, !legacy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let trimmed = legacy.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.lowercased().hasPrefix("smb://") || trimmed.hasPrefix("/") {
-                updateHomeUrl = trimmed
-            } else {
-                updateGithubUrl = trimmed
-            }
+        updateGithubUrl = try container.decodeIfPresent(String.self, forKey: .updateGithubUrl)
+            ?? ((URL(string: legacy ?? "")?.host == "github.com") ? legacy! : "https://github.com/RailgunHamster/HarnessPortable/releases/latest/download")
+        let hadCnb = container.contains(.updateCnbUrl)
+        updateCnbUrl = try container.decodeIfPresent(String.self, forKey: .updateCnbUrl) ?? Self.defaultCnb
+        updateSourceSelected = try container.decodeIfPresent(String.self, forKey: .updateSourceSelected) ?? "cnb"
+        if !["cnb", "github"].contains(updateSourceSelected) { updateSourceSelected = "cnb" }
+        if !hadCnb && updateSourceSelected == "github" && updateGithubUrl.lowercased().hasPrefix("https://github.com/railgunhamster/harnessportable") {
+            updateSourceSelected = "cnb"
         }
-        updateSourceSelected = try container.decodeIfPresent(String.self, forKey: .updateSourceSelected)
-            ?? ((legacy?.lowercased().hasPrefix("smb://") == true || legacy?.hasPrefix("/") == true) ? "home" : "github")
-        let hadGitee = container.contains(.updateGiteeUrl)
-        updateGiteeUrl = try container.decodeIfPresent(String.self, forKey: .updateGiteeUrl) ?? Self.defaultGitee
-        if !hadGitee && updateSourceSelected == "github" && updateGithubUrl.lowercased().hasPrefix("https://github.com/railgunhamster/harnessportable/") {
-            updateSourceSelected = "gitee"
-        }
-        if !["github", "home", "gitee"].contains(updateSourceSelected) { updateSourceSelected = "gitee" }
         updateProxyEnabled = try container.decodeIfPresent(Bool.self, forKey: .updateProxyEnabled) ?? false
         updateProxyAddress = try container.decodeIfPresent(String.self, forKey: .updateProxyAddress) ?? "localhost:7890"
         directAuthModes = try container.decodeIfPresent([String: String].self, forKey: .directAuthModes) ?? [:]
@@ -95,9 +74,8 @@ struct AppSettings: Codable {
         try container.encode(connectionSidebarCollapsed, forKey: .connectionSidebarCollapsed)
         try container.encode(appearance, forKey: .appearance)
         try container.encode(connections, forKey: .connections)
-        try container.encode(updateHomeUrl, forKey: .updateHomeUrl)
         try container.encode(updateGithubUrl, forKey: .updateGithubUrl)
-        try container.encode(updateGiteeUrl, forKey: .updateGiteeUrl)
+        try container.encode(updateCnbUrl, forKey: .updateCnbUrl)
         try container.encode(updateSourceSelected, forKey: .updateSourceSelected)
         try container.encode(updateProxyEnabled, forKey: .updateProxyEnabled)
         try container.encode(updateProxyAddress, forKey: .updateProxyAddress)

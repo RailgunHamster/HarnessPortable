@@ -11,7 +11,7 @@ var executable=Path.GetFullPath(args[0]); var output=Path.GetFullPath(args[1]);
 if(Directory.Exists(output)&&Directory.EnumerateFileSystemEntries(output).Any())throw new InvalidOperationException("Use a new empty fixture directory.");
 Directory.CreateDirectory(output); var data=Path.Combine(output,"data"); Directory.CreateDirectory(data);
 var sshConfig=Path.Combine(data,"ssh-config");File.WriteAllText(sshConfig,"");
-File.WriteAllText(Path.Combine(data,"settings.json"),JsonSerializer.Serialize(new{RestoreLastLayoutOnStartup=false,StartupReconnectPreference=false,SshConfigPath=sshConfig,CloseBehavior="exit",UpdateSourceSelected="home",UpdateHomeUrl=Path.Combine(data,"empty-updates")}));
+File.WriteAllText(Path.Combine(data,"settings.json"),JsonSerializer.Serialize(new{RestoreLastLayoutOnStartup=false,StartupReconnectPreference=false,SshConfigPath=sshConfig,CloseBehavior="exit",UpdateSourceSelected="cnb"}));
 Directory.CreateDirectory(Path.Combine(data,"empty-updates"));
 var endpoint=Path.Combine(output,"endpoint.json");
 var listener=new TcpListener(IPAddress.Loopback,0); listener.Start();
@@ -114,6 +114,19 @@ try
     await Act("dialog.file.accept","invoke"); await Job(export);
     await Until(()=>Task.FromResult(File.Exists(exported)),"export completed");
     Check(File.ReadAllText(exported).Contains("127.0.0.1"),"file picker and export complete without native-dialog automation");
+    await Act("SettingsWindow.Categories","select",new(){["index"]=3});
+    await Act("SettingsWindow.Expander","setExpanded",new(){["value"]=true});
+    var sources=await Job(await Call("ui.act",new(){["target"]=new JsonObject{["automationId"]="SettingsWindow.SourceBox"},["action"]="items"}));
+    Check(sources["result"]!.AsArray().Select(i=>i!["tag"]!.GetValue<string>()).Order().SequenceEqual(new[]{"cnb","github"}),"update UI exposes only CNB and GitHub");
+    await Act("SettingsWindow.SourceAddressBox","setValue",new(){["value"]=@"\\obsolete\share"});
+    await Act("SettingsWindow.SaveSource_Click","invoke");
+    Check(JsonNode.Parse(File.ReadAllText(Path.Combine(data,"settings.json")))!["UpdateCnbUrl"]!.GetValue<string>()=="https://cnb.cool/railgunhamster/HarnessPortable","retired share paths cannot overwrite the saved CNB source");
+    await Act("SettingsWindow.SourceBox","select",new(){["index"]=1});
+    await Act("SettingsWindow.SaveSource_Click","invoke");
+    await Until(()=>Task.FromResult(JsonNode.Parse(File.ReadAllText(Path.Combine(data,"settings.json")))!["UpdateSourceSelected"]!.GetValue<string>()=="github"),"GitHub alternative persisted");
+    await Act("SettingsWindow.OfficialSource_Click","invoke");
+    await Until(()=>Task.FromResult(JsonNode.Parse(File.ReadAllText(Path.Combine(data,"settings.json")))!["UpdateSourceSelected"]!.GetValue<string>()=="cnb"),"official CNB source restored");
+    Check(true,"source switching and official reset use the same API-accessible UI operations");
     await Act("SettingsWindow.Window","window",new(){["value"]="close"});
 
     var second=await CreateDirect("Fixture B",$"http://127.0.0.1:{port}/b");
