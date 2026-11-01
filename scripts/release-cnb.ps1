@@ -99,6 +99,8 @@ if(!(Test-Path -LiteralPath (Join-Path $checkout '.git'))){
     Release-Git -C $checkout init --initial-branch=updates
     Release-Git -C $checkout remote add origin ($Repository+'.git')
 }
+# Feeds are verified byte-for-byte against their release assets; Git must not rewrite line endings.
+Release-Git -C $checkout config core.autocrlf false
 $remote=& git -C $checkout -c http.proxy= ls-remote --heads origin refs/heads/updates
 if($LASTEXITCODE -ne 0){throw 'Cannot inspect CNB update branch.'}
 if($remote){Release-Git -C $checkout fetch origin updates;Release-Git -C $checkout checkout -B updates origin/updates}
