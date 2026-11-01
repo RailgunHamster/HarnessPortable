@@ -25,6 +25,15 @@ jobs:
           HP_UI_PREVIEW_DIR: ${{ runner.temp }}/ui-previews
         run: |
           brew install xcodegen
+          python3 - <<'PY'
+          import pathlib, plistlib
+          version = pathlib.Path('VERSION').read_text().strip()
+          path = pathlib.Path('macos/HarnessPortable/Info.plist')
+          data = plistlib.loads(path.read_bytes())
+          data['CFBundleShortVersionString'] = version
+          data['CFBundleVersion'] = version
+          path.write_bytes(plistlib.dumps(data, sort_keys=False))
+          PY
           cd macos
           xcodegen generate
           python3 - <<'PY'
