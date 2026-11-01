@@ -71,6 +71,16 @@ windows/HarnessPortable.Windows/bin/Debug/net10.0-windows/HarnessPortable.exe
 - `VERSION` —— 当前版本（如 `2.5.0`），Windows 程序集版本与 Android `versionName` 都读它
 - `CHANGELOG.md` —— 按 `## x.y.z` 分段；打包时把当前版本那一段写入 Velopack 包
 
+每个版本标题下保留独立的发布时间行，例如：
+
+```text
+## 2.8.1
+
+发布时间：2026-11-01 16:40（北京时间，UTC+08:00）
+```
+
+时间采用 CNB 发行记录的 `published_at`，统一换算到北京时间，发布重试不改写为当前时间。早期版本按 GitHub 发行记录补齐；四个无法查证的历史版本保留“未记录”，新版本必须填写有效时间。Windows 日志测试会检查所有版本，打包脚本原样保留此行，应用内日志和三端更新索引共用同一段内容。
+
 ## 发布（Velopack，推荐分发）
 
 不再使用单文件 exe。`vpk pack` 把 self-contained 目录打成安装包和更新源：

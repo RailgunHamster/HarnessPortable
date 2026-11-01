@@ -2,9 +2,9 @@ name: Windows UI API contract
 
 on:
   push:
-    paths: ['windows/**', 'scripts/*HarnessApi.ps1', 'scripts/test-fixtures/windows-automation/**', 'spec/windows-ui-api-gestures.json', '.github/workflows/windows-api.yml']
+    paths: ['windows/**', 'VERSION', 'CHANGELOG.md', 'scripts/*HarnessApi.ps1', 'scripts/test-fixtures/windows-automation/**', 'spec/windows-ui-api-gestures.json', '.github/workflows/windows-api.yml']
   pull_request:
-    paths: ['windows/**', 'scripts/*HarnessApi.ps1', 'scripts/test-fixtures/windows-automation/**', 'spec/windows-ui-api-gestures.json', '.github/workflows/windows-api.yml']
+    paths: ['windows/**', 'VERSION', 'CHANGELOG.md', 'scripts/*HarnessApi.ps1', 'scripts/test-fixtures/windows-automation/**', 'spec/windows-ui-api-gestures.json', '.github/workflows/windows-api.yml']
   workflow_dispatch:
 
 permissions:
