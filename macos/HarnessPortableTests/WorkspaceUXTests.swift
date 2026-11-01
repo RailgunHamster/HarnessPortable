@@ -6,7 +6,7 @@ final class WorkspaceUXTests: XCTestCase {
     func testLegacySettingsKeepDefaultsAndReconnectOnStartup() throws {
         let settings = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"closeBehavior":"tray","updateSourceSelected":"home"}"#.utf8))
         XCTAssertEqual(settings.closeBehavior, "tray")
-        XCTAssertEqual(settings.updateSourceSelected, "home")
+        XCTAssertEqual(settings.updateSourceSelected, "cnb")
         XCTAssertTrue(settings.reconnectRestoredWorkspace)
         XCTAssertTrue(settings.connections.isEmpty)
     }
