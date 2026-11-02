@@ -56,6 +56,8 @@ jobs:
             artifacts/automation-ci/api-catalog.json
             artifacts/automation-ci/verification.json
             artifacts/automation-ci/data/crash.log
+            artifacts/automation-ci/data/flicker.log
+            artifacts/automation-ci/browser-wait.json
             artifacts/automation-cli-ci/cli-verification.json
             artifacts/update-splash-ci/verification.json
             artifacts/update-splash-ci/*.png

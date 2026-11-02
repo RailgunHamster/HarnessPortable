@@ -60,6 +60,7 @@ try
     await Until(async()=>
     {
         var browser=await Call("browser.state",new(){["tabId"]=tab});
+        File.WriteAllText(Path.Combine(output,"browser-wait.json"),browser.ToJsonString());
         return browser["ready"]!.GetValue<bool>()&&browser["navigationSucceeded"]?.GetValue<bool>()==true;
     },"browser page loaded",20);
     Check(true,"connection editor and save/open are controlled entirely through the API");
@@ -173,6 +174,8 @@ try
 catch(Exception error)
 {
     Console.Error.WriteLine(error);
+    if(File.Exists(Path.Combine(output,"browser-wait.json")))Console.Error.WriteLine("Last browser state: "+File.ReadAllText(Path.Combine(output,"browser-wait.json")));
+    if(File.Exists(Path.Combine(data,"flicker.log")))Console.Error.WriteLine(string.Join('\n',File.ReadAllLines(Path.Combine(data,"flicker.log")).TakeLast(60)));
     if(File.Exists(Path.Combine(data,"crash.log")))Console.Error.WriteLine(File.ReadAllText(Path.Combine(data,"crash.log")));
     Environment.ExitCode=1;
 }
