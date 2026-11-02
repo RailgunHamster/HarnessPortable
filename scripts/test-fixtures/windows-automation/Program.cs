@@ -105,7 +105,7 @@ try
 
     await Command("app.settings"); await Find("SettingsWindow.Categories");
     await Act("SettingsWindow.AppearanceBox","select",new(){["index"]=2});
-    await Until(()=>Task.FromResult(JsonNode.Parse(File.ReadAllText(Path.Combine(data,"settings.json")))!["Appearance"]!.GetValue<string>()=="dark"),"appearance persisted");
+    await Until(()=>Task.FromResult(ReadFixtureJson(Path.Combine(data,"settings.json"))?["Appearance"]?.GetValue<string>()=="dark"),"appearance persisted");
     await Act("SettingsWindow.Categories","select",new(){["index"]=2});
     var export=await Call("ui.act",new(){["target"]=new JsonObject{["automationId"]="SettingsWindow.Export_Click"},["action"]="invoke"});
     await Find("dialog.file.path");
@@ -133,12 +133,18 @@ try
     Check(sources["result"]!.AsArray().Select(i=>i!["tag"]!.GetValue<string>()).Order().SequenceEqual(new[]{"cnb","github"}),"update UI exposes only CNB and GitHub");
     await Act("SettingsWindow.SourceAddressBox","setValue",new(){["value"]=@"\\obsolete\share"});
     await Act("SettingsWindow.SaveSource_Click","invoke");
-    Check(JsonNode.Parse(File.ReadAllText(Path.Combine(data,"settings.json")))!["UpdateCnbUrl"]!.GetValue<string>()=="https://cnb.cool/railgunhamster/HarnessPortable","retired share paths cannot overwrite the saved CNB source");
+    JsonNode? savedSettings = null;
+    await Until(() =>
+    {
+        savedSettings = ReadFixtureJson(Path.Combine(data,"settings.json"));
+        return Task.FromResult(savedSettings?["UpdateCnbUrl"]?.GetValue<string>()=="https://cnb.cool/railgunhamster/HarnessPortable");
+    }, "saved CNB source remains readable");
+    Check(savedSettings?["UpdateCnbUrl"]?.GetValue<string>()=="https://cnb.cool/railgunhamster/HarnessPortable","retired share paths cannot overwrite the saved CNB source");
     await Act("SettingsWindow.SourceBox","select",new(){["index"]=1});
     await Act("SettingsWindow.SaveSource_Click","invoke");
-    await Until(()=>Task.FromResult(JsonNode.Parse(File.ReadAllText(Path.Combine(data,"settings.json")))!["UpdateSourceSelected"]!.GetValue<string>()=="github"),"GitHub alternative persisted");
+    await Until(()=>Task.FromResult(ReadFixtureJson(Path.Combine(data,"settings.json"))?["UpdateSourceSelected"]?.GetValue<string>()=="github"),"GitHub alternative persisted");
     await Act("SettingsWindow.OfficialSource_Click","invoke");
-    await Until(()=>Task.FromResult(JsonNode.Parse(File.ReadAllText(Path.Combine(data,"settings.json")))!["UpdateSourceSelected"]!.GetValue<string>()=="cnb"),"official CNB source restored");
+    await Until(()=>Task.FromResult(ReadFixtureJson(Path.Combine(data,"settings.json"))?["UpdateSourceSelected"]?.GetValue<string>()=="cnb"),"official CNB source restored");
     Check(true,"source switching and official reset use the same API-accessible UI operations");
     await Act("SettingsWindow.Window","window",new(){["value"]="close"});
 
@@ -218,6 +224,12 @@ async Task Until(Func<Task<bool>> condition,string reason,int seconds=10)
 {
     var watch=Stopwatch.StartNew();
     while(!await condition()) {if(product.HasExited)throw new InvalidOperationException("Product exited while waiting for "+reason);if(watch.Elapsed>TimeSpan.FromSeconds(seconds))throw new TimeoutException(reason);await Task.Delay(40);}
+}
+static JsonNode? ReadFixtureJson(string path)
+{
+    try { return JsonNode.Parse(File.ReadAllText(path)); }
+    catch (IOException) { return null; }
+    catch (JsonException) { return null; }
 }
 static async Task ServeHttp(TcpListener listener,CancellationToken cancellation)
 {
