@@ -385,7 +385,12 @@ internal sealed class HarnessSplashForm : Form
             targetProgress = Math.Max(targetProgress, StageBaseProgress(2));
         }
 
-        if (!IsUpdateExeRunning(config.RootDir) && stage >= 1)
+        if (IsUpdateExeRunning(config.RootDir))
+        {
+            if (updateExeExitedAt != null) Signal("observed-updater-resumed");
+            updateExeExitedAt = null;
+        }
+        else if (stage >= 1)
         {
             if (stage < 3) { stage = 3; targetProgress = Math.Max(targetProgress, StageBaseProgress(3)); }
             if (updateExeExitedAt == null) updateExeExitedAt = DateTime.UtcNow;

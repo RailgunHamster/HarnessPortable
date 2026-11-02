@@ -78,9 +78,14 @@ try
     await Task.Delay(300); Check(!splash.HasExited, "a same-name window in a sibling installation cannot dismiss the splash");
     Directory.CreateDirectory(Path.Combine(root, "packages", "VelopackTemp", "backup"));
     await Wait(() => File.Exists(Path.Combine(session, "observed-replacing")), "replacing");
-    var next = Start(main, "window", newGate);
     File.WriteAllText(updateGate, ""); await updater.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
     await Wait(() => File.Exists(Path.Combine(session, "observed-starting")), "starting");
+    var resumedGate = Path.Combine(output, "resumed-updater-exit");
+    var resumedUpdater = Start(updateExe, "wait", resumedGate);
+    await Wait(() => File.Exists(Path.Combine(session, "observed-updater-resumed")), "replacement updater observed");
+    await Task.Delay(5500); Check(!splash.HasExited, "an updater restart resets the no-updater grace period");
+    var next = Start(main, "window", newGate);
+    File.WriteAllText(resumedGate, ""); await resumedUpdater.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
     await Task.Delay(5500); Check(!splash.HasExited, "slow replacement startup keeps the transition visible until its window is ready");
     File.WriteAllText(newGate, ""); await splash.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
     Check(splash.ExitCode == 0 && File.Exists(Path.Combine(session, "observed-handoff")), "new matching window completes the handoff and closes the helper");
