@@ -81,6 +81,8 @@ $endpoint = $api.EndpointFile
 
 应用状态提供当前窗格、标签、连接和更新状态。直接网页的连接 key 是 URL 的 SHA-256 标识；展示地址去掉凭据、查询和 fragment。不要自行拼接连接 key，使用 `library.list` 返回的值。
 
+设置页、管理页、托盘与 `updates.apply` 共用同一下载和安装交接操作。Windows 在下载校验完成后显示独立只读的更新过渡窗，排队静默更新，再走应用正常退出路径；该状态窗口没有按钮或自定义输入手势，也不抢焦点。外置窗口无法准备或显示时回退到原生更新进度。运行时 API 随旧主进程退出而结束，安装器及独立过渡窗的生命周期由隔离进程回归另外验证。
+
 `browser.state` 提供 `ready`、`navigating`、`navigationSucceeded`、`parked` 和网页提示是否打开。初始化尚未完成时浏览器命令返回 `unavailable`。`browser.evaluate` 调用现有 WebView2，参数为 `tabId`、`script`，可用 `raw:true` 返回原始 JSON 字符串。`browser.cdp` 接受 `tabId`、`command`、可选对象 `parameters`，通过 WebView2 的公开 DevTools API 操作嵌入页面，返回原始 JSON 字符串；`capture` 返回 PNG 的 Base64。
 
 设置、编辑器和认证框的各字段可直接通过控件 API 操作，不额外维护一套验证规则。API 模式把 OS 原生消息框和文件选择框接到应用拥有的可操作提示：例如 `dialog.choice.yes/no`、`dialog.file.path/accept/cancel`。文件存在、目录有效和覆盖确认仍执行；普通启动继续使用原生 Windows 对话框。操作系统安装器、文件浏览器自身的内部 UI 不属于本应用接口。
@@ -136,3 +138,11 @@ dotnet run --project scripts/test-fixtures/windows-automation/Smoke.csproj -c Re
 ```
 
 输出目录必须不存在或为空。回归运行实际产品进程，通过公开 API 驱动，不调用私有 UI 方法；使用随机端口的本地网页、隔离配置和屏幕外窗口，结束后关闭自身子进程。
+
+外置更新过渡窗的隔离回归：
+
+```powershell
+dotnet run --project scripts/test-fixtures/update-splash/Smoke.csproj -c Release -- artifacts/update-splash-run-new
+```
+
+该回归仅使用临时假安装目录与假客户端进程，验证阶段、交接、异常清理和主题渲染，不覆盖安装用户的程序。

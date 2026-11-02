@@ -133,6 +133,20 @@ pwsh -File scripts/test-fixtures/release-retention-api.ps1
 
 构建产物保留在仓库 `artifacts/`，不自动复制到 Downloads 或家庭共享。
 
+### Windows 更新过渡窗
+
+`windows/HarnessPortable.UpdateSplash/` 保存外置 WinForms 过渡窗源码及图标，两者作为资源嵌入主程序集。下载并校验更新包后，`UpdateTransitionSplash` 在用户临时目录的 `HarnessPortable/update-splash/` 中使用系统 .NET Framework 编译器编译并缓存独立程序；无需将源码或预编译演示 EXE 作为松散文件分发。编译有超时，缺少编译器或窗口无法显示时使用 Velopack 原生进度。
+
+过渡窗仅显示状态，没有按钮和拖拽手势；它不激活窗口，不强行切换焦点。确认显示后才以 `silent: true` 排队更新，通过应用正常退出路径保存工作区、退出托盘并结束隧道。辅助进程运行于安装目录之外，仅观察本次安装目录与旧进程；不会锁住待替换文件。阶段与动态进度是对替换活动的观察，不是安装器提供的精确百分比。新客户端窗口出现后自动关闭；排队失败、取消或长时间无响应也会清理。
+
+独立进程回归使用临时目录、自行编译的假旧版／更新器／新版进程，不调用真实安装器、不读取连接配置：
+
+```powershell
+dotnet run --project scripts/test-fixtures/update-splash/Smoke.csproj -c Release -- artifacts/update-splash-run-new
+```
+
+输出目录必须不存在或为空，内含验证记录与浅色／深色渲染图。此功能仅覆盖 Windows。
+
 开发时直接 `dotnet run` 不会走更新（Velopack 未安装）。
 
 ## 配置文件

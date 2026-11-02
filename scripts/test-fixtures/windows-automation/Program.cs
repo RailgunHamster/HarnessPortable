@@ -112,8 +112,21 @@ try
     var exported=Path.Combine(output,"exported.json");
     await Act("dialog.file.path","setValue",new(){["value"]=exported});
     await Act("dialog.file.accept","invoke"); await Job(export);
-    await Until(()=>Task.FromResult(File.Exists(exported)),"export completed");
-    Check(File.ReadAllText(exported).Contains("127.0.0.1"),"file picker and export complete without native-dialog automation");
+    string? exportedJson = null;
+    await Until(() =>
+    {
+        // Invoke can return before the dialog's caller finishes writing the file.
+        try
+        {
+            var text = File.ReadAllText(exported);
+            if (JsonNode.Parse(text) is null) return Task.FromResult(false);
+            exportedJson = text;
+            return Task.FromResult(true);
+        }
+        catch (IOException) { return Task.FromResult(false); }
+        catch (JsonException) { return Task.FromResult(false); }
+    }, "export completed with valid JSON");
+    Check(exportedJson!.Contains("127.0.0.1"),"file picker and export complete without native-dialog automation");
     await Act("SettingsWindow.Categories","select",new(){["index"]=3});
     await Act("SettingsWindow.Expander","setExpanded",new(){["value"]=true});
     var sources=await Job(await Call("ui.act",new(){["target"]=new JsonObject{["automationId"]="SettingsWindow.SourceBox"},["action"]="items"}));

@@ -243,30 +243,36 @@ public sealed class UpdateService
             }
         }
 
-        SetBusy(true, "正在下载更新…");
+        lock (_gate)
+        {
+            if (Busy) return;
+            Busy = true;
+            Progress = 0;
+            Status = "正在下载更新…";
+        }
+        StateChanged?.Invoke();
         try
         {
-            var manager = new UpdateManager(UpdateSourceFactory.Create(url, proxy));
+            var manager = new UpdateManager(_createSource(url, proxy));
             FlickerLog.Log("update", "apply " + pending.TargetFullRelease.Version + " from " + MaskUrl(url));
-            await manager.DownloadUpdatesAsync(pending, p =>
-            {
-                lock (_gate)
+            await UpdateInstallTransition.RunAsync(
+                async cancellation =>
                 {
-                    Progress = p;
-                    Status = $"正在下载更新… {p}%";
-                }
-
-                StateChanged?.Invoke();
-            }, token).ConfigureAwait(false);
-
-            lock (_gate)
-            {
-                Status = "正在安装并重启…";
-                Busy = true;
-            }
-
-            StateChanged?.Invoke();
-            manager.ApplyUpdatesAndRestart(pending.TargetFullRelease);
+                    await manager.DownloadUpdatesAsync(pending, p =>
+                    {
+                        lock (_gate) { Progress = p; Status = $"正在下载更新… {p}%"; }
+                        StateChanged?.Invoke();
+                    }, cancellation).ConfigureAwait(false);
+                    UpdateTransitionSplash.WarmUp();
+                    lock (_gate) { Status = "正在准备安装并重启…"; }
+                    StateChanged?.Invoke();
+                },
+                cancellation => UpdateTransitionSplash.LaunchAsync(CurrentVersion,
+                    pending.TargetFullRelease.Version.ToString(), Velopack.Locators.VelopackLocator.Current.RootAppDir ?? "",
+                    AppTheme.IsDark, cancellation),
+                silent => manager.WaitExitThenApplyUpdates(pending.TargetFullRelease, silent: silent, restart: true),
+                App.ExitForUpdateAsync,
+                token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

@@ -11,3 +11,4 @@ using System.Windows;
 )]
 
 [assembly: InternalsVisibleTo("HarnessPortable.Windows.Tests")]
+[assembly: InternalsVisibleTo("HarnessPortable.UpdateSplash.Smoke")]

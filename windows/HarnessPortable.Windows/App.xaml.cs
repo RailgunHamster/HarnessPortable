@@ -133,6 +133,12 @@ public partial class App : System.Windows.Application
         Shutdown();
     }
 
+    internal static async Task ExitForUpdateAsync()
+    {
+        if (Current is not App app) throw new InvalidOperationException("The application is not running.");
+        await app.Dispatcher.InvokeAsync(app.ExitApplication);
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         _automationServer?.Stop();
