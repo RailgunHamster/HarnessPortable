@@ -114,3 +114,4 @@ foreach($file in $feeds){
     if((Get-FileHash -LiteralPath $path).Hash -ne (Get-FileHash -LiteralPath $file).Hash){throw ('CNB public index hash mismatch: '+$name)}
 }
 [ordered]@{version=$Version;repository=$Repository;release=($Repository+'/-/releases/tag/'+$tag);anonymousDownloads='verified';feeds=@($feeds|ForEach-Object {Split-Path -Leaf $_})}|ConvertTo-Json|Tee-Object -FilePath (Join-Path $stage ('publication-'+$Platform+'.json'))
+& (Join-Path $PSScriptRoot 'prune-releases.ps1') -Provider CNB -CnbRepository $Repository -Apply

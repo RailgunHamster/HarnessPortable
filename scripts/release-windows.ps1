@@ -104,6 +104,7 @@ if (-not $SkipGitHub) {
             --tag "v$version" `
             --releaseName "Harness Portable $version"
         if ($LASTEXITCODE -ne 0) { throw "vpk upload github failed" }
+        & (Join-Path $PSScriptRoot 'prune-releases.ps1') -Provider GitHub -Apply
     }
 }
 

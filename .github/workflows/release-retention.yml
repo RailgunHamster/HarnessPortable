@@ -1,0 +1,17 @@
+name: Release retention
+on:
+  push:
+    paths: ['scripts/ReleaseRetention.ps1', 'scripts/prune-releases.ps1', 'scripts/release-*.ps1', 'scripts/test-fixtures/release-retention*.ps1', '.github/workflows/release-retention.yml']
+  pull_request:
+    paths: ['scripts/ReleaseRetention.ps1', 'scripts/prune-releases.ps1', 'scripts/release-*.ps1', 'scripts/test-fixtures/release-retention*.ps1', '.github/workflows/release-retention.yml']
+permissions:
+  contents: read
+jobs:
+  offline-tests:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - shell: pwsh
+        run: |
+          ./scripts/test-fixtures/release-retention.ps1
+          ./scripts/test-fixtures/release-retention-api.ps1

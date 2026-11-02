@@ -120,6 +120,19 @@ pwsh -File scripts/release-windows.ps1 -SkipCnb
 
 应用设置保留 CNB（默认）与 GitHub 两个独立地址。家庭服务器、Gitee 及共享账号入口已移除。维护者在本机提供 `CNB_TOKEN` 或 `CNB_TOKEN_FILE`，客户端不需要令牌。可单独执行 `scripts/release-cnb.ps1 -Platform All` 发布已构建的 Windows / Android 包。
 
+CNB 和 GitHub 各保留最近 3 个正式版本，按版本号排序。发布成功后自动清理更早的发行记录及附件；源码、Git 标签和完整 `CHANGELOG.md` 保留。各平台最新安装包、平台标记的 latest 版本及 CNB 在线更新索引引用的版本也会保留，防止某个平台更新较慢时断开下载链接。草稿、预览版和非标准版本标签不参与自动清理。
+
+清理默认仅预览，执行时先在 `artifacts/release-retention/` 保存完整发行元数据及计划，完成后核对保留附件与 latest：
+
+```powershell
+pwsh -File scripts/prune-releases.ps1
+pwsh -File scripts/prune-releases.ps1 -Apply
+pwsh -File scripts/test-fixtures/release-retention.ps1
+pwsh -File scripts/test-fixtures/release-retention-api.ps1
+```
+
+构建产物保留在仓库 `artifacts/`，不自动复制到 Downloads 或家庭共享。
+
 开发时直接 `dotnet run` 不会走更新（Velopack 未安装）。
 
 ## 配置文件

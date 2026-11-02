@@ -157,6 +157,7 @@ if (-not $SkipGitHub) {
                 -InFile $file.Path `
                 -Uri "${uploadBase}?name=$([uri]::EscapeDataString($file.Name))" | Out-Null
         }
+        & (Join-Path $PSScriptRoot 'prune-releases.ps1') -Provider GitHub -Apply
     }
 }
 
