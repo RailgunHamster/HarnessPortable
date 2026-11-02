@@ -29,6 +29,8 @@
                             <Grid Panel.ZIndex="1"
                                   Visibility="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type avalonDock:LayoutDocumentPaneControl}}, Path=Model.ShowHeader, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Border x:Name="ActivePaneAccentBar" Height="2" VerticalAlignment="Top" Grid.ColumnSpan="2"
+                                        Background="Transparent" Panel.ZIndex="2" IsHitTestVisible="False"/>
                                 <avalonDock:DocumentPaneTabPanel x:Name="HeaderPanel"
                                                                  IsItemsHost="True"
                                                                  KeyboardNavigation.TabIndex="1"/>
@@ -75,6 +77,11 @@
                                                   SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
                             </Border>
                         </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="ActivePaneAccentBar" Property="Background" Value="{DynamicResource DshAccent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -252,14 +259,31 @@
             </DockPanel>
         </Border>
 
-        <StatusBar Padding="12,5" x:Name="ChromeStatus" DockPanel.Dock="Bottom" Background="{DynamicResource DshBgBase}" BorderBrush="{DynamicResource DshBgLayer3}" BorderThickness="0,1,0,0">
+        <StatusBar Padding="12,4" x:Name="ChromeStatus" DockPanel.Dock="Bottom" Background="{DynamicResource DshBgBase}" BorderBrush="{DynamicResource DshBgLayer3}" BorderThickness="0,1,0,0">
             <StatusBarItem>
-                <TextBlock x:Name="StatusText" Text="就绪" Foreground="{DynamicResource DshTextSecondary}"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="{DynamicResource DshBgLayer1}" BorderBrush="{DynamicResource DshBorderL1}"
+                            BorderThickness="1" CornerRadius="6" Padding="8,2" Margin="0,0,10,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse x:Name="StatusHealthDot" Width="6" Height="6" Fill="{DynamicResource DshGreen}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="TunnelHealthText" Text="0 隧道在线" FontFamily="{DynamicResource DshMonoFont}"
+                                       FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource DshTextPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="StatusText" Text="就绪" FontSize="12" Foreground="{DynamicResource DshTextSecondary}" VerticalAlignment="Center"/>
+                </StackPanel>
             </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right">
-                <Button x:Name="StopTunnelButton" Content="停止全部隧道"
-                        Style="{StaticResource ModernToolbarButton}"
-                        Visibility="Collapsed" Click="StopAll_Click" AutomationProperties.AutomationId="MainWindow.StopTunnelButton"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="StopTunnelButton" Content="停止全部隧道"
+                            Style="{StaticResource ModernToolbarButton}" Margin="0,0,10,0"
+                            Visibility="Collapsed" Click="StopAll_Click" AutomationProperties.AutomationId="MainWindow.StopTunnelButton"/>
+                    <Border Background="{DynamicResource DshBgLayer2}" BorderBrush="{DynamicResource DshBorderL1}"
+                            BorderThickness="1" CornerRadius="5" Padding="7,2" VerticalAlignment="Center">
+                        <TextBlock Text="DPAPI 凭据加密 · TOFU 密钥核验" FontFamily="{DynamicResource DshMonoFont}"
+                                   FontSize="10.5" Foreground="{DynamicResource DshTextTertiary}"/>
+                    </Border>
+                </StackPanel>
             </StatusBarItem>
         </StatusBar>
 

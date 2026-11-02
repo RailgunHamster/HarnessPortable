@@ -221,6 +221,11 @@ public partial class MainWindow : Window
         var active = _services.Tunnels.GetActiveStates().ToList();
         StopTunnelButton.Visibility = active.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
+        TunnelHealthText.Text = active.Count > 0
+            ? $"{active.Count} 隧道在线"
+            : "隧道待命";
+        StatusHealthDot.Fill = (System.Windows.Media.Brush)FindResource(active.Count > 0 ? "DshGreen" : "DshTextTertiary");
+
         StatusText.Text = $"{active.Count} 个活动 SSH 连接 · {AllSessionDocs().Count()} 个网页标签 · 工作区自动保存";
         StatusText.ToolTip = active.Count == 0 ? "从连接库打开一个服务" : string.Join("\n", active.Select(s => $"{s.ProfileName} · {s.Status}"));
     }

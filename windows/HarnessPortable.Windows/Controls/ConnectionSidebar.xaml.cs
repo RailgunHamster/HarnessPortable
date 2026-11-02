@@ -17,6 +17,7 @@ public sealed class ConnectionRow(ConnectionEntry entry, string detail, Brush br
     private static readonly Geometry WebIcon = FrozenIcon("M9,1 A8,8 0 1 1 9,17 A8,8 0 1 1 9,1 M1,9 L17,9 M9,1 C3,5 3,13 9,17 M9,1 C15,5 15,13 9,17");
     public ConnectionEntry Entry { get; } = entry;
     public string Detail { get; } = detail;
+    public string TopologyBadge => Entry.Tunnel is { } t ? $":{t.LocalPort} ⇄ :{t.RemotePort}" : "DIRECT";
     public Brush StatusBrush { get; } = brush;
     public Geometry Icon => Entry.Tunnel is null ? WebIcon : ServerIcon;
     public string Tooltip => Entry.Name + "\n" + Entry.Address + "\n" + Detail;

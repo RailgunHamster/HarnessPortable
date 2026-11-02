@@ -16,6 +16,10 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         public string Name => Profile.DisplayName;
         public string Summary => Profile.Summary;
         public string LocalText => $"本地端口 {Profile.LocalPort}";
+        public string LocalEndpoint => $"127.0.0.1:{Profile.LocalPort} 📋";
+        public string SshBridgeText => $"══[ SSH · {Profile.User}@{Profile.SshHost}:{Profile.SshPort} ]══▶";
+        public string RemoteEndpoint => $"{Profile.RemoteHost}:{Profile.RemotePort}";
+        public string PrimaryActionLabel => StopVisibility == Visibility.Visible ? "打开网页" : "连接";
         public string StatusText { get; init; } = "";
         public System.Windows.Media.Brush StatusBrush { get; init; } = System.Windows.Media.Brushes.Green;
         public Visibility StatusVisibility { get; init; } = Visibility.Collapsed;
@@ -412,6 +416,25 @@ public partial class ManagementView : System.Windows.Controls.UserControl
         if ((sender as FrameworkElement)?.Tag is TunnelListItem item)
         {
             StopTunnel(item.Profile.Id);
+        }
+    }
+
+    private void CopyLocalUrl_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is TunnelListItem item)
+        {
+            try { System.Windows.Clipboard.SetText($"http://127.0.0.1:{item.Profile.LocalPort}"); }
+            catch { }
+        }
+    }
+
+    private void TunnelMore_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button { ContextMenu: { } menu } button)
+        {
+            menu.PlacementTarget = button;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
         }
     }
 

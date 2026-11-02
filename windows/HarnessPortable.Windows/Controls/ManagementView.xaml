@@ -85,33 +85,72 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel>
+                                    <StackPanel Margin="0,0,14,0">
                                         <StackPanel Orientation="Horizontal">
-                                            <Ellipse Width="7" Height="7" Fill="{Binding StatusBrush}"
+                                            <Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}"
                                                      VerticalAlignment="Center"
-                                                     Visibility="{Binding StatusVisibility}"/>
-                                            <TextBlock Text="{Binding Name}" FontSize="15" MaxWidth="300" TextTrimming="CharacterEllipsis" FontWeight="SemiBold"
+                                                     Visibility="{Binding StatusVisibility}"
+                                                     Margin="0,0,7,0"/>
+                                            <TextBlock Text="{Binding Name}" FontSize="15" MaxWidth="320" TextTrimming="CharacterEllipsis" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource DshTextPrimary}"
-                                                       Margin="7,0,0,0" VerticalAlignment="Center"/>
-                                            <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}"
-                                                       FontSize="11" Margin="7,0,0,0" VerticalAlignment="Center"
-                                                       Visibility="{Binding StatusVisibility}"/>
+                                                       VerticalAlignment="Center"/>
+                                            <Border Background="{DynamicResource DshBgLayer2}"
+                                                    BorderBrush="{DynamicResource DshBorderL1}"
+                                                    BorderThickness="1" CornerRadius="6" Padding="7,1" Margin="8,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    Visibility="{Binding StatusVisibility}">
+                                                <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}"
+                                                           FontSize="11" FontWeight="SemiBold"/>
+                                            </Border>
                                         </StackPanel>
-                                        <TextBlock Text="{Binding Summary}" Style="{StaticResource DshMono}"
-                                                   Margin="0,6,0,0"/>
-                                        <TextBlock Text="{Binding LocalText}" Style="{StaticResource DshLabel}"
-                                                   Margin="0,3,0,0"/>
+                                        <Border Background="{DynamicResource DshBgLayer2}"
+                                                BorderBrush="{DynamicResource DshBorderL1}"
+                                                BorderThickness="1" CornerRadius="8" Padding="8,5" Margin="0,8,0,0"
+                                                HorizontalAlignment="Left">
+                                            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Button Style="{StaticResource DshRowButton}"
+                                                        Padding="7,2" Margin="0"
+                                                        Tag="{Binding}" Click="CopyLocalUrl_Click"
+                                                        ToolTip="点击复制本地转发地址 http://127.0.0.1:端口"
+                                                        AutomationProperties.AutomationId="ManagementView.CopyLocalUrl_Click">
+                                                    <TextBlock Text="{Binding LocalEndpoint}" FontFamily="{DynamicResource DshMonoFont}"
+                                                               FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource DshAccent}"/>
+                                                </Button>
+                                                <TextBlock Text="{Binding SshBridgeText}" FontFamily="{DynamicResource DshMonoFont}"
+                                                           FontSize="11.5" Foreground="{DynamicResource DshTextTertiary}"
+                                                           VerticalAlignment="Center" Margin="8,0"/>
+                                                <Border Background="{DynamicResource DshBgLayer1}"
+                                                        BorderBrush="{DynamicResource DshBorderL1}"
+                                                        BorderThickness="1" CornerRadius="6" Padding="7,2" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding RemoteEndpoint}" FontFamily="{DynamicResource DshMonoFont}"
+                                                               FontSize="12" Foreground="{DynamicResource DshTextPrimary}"/>
+                                                </Border>
+                                            </WrapPanel>
+                                        </Border>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Button Style="{StaticResource DshRowPrimaryButton}" Content="连接"
+                                        <Button Style="{StaticResource DshRowPrimaryButton}" Content="{Binding PrimaryActionLabel}"
                                                 Tag="{Binding}" Click="TunnelConnect_Click" AutomationProperties.AutomationId="ManagementView.TunnelConnect_Click"/>
                                         <Button Style="{StaticResource DshRowButton}" Content="停止"
                                                 Tag="{Binding}" Click="TunnelStop_Click"
                                                 Visibility="{Binding StopVisibility}" AutomationProperties.AutomationId="ManagementView.TunnelStop_Click"/>
-                                        <Button Style="{StaticResource DshRowButton}" Content="编辑"
-                                                Tag="{Binding}" Click="TunnelEdit_Click" AutomationProperties.AutomationId="ManagementView.TunnelEdit_Click"/>
-                                        <Button Style="{StaticResource DshDangerButton}" Content="删除"
-                                                Padding="10,5" Tag="{Binding}" Click="TunnelDelete_Click" AutomationProperties.AutomationId="ManagementView.TunnelDelete_Click"/>
+                                        <Button Style="{StaticResource DshRowButton}" Content="⋯"
+                                                Width="34" Padding="0,5" Tag="{Binding}"
+                                                ToolTip="编辑或删除隧道"
+                                                Click="TunnelMore_Click" AutomationProperties.AutomationId="ManagementView.TunnelMore_Click">
+                                            <Button.ContextMenu>
+                                                <ContextMenu AutomationProperties.AutomationId="ManagementView.TunnelContextMenu">
+                                                    <MenuItem Header="编辑隧道…" Tag="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              Click="TunnelEdit_Click" AutomationProperties.AutomationId="ManagementView.TunnelEdit_Click"/>
+                                                    <MenuItem Header="复制本地地址" Tag="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              Click="CopyLocalUrl_Click" AutomationProperties.AutomationId="ManagementView.TunnelCopyUrlMenu_Click"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="删除隧道…" Tag="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              Foreground="{DynamicResource DshDangerText}"
+                                                              Click="TunnelDelete_Click" AutomationProperties.AutomationId="ManagementView.TunnelDelete_Click"/>
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
                                     </StackPanel>
                                 </Grid>
                             </Border>
