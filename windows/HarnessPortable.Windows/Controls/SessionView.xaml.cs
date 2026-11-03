@@ -300,7 +300,7 @@ public partial class SessionView : System.Windows.Controls.UserControl
         // A collapsed or not-yet-loaded tab must never be focused: claiming
         // focus inside a hidden HwndHost is what makes two documents fight
         // over Win32 focus.
-        if (!IsVisible || !IsLoaded)
+        if (!IsVisible || !IsLoaded || !_coreReady)
         {
             FlickerLog.Log("focus-web", "skip: view not shown (" + LogTag + ")");
             return;
@@ -435,14 +435,39 @@ public partial class SessionView : System.Windows.Controls.UserControl
     {
         _automationNavigating=false; _automationNavigationSucceeded=null;
         var browser = WebView;
+        Exception? lastError = null;
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            browser = WebView;
+            try
+            {
+                browser.CreationProperties = new CoreWebView2CreationProperties
+                {
+                    UserDataFolder = Path.Combine(AppPaths.DataDirectory, "WebView2"),
+                };
+
+                await browser.EnsureCoreWebView2Async().WaitAsync(TimeSpan.FromSeconds(15));
+                lastError = null;
+                break;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                FlickerLog.Log("webview", $"init attempt {attempt} failed: {ex.GetType().Name}: {ex.Message} ({LogTag})");
+                if (_shutdown || !ReferenceEquals(WebView, browser) || attempt == 3) break;
+                var oldBrowser = WebView;
+                BrowserGrid.Children.Remove(oldBrowser);
+                WebView = new WebView2();
+                BrowserGrid.Children.Insert(0, WebView);
+                ScheduleBrowserDisposal(oldBrowser, _browserProcess);
+                _browserProcess = null;
+                await Task.Delay(300);
+                if (_shutdown) return;
+            }
+        }
         try
         {
-            browser.CreationProperties = new CoreWebView2CreationProperties
-            {
-                UserDataFolder = Path.Combine(AppPaths.DataDirectory, "WebView2"),
-            };
-
-            await browser.EnsureCoreWebView2Async();
+            if (lastError is not null) throw lastError;
             if (_shutdown || !ReferenceEquals(WebView, browser)) return;
             _coreReady = true;
             WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -515,6 +540,8 @@ public partial class SessionView : System.Windows.Controls.UserControl
             WebView.PreviewKeyDown += OnWebViewPreviewKeyDown;
             if (!_isTunnel || _profile is not null && _services.Tunnels.GetState(_profile.Id).Status == TunnelStatus.Connected)
                 Navigate(await ResolveInitialUrlAsync());
+            if (IsVisible && IsLoaded && Window.GetWindow(this)?.IsActive == true)
+                FocusWebView();
         }
         catch (Exception ex)
         {

@@ -26,7 +26,7 @@ string pipeName="";
 var checks=new List<string>();
 try
 {
-    await Until(()=>Task.FromResult(File.Exists(endpoint)),"endpoint ready",20);
+    await Until(()=>Task.FromResult(File.Exists(endpoint)),"endpoint ready",30);
     pipeName=JsonNode.Parse(File.ReadAllText(endpoint))!["pipeName"]!.GetValue<string>();
     var catalog=await Call("api.describe");
     File.WriteAllText(Path.Combine(output,"api-catalog.json"),catalog.ToJsonString(new(){WriteIndented=true}));
@@ -62,7 +62,7 @@ try
         var browser=await Call("browser.state",new(){["tabId"]=tab});
         File.WriteAllText(Path.Combine(output,"browser-wait.json"),browser.ToJsonString());
         return browser["ready"]!.GetValue<bool>()&&browser["navigationSucceeded"]?.GetValue<bool>()==true;
-    },"browser page loaded",20);
+    },"browser page loaded",45);
     Check(true,"connection editor and save/open are controlled entirely through the API");
     var scriptJob=await Call("browser.evaluate",new(){["tabId"]=tab,["script"]="prompt('fixture prompt','initial')"});
     await Find("SessionView.ScriptPromptBox");

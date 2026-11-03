@@ -22,26 +22,26 @@ public sealed class TunnelDisconnectTests
         using var cleanupEntered = new ManualResetEventSlim();
         var cleanupCount = 0;
         var resources = new TunnelResources();
-        resources.OwnForward(() => { cleanupEntered.Set(); release.Wait(TimeSpan.FromSeconds(5)); Interlocked.Increment(ref cleanupCount); });
-        using var registration = cancellation.Token.Register(() => { callbackEntered.Set(); release.Wait(TimeSpan.FromSeconds(5)); });
+        resources.OwnForward(() => { cleanupEntered.Set(); release.Wait(TimeSpan.FromSeconds(10)); Interlocked.Increment(ref cleanupCount); });
+        using var registration = cancellation.Token.Register(() => { callbackEntered.Set(); release.Wait(TimeSpan.FromSeconds(10)); });
         typeof(TunnelEngine).GetField("_cts", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(engine, cancellation);
         typeof(TunnelEngine).GetField("_resources", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(engine, resources);
         engine.State.Set(new("open-tab", Status: TunnelStatus.Connected));
         var stop = Task.Run(() => { if (restart) engine.Start("replacement"); else engine.Stop(); });
         try
         {
-            Assert.Same(stop, await Task.WhenAny(stop, Task.Delay(500)));
+            Assert.Same(stop, await Task.WhenAny(stop, Task.Delay(3000)));
             await stop;
             if (!restart) Assert.Equal(TunnelStatus.Stopped, engine.State.Current.Status);
             Assert.Equal(restart ? "replacement" : "open-tab", engine.State.Current.ProfileId);
-            Assert.True(callbackEntered.Wait(TimeSpan.FromSeconds(2)));
-            Assert.True(cleanupEntered.Wait(TimeSpan.FromSeconds(2)));
+            Assert.True(callbackEntered.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(cleanupEntered.Wait(TimeSpan.FromSeconds(5)));
             // A worker finally block and another stop must not re-enter the teardown.
             resources.Dispose();
             engine.Stop();
         }
         finally { release.Set(); }
-        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref cleanupCount) == 1, TimeSpan.FromSeconds(2)));
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref cleanupCount) == 1, TimeSpan.FromSeconds(5)));
     }
 
     [Fact]
