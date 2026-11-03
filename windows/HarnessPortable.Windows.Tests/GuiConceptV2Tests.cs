@@ -105,6 +105,7 @@ public sealed class GuiConceptV2Tests
                 Assert.Equal("127.0.0.1:4317", item.RemoteEndpoint);
                 Assert.Equal("打开网页", item.PrimaryActionLabel);
 
+                Environment.SetEnvironmentVariable("HARNESS_PORTABLE_DATA_DIRECTORY", null);
                 try { Directory.Delete(tempData, recursive: true); } catch { }
             }
             catch (Exception ex)

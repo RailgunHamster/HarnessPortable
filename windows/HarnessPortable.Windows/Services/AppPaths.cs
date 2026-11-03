@@ -4,7 +4,7 @@ namespace HarnessPortable.Windows.Services;
 
 public static class AppPaths
 {
-    public static string DataDirectory { get; } = ResolveDataDirectory();
+    public static string DataDirectory => ResolveDataDirectory();
 
     private static string ResolveDataDirectory()
     {
