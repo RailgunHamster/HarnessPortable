@@ -12,13 +12,22 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -32,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -49,6 +59,7 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -342,16 +353,10 @@ fun AppRoot() {
 
         if (pending != null && screen == "browser") {
             val profile = pending!!
-            Surface(Modifier.fillMaxSize(), color = LocalDsh.current.base) {
-                Column(Modifier.fillMaxSize()) {
-                    TextButton(onClick = { screen = "connections" }) { Text("返回连接列表（保持连接）") }
-                    Box(Modifier.weight(1f)) {
-                        ConnectingScreen(info = if (tunnelInfo.profileId == profile.id) tunnelInfo else TunnelState.Info(profileId = profile.id, profileName = profile.name, status = TunnelState.Status.CONNECTING),
-                            profile = profile, onCancel = { disconnectCurrent() },
-                            onRetry = { connectTunnel(profile, forceRestart = true) }, onChangePassword = { passwordFor = profile })
-                    }
-                }
-            }
+            ConnectingScreen(info = if (tunnelInfo.profileId == profile.id) tunnelInfo else TunnelState.Info(profileId = profile.id, profileName = profile.name, status = TunnelState.Status.CONNECTING),
+                profile = profile, onCancel = { disconnectCurrent() },
+                onReturnToConnections = { screen = "connections" },
+                onRetry = { connectTunnel(profile, forceRestart = true) }, onChangePassword = { passwordFor = profile })
         }
     }
 
@@ -432,110 +437,159 @@ internal fun DirectResolvingScreen(host: String) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun ConnectingScreen(
     info: TunnelState.Info,
     profile: TunnelProfile,
     onCancel: () -> Unit,
+    onReturnToConnections: () -> Unit,
     onRetry: () -> Unit,
     onChangePassword: () -> Unit
 ) {
     val dsh = LocalDsh.current
-    Box(
-        modifier = Modifier.fillMaxSize().dshPage(),
-        contentAlignment = Alignment.Center
+    val minActionWidth = 112.dp * LocalDensity.current.fontScale
+    val closedBeforeAuthentication = info.status == TunnelState.Status.FAILED &&
+        SshFailureDetails.closedBeforeAuthentication(info.message)
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize().dshPage().safeDrawingPadding()
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
-                .padding(24.dp)
-                .widthIn(max = 420.dp)
-                .dshCard()
-                .padding(20.dp)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            when (info.status) {
-                TunnelState.Status.FAILED -> {
-                    Icon(
-                        Icons.Filled.ErrorOutline,
-                        contentDescription = null,
-                        tint = dsh.danger,
-                        modifier = Modifier.size(40.dp)
-                    )
-                    Text(
-                        "连接失败",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
-                        color = dsh.textPrimary
-                    )
-                }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .widthIn(max = 420.dp)
+                    .fillMaxWidth()
+                    .dshCard()
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
+            ) {
+                when (info.status) {
+                    TunnelState.Status.FAILED -> {
+                        Icon(
+                            Icons.Filled.ErrorOutline,
+                            contentDescription = null,
+                            tint = dsh.danger,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Text(
+                            "连接失败",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 20.sp,
+                            color = dsh.textPrimary
+                        )
+                    }
 
-                TunnelState.Status.STOPPED -> {
-                    Text(
-                        "隧道已停止",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
-                        color = dsh.textPrimary
-                    )
-                }
+                    TunnelState.Status.STOPPED -> {
+                        Text(
+                            "隧道已停止",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp,
+                            color = dsh.textPrimary
+                        )
+                    }
 
-                else -> {
-                    CircularProgressIndicator(
-                        color = dsh.accent,
-                        trackColor = dsh.layer3,
-                        modifier = Modifier.size(28.dp)
-                    )
+                    else -> {
+                        CircularProgressIndicator(
+                            color = dsh.accent,
+                            trackColor = dsh.layer3,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Text(
+                            if (info.status == TunnelState.Status.RETRYING)
+                                "连接失败，正在重试…"
+                            else "正在连接 ${profile.name}…",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp,
+                            color = dsh.textPrimary
+                        )
+                    }
+                }
+                if (closedBeforeAuthentication) {
                     Text(
-                        if (info.status == TunnelState.Status.RETRYING)
-                            "连接失败，正在重试…"
-                        else "正在连接 ${profile.name}…",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
-                        color = dsh.textPrimary
+                        SshFailureDetails.BEFORE_AUTHENTICATION_EXPLANATION,
+                        fontSize = 14.sp,
+                        color = dsh.textSecondary,
+                        textAlign = TextAlign.Center
                     )
                 }
-            }
-            info.message?.let {
-                Text(
-                    it,
-                    fontSize = 12.sp,
-                    fontFamily = DshMonoFontFamily,
-                    color = dsh.textTertiary,
-                    textAlign = TextAlign.Center
-                )
-            }
-            when (info.status) {
-                TunnelState.Status.FAILED -> Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onChangePassword,
-                        shape = DshControlShape,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent)
-                    ) { Text("修改密码") }
-                    Button(
-                        onClick = onRetry,
+                info.message?.let {
+                    Text(
+                        it,
+                        fontSize = 12.sp,
+                        fontFamily = DshMonoFontFamily,
+                        color = dsh.textTertiary,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                when (info.status) {
+                    TunnelState.Status.FAILED -> FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        maxItemsInEachRow = 2
+                    ) {
+                        if (!closedBeforeAuthentication) {
+                            OutlinedButton(
+                                onClick = onChangePassword,
+                                modifier = Modifier.weight(1f).widthIn(min = minActionWidth),
+                                shape = DshControlShape,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent)
+                            ) { Text("修改密码") }
+                        }
+                        Button(
+                            onClick = onRetry,
+                            modifier = Modifier.weight(1f).widthIn(min = minActionWidth),
+                            shape = DshControlShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = dsh.brandFill,
+                                contentColor = dsh.brandText
+                            )
+                        ) { Text("重试") }
+                    }
+
+                    TunnelState.Status.STOPPED -> Button(
+                        onClick = onCancel,
                         shape = DshControlShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = dsh.brandFill,
                             contentColor = dsh.brandText
                         )
-                    ) { Text("重试") }
+                    ) { Text("返回连接列表") }
+
+                    else -> OutlinedButton(
+                        onClick = onCancel,
+                        shape = DshControlShape,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent)
+                    ) { Text("取消") }
                 }
-
-                TunnelState.Status.STOPPED -> Button(
-                    onClick = onCancel,
-                    shape = DshControlShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = dsh.brandFill,
-                        contentColor = dsh.brandText
-                    )
-                ) { Text("返回") }
-
-                else -> OutlinedButton(
-                    onClick = onCancel,
-                    shape = DshControlShape,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent)
-                ) { Text("取消") }
+                if (info.status != TunnelState.Status.STOPPED) {
+                    TextButton(
+                        onClick = onReturnToConnections,
+                        shape = DshControlShape,
+                        colors = ButtonDefaults.textButtonColors(contentColor = dsh.textSecondary)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("返回连接列表", textAlign = TextAlign.Center)
+                    }
+                    if (info.status == TunnelState.Status.CONNECTING || info.status == TunnelState.Status.RETRYING) {
+                        Text(
+                            "返回列表后仍会在后台连接",
+                            fontSize = 12.sp,
+                            color = dsh.textTertiary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
         }
     }
