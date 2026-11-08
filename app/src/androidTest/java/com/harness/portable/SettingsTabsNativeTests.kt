@@ -28,6 +28,16 @@ class SettingsTabsNativeTests {
         error("Missing UI label: $label")
     }
     private fun click(label: String) {
+        if (label in listOf("通用", "数据与安全", "WebDAV 同步", "更新与关于")) {
+            repeat(8) {
+                if (find(label) == null) {
+                    val horizontal = nodes().firstOrNull { it.isScrollable && (it.className?.toString() == "android.widget.HorizontalScrollView" || it.actionList.any { action -> action.id == AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT.id }) }
+                        ?: error("Missing horizontal category scroller for $label")
+                    assertTrue(horizontal.performAction(if (label == "通用") AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD else AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
+                    instrumentation.waitForIdleSync(); SystemClock.sleep(200)
+                }
+            }
+        }
         var node = waitFor(label)
         while (!node.isClickable) node = node.parent ?: error("No clickable ancestor for $label")
         assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_CLICK)); instrumentation.waitForIdleSync(); SystemClock.sleep(350)
