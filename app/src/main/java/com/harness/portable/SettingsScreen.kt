@@ -268,7 +268,7 @@ internal fun LanMachineField(
                 1.dp,
                 dsh.borderOver(dsh.borderL2, dsh.layer1),
                 DshControlShape
-            ).automationId(automationId + ".Menu").automationDismiss(::closeSuggestions)
+            ).automationId(automationId + ".Menu").automationVisible(expanded).automationScrollOwner().automationDismiss(::closeSuggestions)
         ) {
             if (discovering) {
                 DropdownMenuItem(

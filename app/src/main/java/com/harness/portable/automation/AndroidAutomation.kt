@@ -120,7 +120,8 @@ object AndroidAutomation {
         while (events.size > 200) events.removeFirst()
     }
 
-    internal fun dispatch(method: String, args: JSONObject): Any? = onMain {
+    internal fun dispatch(source: AndroidAutomationServer, method: String, args: JSONObject): Any? = onMain {
+        if (server !== source) fail("stale", "Automation session has ended")
         builtins[method]?.let { allowed -> if (args.keys().asSequence().any { it !in allowed }) fail("invalid_argument", "Unknown operation argument") }
         when (method) {
             "api.describe" -> describe()

@@ -78,7 +78,7 @@ internal fun RowActions(onDelete: () -> Unit, dataKey: String, onEdit: (() -> Un
         IconButton(onClick = { expanded = true }, modifier = Modifier.automationId("Legacy.Row.More", dataKey)) {
             Icon(Icons.Filled.MoreVert, contentDescription = "更多操作", tint = dsh.textSecondary)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.automationId("Legacy.Row.Menu", dataKey).automationDismiss { expanded = false },
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.automationId("Legacy.Row.Menu", dataKey).automationVisible(expanded).automationScrollOwner().automationDismiss { expanded = false },
             containerColor = dsh.layer1, tonalElevation = 0.dp, shadowElevation = 0.dp) {
             if (onEdit != null) {
                 DropdownMenuItem(text = { Text("编辑连接") }, leadingIcon = { Icon(Icons.Filled.Edit, null) },

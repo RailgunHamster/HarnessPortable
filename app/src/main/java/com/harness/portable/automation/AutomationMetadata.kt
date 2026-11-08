@@ -19,5 +19,5 @@ fun Modifier.automationId(id: String, dataKey: String = ""): Modifier = semantic
 /** Also protects a password/token after the user toggles its visual mask. */
 fun Modifier.automationSensitive(): Modifier = semantics { this[AutomationSensitive] = true }
 fun Modifier.automationVisible(visible: Boolean): Modifier = semantics { this[AutomationVisible] = visible }
-/** Material TabRow owns an internal scroll node distinct from its tagged outer surface. */
+/** Material tabs and menus own an internal scroll node distinct from their tagged surface. */
 fun Modifier.automationScrollOwner(): Modifier = semantics { this[AutomationScrollOwner] = true }

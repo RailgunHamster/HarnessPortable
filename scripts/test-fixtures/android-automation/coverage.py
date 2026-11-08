@@ -32,6 +32,12 @@ for path in UI.rglob('*.kt'):
     def problem(at, reason): errors.append(f'{path.name}:{text.count(chr(10), 0, at)+1}: {reason}')
     for call in re.finditer(r'\b([A-Za-z_]\w*)\s*\(', code):
         kind = call.group(1)
+        if re.search(r'\bfun\s*$', code[max(0, call.start()-8):call.start()]): continue
+        args = arguments(text, code.index('(', call.start()))
+        callback = any(re.match(r'\s*(?:onClick|onLongClick|onValueChange|onCheckedChange|onExpandedChange|onDismissRequest)\s*=', p) for p in args)
+        if callback and kind not in KINDS | {'DropdownMenu', 'clickable'}:
+            if kind != 'LanMachineField' or not any(re.match(r'\s*automationId\s*=', p) for p in args):
+                problem(call.start(), f'Custom interactive wrapper {kind} needs explicit ID/operation coverage')
         if kind in ('AlertDialog', 'DropdownMenu'):
             # The one legacy menu also declares its native dismissal callback.
             args = arguments(text, code.index('(', call.start()))
@@ -46,8 +52,6 @@ for path in UI.rglob('*.kt'):
                     'LazyRow', 'LazyVerticalGrid', 'LazyHorizontalGrid', 'ModalBottomSheet', 'Dialog', 'SelectionContainer'}:
             problem(call.start(), f'New interactive kind {kind} needs an adapter behavior test and coverage registration')
         if kind not in KINDS and kind not in ('DropdownMenu',): continue
-        if re.search(r'\bfun\s*$', code[max(0, call.start()-8):call.start()]): continue
-        args = arguments(text, code.index('(', call.start()))
         modifier = next((p for p in args if re.match(r'\s*modifier\s*=', p)), '')
         if not modifier and kind == 'LazyColumn' and args: modifier = args[0]
         if not re.search(r'\.automationId\s*\(', modifier):

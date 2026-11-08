@@ -42,4 +42,4 @@ fun AutomationDropdownMenu(
     onDismissRequest: () -> Unit,
     modifier: Modifier,
     content: @Composable ColumnScope.() -> Unit
-) = DropdownMenu(expanded, onDismissRequest, modifier.automationDismiss(onDismissRequest), content = content)
+) = DropdownMenu(expanded, onDismissRequest, modifier.automationVisible(expanded).automationScrollOwner().automationDismiss(onDismissRequest), content = content)

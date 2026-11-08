@@ -70,6 +70,9 @@ def until(fn, timeout=15):
         time.sleep(.08)
     raise AssertionError('Expected application state was not reached')
 
+def available(method):
+    until(lambda:method in [value['name'] for value in call('api.describe')['methods']])
+
 def find(identity, key=None):
     selector={'automationId':identity}
     if key is not None: selector['dataKey']=key
@@ -111,7 +114,7 @@ try:
 
     call('library.create',{'kind':'ssh'}); until(lambda:find('TunnelEditor.Name'))
     act('TunnelEditor.Name','setValue',value='API fixture SSH'); act('TunnelEditor.Host','setValue',value='127.0.0.1')
-    if until(lambda:find('TunnelEditor.Host.Menu')): act('TunnelEditor.Host.Menu','dismiss')
+    if until(lambda:find('TunnelEditor.Host.Menu')): inspect(); act('TunnelEditor.Host.Menu','dismiss')
     act('TunnelEditor.SshPort','setValue',value='9'); act('TunnelEditor.User','setValue',value='fixture')
     act('TunnelEditor.Password','setValue',value=secret_values[0]); act('TunnelEditor.PasswordVisibility'); inspect()
     reveal('TunnelEditor.Mode.manual','TunnelEditor.Content'); act('TunnelEditor.Mode.manual','selectItem')
@@ -155,7 +158,7 @@ try:
 
     call('app.connections'); call('library.create',{'kind':'direct'}); until(lambda:find('DirectEditor.Address'))
     url=f'http://127.0.0.1:{http_port}/fixture?token='+secret_values[3]
-    act('DirectEditor.Address','setValue',value=url); until(lambda:find('DirectEditor.Address.Menu')); act('DirectEditor.Address.Menu','dismiss')
+    act('DirectEditor.Address','setValue',value=url); until(lambda:find('DirectEditor.Address.Menu')); inspect(); act('DirectEditor.Address.Menu','dismiss')
     inspect(); act('DirectEditor.Save'); until(lambda:len(call('library.list'))==2)
     direct=next(v for v in call('library.list') if v.get('kind')=='direct'); assert 'token' not in direct['url']
     call('config.export'); export_dialog=until(lambda:call('dialogs.get') if call('dialogs.get').get('kind')=='create' else None)
@@ -165,6 +168,7 @@ try:
         exported_bytes=base64.b64decode(call('files.get',{'fileId':exported_file['fileId']})['base64'])
         for secret in secret_values: assert secret.encode() not in exported_bytes
     inspect(); call('library.open',{'key':direct['key']})
+    available('browser.state'); until(lambda:call('browser.state')['ready'])
     until(lambda:call('browser.evaluate',{'script':"document.body ? document.body.innerText.includes('Harness API loopback') : false"}))
     assert 'token' not in call('browser.state')['url']; act('Browser.Toolbar.Collapse'); until(lambda:find('Browser.Toolbar.Expand')); act('Browser.Toolbar.Expand')
     call('browser.authenticate'); until(lambda:find('Browser.AuthInput')); act('Browser.AuthInput','setValue',value=secret_values[1]); inspect(); act('Browser.AuthCancel')
@@ -179,7 +183,7 @@ try:
     until(lambda:call('browser.evaluate',{'script':"document.getElementById('upload').files.length"})==1)
     checks.append('actual embedded page bridge, retained browser state, toolbar operations, token redaction, and native upload picker callback')
 
-    call('app.connections'); call('library.delete',{'key':direct['key']}); until(lambda:find('Library.DeleteConfirm')); act('Library.DeleteConfirm')
+    call('app.connections'); available('library.delete'); call('library.delete',{'key':direct['key']}); until(lambda:find('Library.DeleteConfirm')); act('Library.DeleteConfirm')
     until(lambda:len(call('library.list'))==1); call('app.settings'); call('settings.tab',{'value':'about'}); until(lambda:find('Updates.Check')); inspect()
     act('Updates.Source.GITHUB','selectItem'); act('Updates.Source.CNB','selectItem'); assert call('updates.status')['source']=='CNB'
     call('settings.tab',{'value':'general'}); act('Settings.Appearance.dark','selectItem'); inspect(); act('Settings.Appearance.light','selectItem')

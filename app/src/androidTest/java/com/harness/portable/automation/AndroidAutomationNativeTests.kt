@@ -163,6 +163,13 @@ class AndroidAutomationNativeTests {
         assertEquals("unauthorized", rpc("api.describe", auth = "b".repeat(64)).getJSONObject("error").getString("code"))
         assertEquals("invalid_argument", rpc("ui.tree", JSONObject().put("includeHidden", "false")).getJSONObject("error").getString("code"))
         assertEquals("invalid_argument", rpc("api.describe", JSONObject().put("unknown", true)).getJSONObject("error").getString("code"))
+        val activePort = port
+        AndroidAutomationServer("c".repeat(64), 0).use { stale ->
+            try {
+                port = stale.port
+                assertEquals("stale", rpc("api.describe", auth = "c".repeat(64)).getJSONObject("error").getString("code"))
+            } finally { port = activePort }
+        }
         act("Fixture.List", "realize", JSONObject().put("index", 80))
         val end = android.os.SystemClock.elapsedRealtime() + 10000
         while (android.os.SystemClock.elapsedRealtime() < end) {
@@ -171,5 +178,7 @@ class AndroidAutomationNativeTests {
             Thread.sleep(30)
         }
         call("ui.act", JSONObject().put("target", JSONObject().put("automationId", "Fixture.Item").put("dataKey", "80")).put("action", "invoke")); assertEquals(80, model.counter)
+        val scrolled = act("Fixture.List", "scroll", JSONObject().put("vertical", -160)) as JSONObject
+        assertTrue(scrolled.optBoolean("accepted"))
     }
 }

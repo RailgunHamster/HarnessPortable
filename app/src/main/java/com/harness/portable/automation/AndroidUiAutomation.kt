@@ -29,15 +29,17 @@ internal object AndroidUiAutomation {
     private val roots = mutableListOf<WeakReference<ViewRootForTest>>()
     private val rootIds = WeakHashMap<View, Int>()
     private var nextRoot = 0
-    private var installed = false
+    private val created: (ViewRootForTest) -> Unit = { root ->
+        roots.removeAll { it.get() == null }; roots.add(WeakReference(root))
+    }
     private data class Node(val root: ViewRootForTest, val node: SemanticsNode, val parent: String?, val sensitive: Boolean, val visible: Boolean) {
         val id: String get() = "compose:${rootIds.getOrPut(root.view) { ++nextRoot }}:${node.id}"
         val config: SemanticsConfiguration get() = node.config
     }
     fun install() {
-        if (installed) return; installed = true
-        val previous = ViewRootForTest.onViewCreatedCallback
-        ViewRootForTest.onViewCreatedCallback = { root -> previous?.invoke(root); roots.removeAll { it.get() == null }; roots.add(WeakReference(root)) }
+        // ComposeTestRule checks ownership by callback identity. Respect another owner;
+        // public window inspection still discovers its roots on Android 10 and later.
+        if (ViewRootForTest.onViewCreatedCallback == null) ViewRootForTest.onViewCreatedCallback = created
     }
     private fun collect(): List<Node> {
         val active = linkedSetOf<ViewRootForTest>()
@@ -178,7 +180,9 @@ internal object AndroidUiAutomation {
                 val x = args.optDouble("horizontal", 0.0); val y = args.optDouble("vertical", 0.0)
                 if (!x.isFinite() || !y.isFinite() || kotlin.math.abs(x) > 10000 || kotlin.math.abs(y) > 10000) fail("invalid_argument", "Invalid scroll amount")
                 val scroll = c.getOrNull(SemanticsActions.ScrollByOffset)
-                if (scroll != null) { scroll(Offset(x.toFloat(), y.toFloat())); true }
+                if (scroll != null) {
+                    kotlinx.coroutines.withContext(androidx.compose.ui.platform.AndroidUiDispatcher.Main) { scroll(Offset(x.toFloat(), y.toFloat())) }; true
+                }
                 else c[SemanticsActions.ScrollBy].action?.invoke(x.toFloat(), y.toFloat())
             }
             "realize" -> c[SemanticsActions.ScrollToIndex].action?.invoke(args.getInt("index").also { if (it < 0) fail("invalid_argument", "Index must be nonnegative") })

@@ -53,7 +53,7 @@ internal class AndroidAutomationServer(token: String, requestedPort: Int) : Clos
                     id = request.opt("id") ?: JSONObject.NULL
                     if (request.optString("jsonrpc") != "2.0") fail("invalid_request", "Expected jsonrpc 2.0")
                     val params = request.optJSONObject("params") ?: if (request.has("params")) fail("invalid_argument", "params must be an object") else JSONObject()
-                    val result = AndroidAutomation.dispatch(request.requiredString("method"), params)
+                    val result = AndroidAutomation.dispatch(this, request.requiredString("method"), params)
                     response.put("result", result ?: JSONObject.NULL)
                 } catch (e: Exception) {
                     val failure = e as? AutomationFailure
