@@ -46,8 +46,11 @@ object AutomationDialogs {
     internal fun putFile(args: JSONObject): JSONObject {
         val bytes = runCatching { Base64.decode(args.requiredString("base64"), Base64.DEFAULT) }.getOrElse { fail("invalid_argument", "Invalid file encoding") }
         if (bytes.size > 512 * 1024 || files.size >= 100) fail("limit_exceeded", "Automation file limit exceeded")
-        val name = args.optString("name", "fixture.bin"); if (!name.matches(Regex("[A-Za-z0-9_.-]{1,80}")) || name in listOf(".", "..")) fail("invalid_argument", "Invalid file name")
-        val id = UUID.randomUUID().toString(); val file = File(directory(), "$id-$name"); file.writeBytes(bytes); files[id] = file
+        val name = if (args.has("name")) args.requiredString("name") else "fixture.bin"
+        if (name.length !in 1..80 || name.toByteArray(Charsets.UTF_8).size > 180 || name.any { it.isISOControl() || it == '/' || it == '\\' } || name in listOf(".", "..")) fail("invalid_argument", "Invalid file name")
+        val id = UUID.randomUUID().toString()
+        val folder = File(directory(), id).apply { check(mkdirs()) }
+        val file = File(folder, name); file.writeBytes(bytes); files[id] = file
         return JSONObject().put("fileId", id).put("size", bytes.size)
     }
     internal fun getFile(args: JSONObject): JSONObject {
@@ -57,5 +60,9 @@ object AutomationDialogs {
         return JSONObject().put("fileId", id).put("base64", Base64.encodeToString(file.readBytes(), Base64.NO_WRAP))
     }
     internal fun listFiles() = JSONArray(files.map { JSONObject().put("fileId", it.key).put("name", it.value.name).put("size", it.value.length()) })
-    internal fun reset() { cancelPending(); files.values.forEach { it.delete() }; files.clear(); exported.clear() }
+    internal fun reset() {
+        cancelPending()
+        files.forEach { (id, file) -> file.delete(); file.parentFile?.takeIf { it.name == id }?.delete() }
+        files.clear(); exported.clear()
+    }
 }

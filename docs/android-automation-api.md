@@ -62,7 +62,7 @@ $endpoint = $session.EndpointFile
 
 Compose 确认框和菜单可通过 `ui.act` 操作或 `app.back` 返回。文件选择在普通模式保留系统界面；API 模式由 `dialogs.get` 返回 `id`、`kind` 和要求，`dialogs.choose` 调用原来的选择结果回调。传入 `cancel:true` 取消；过期 ID 被拒绝。
 
-`files.put` 接收 `name/base64`，单文件最多 512 KiB、每会话最多 100 个文件；将返回的 `fileId` 放入 `dialogs.choose.fileIds`。上传文件只写，不能用 `files.get` 读取。创建文件对话框确认后，从 `files.list` 找到生成的导出，再用 `files.get` 取回 Base64。停止会话清理 API 自己创建的缓存。系统权限、系统设置和 APK 安装器属于 Android 系统界面，API 负责交接，不冒充其原生控件。
+`files.put` 接收 `name/base64`，单文件最多 512 KiB、每会话最多 100 个文件；文件名保留 Unicode，最多 80 字符且 UTF-8 最多 180 字节，拒绝路径分隔符、控制字符和路径跳转。将返回的 `fileId` 放入 `dialogs.choose.fileIds`，网页收到原文件名。上传文件只写，不能用 `files.get` 读取。创建文件对话框确认后，从 `files.list` 找到生成的导出，再用 `files.get` 取回 Base64。停止会话清理 API 自己创建的缓存。系统权限、系统设置和 APK 安装器属于 Android 系统界面，API 负责交接，不冒充其原生控件。
 
 ## 验证
 

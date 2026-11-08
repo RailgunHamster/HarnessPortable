@@ -178,12 +178,15 @@ try:
     call('browser.evaluate',{'script':"document.getElementById('entry').value='retained-page-state'; true"})
     act('Browser.Settings'); until(lambda:find('Settings.Back')); inspect(); act('Settings.Back')
     assert call('browser.evaluate',{'script':"document.getElementById('entry').value"})=='retained-page-state'
-    upload=call('files.put',{'name':'fixture.txt','base64':base64.b64encode(b'loopback upload fixture').decode()})
+    upload_name='连接-fixture.txt'
+    assert request('files.put',{'name':'../escape.txt','base64':'YQ=='})['error']['code']=='invalid_argument'
+    upload=call('files.put',{'name':upload_name,'base64':base64.b64encode(b'loopback upload fixture').decode()})
     assert request('files.get',{'fileId':upload['fileId']})['error']['code']=='write_only'
     call('browser.evaluate',{'script':"document.getElementById('upload').click(); true",'userGesture':True})
     chooser=until(lambda:call('dialogs.get') if call('dialogs.get').get('kind')=='open' else None)
     call('dialogs.choose',{'id':chooser['id'],'fileIds':[upload['fileId']]})
     until(lambda:call('browser.evaluate',{'script':"document.getElementById('upload').files.length"})==1)
+    assert call('browser.evaluate',{'script':"document.getElementById('upload').files[0].name"})==upload_name
     checks.append('actual embedded page bridge, retained browser state, toolbar operations, token redaction, and native upload picker callback')
 
     call('app.connections'); available('library.delete'); call('library.delete',{'key':direct['key']}); until(lambda:find('Library.DeleteConfirm')); act('Library.DeleteConfirm')
