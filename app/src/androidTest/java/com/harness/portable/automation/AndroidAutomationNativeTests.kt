@@ -135,6 +135,17 @@ class AndroidAutomationNativeTests {
         val field = waitNode("Fixture.Credential"); assertTrue(field.getBoolean("sensitive")); assertTrue(field.getBoolean("hasValue")); assertFalse(field.has("value"))
         assertTrue((act("Fixture.Credential", "selectText", JSONObject().put("start", 1).put("length", 3)) as JSONObject).optBoolean("accepted"))
         assertEquals(1, model.input.selection.start); assertEquals(4, model.input.selection.end)
+        fun inputBecomes(expected: String) {
+            val deadline = android.os.SystemClock.elapsedRealtime() + 10000
+            while (model.input.text != expected && android.os.SystemClock.elapsedRealtime() < deadline) Thread.sleep(20)
+            assertEquals(expected, model.input.text)
+        }
+        assertTrue((act("Fixture.Credential", "edit", JSONObject().put("value", "copy")) as JSONObject).optBoolean("accepted"))
+        act("Fixture.Credential", "setValue", JSONObject().put("value", ""))
+        act("Fixture.Credential", "edit", JSONObject().put("value", "paste")); inputBecomes("ixt")
+        act("Fixture.Credential", "edit", JSONObject().put("value", "selectAll"))
+        act("Fixture.Credential", "edit", JSONObject().put("value", "cut")); inputBecomes("")
+        act("Fixture.Credential", "edit", JSONObject().put("value", "paste")); inputBecomes("ixt")
         act("Fixture.Credential", "focus"); act("Fixture.Credential", "ime"); assertEquals(1, model.ime)
     }
     @Test fun nativeToggleRangeLongClickAndExpansionUseActualCallbacks() = fixture { model ->
