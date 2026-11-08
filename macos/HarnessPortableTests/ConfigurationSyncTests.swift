@@ -75,6 +75,21 @@ final class ConfigurationSyncTests: XCTestCase {
         let body = String(data: cloud.document()!, encoding: .utf8)!
         for secret in ["local-ssh-secret", "dav-secret", "identityFile", "/private/"] { XCTAssertFalse(body.contains(secret)) }
     }
+    func testCancellationInterruptsAnActualPendingReadWithoutReplacingLocalLibrary() async throws {
+        let cloud = try await SyncLoopback.start(); cloud.holdReads = true; defer { cloud.close() }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("HarnessCancel-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true); defer { try? FileManager.default.removeItem(at: root) }
+        let profiles = ProfileStore(path: root.appendingPathComponent("profiles.json")); let settings = SettingsStore(path: root.appendingPathComponent("settings.json"))
+        let profile = TunnelProfile(id: "fixture-" + UUID().uuidString, sshHost: "fixture.invalid", user: "fixture")
+        try profiles.replaceForSync(ProfileConfig(tunnels: [profile]))
+        let sync = ConfigurationSync(profiles: profiles, settings: settings, keychain: KeychainStore(), directory: root, secretPrefix: "#cancel-test-\(UUID().uuidString):")
+        try sync.configure(WebDavOptions(url: cloud.url, allowHttp: true))
+        let task = Task { await sync.run() }
+        for _ in 0..<100 { if !cloud.requests().isEmpty { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertFalse(cloud.requests().isEmpty)
+        sync.cancel(); await task.value
+        XCTAssertEqual(sync.phase, "cancelled"); XCTAssertEqual(profiles.tunnels, [profile])
+    }
 }
 
 private final class SyncLoopback {
@@ -87,6 +102,7 @@ private final class SyncLoopback {
     private var records: [Request] = []
     private var connections: [NWConnection] = []
     private(set) var url = ""
+    var holdReads = false
     private init() throws {
         let parameters = NWParameters.tcp; parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         listener = try NWListener(using: parameters)
@@ -130,6 +146,7 @@ private final class SyncLoopback {
     }
     private func respond(_ connection: NWConnection, _ request: Request) {
         lock.lock(); records.append(request); let status: Int; var payload = Data()
+        if holdReads && request.method == "GET" { lock.unlock(); return }
         switch request.method {
         case "PROPFIND": status = 207
         case "GET": status = body == nil ? 404 : 200; payload = body ?? Data()

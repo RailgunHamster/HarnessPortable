@@ -22,6 +22,7 @@ final class WebDavConfigurationClient {
     private var cancelled = false
     func begin() { lock.lock(); cancelled = false; lock.unlock() }
     func cancel() { lock.lock(); cancelled = true; lock.unlock(); session.getAllTasks { $0.forEach { $0.cancel() } } }
+    func isCancelled() -> Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
     func checkCancelled() throws { lock.lock(); let value = cancelled; lock.unlock(); if value { throw CancellationError() } }
     static func folder(_ options: WebDavOptions) throws -> URL {
         guard let c = URLComponents(string: options.url), let scheme = c.scheme, ["https", "http"].contains(scheme), !(c.host ?? "").isEmpty,

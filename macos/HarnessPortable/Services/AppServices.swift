@@ -38,6 +38,7 @@ final class AppServices: ObservableObject {
     func shutdown() {
         guard !didShutdown else { return }
         didShutdown = true
+        sync.cancel()
         tunnels.shutdown()
     }
 }

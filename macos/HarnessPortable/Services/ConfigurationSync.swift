@@ -101,7 +101,10 @@ final class ConfigurationSync: ObservableObject {
             try await operation(state, keychain.password(for: secretKey(state.options)) ?? "")
             if phase == "syncing" { phase = "success" }
         } catch is CancellationError { phase = "cancelled"; message = "同步已取消，本机配置未替换；下次同步会重新检查云端。" }
-        catch { phase = "failed"; message = (error as? SyncError)?.message ?? "同步失败，未应用云端配置；请检查网络与 WebDAV 设置。" }
+        catch {
+            phase = client.isCancelled() ? "cancelled" : "failed"
+            message = client.isCancelled() ? "同步已取消，本机配置未替换；下次同步会重新检查云端。" : (error as? SyncError)?.message ?? "同步失败，未应用云端配置；请检查网络与 WebDAV 设置。"
+        }
     }
     func snapshot(_ base: [String: Any]) throws -> [String: Any] {
         var entries = SharedConfiguration.entries(base).filter { $0.key.hasPrefix("windows:") || $0.key.hasPrefix("android:") }
