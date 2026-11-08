@@ -157,12 +157,7 @@ fun SettingsScreen(
         if (uri != null) scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val config = JSONObject().put("version", 1).put("directs", JSONArray(directs)).put("tunnels", JSONArray(tunnels.map { p ->
-                        JSONObject().put("id", p.id).put("name", p.name).put("sshHost", p.sshHost).put("sshPort", p.sshPort)
-                            .put("user", p.user).put("remoteHost", p.remoteHost).put("remotePort", p.remotePort).put("localPort", p.localPort)
-                            .put("authMode", p.authMode).put("identityFile", p.identityFile).put("systemdUnit", p.systemdUnit)
-                            .put("systemdScope", p.systemdScope).put("systemdLogPath", p.systemdLogPath)
-                    }))
+                    val config = ConnectionExport.document(tunnels, directs)
                     ctx.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(config.toString(2)) }
                         ?: error("无法写入所选文件")
                 }

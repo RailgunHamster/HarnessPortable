@@ -8,12 +8,6 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
-import com.harness.portable.automation.AndroidAutomation
-import com.harness.portable.automation.AndroidOperation
-import com.harness.portable.automation.AndroidReadOperation
-import com.harness.portable.automation.AutomationOperations
-import com.harness.portable.automation.fail
-import com.harness.portable.automation.requiredString
 import org.json.JSONObject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -38,7 +32,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -481,8 +474,8 @@ fun AppRoot() {
             shape = DshCardShape,
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
-            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        , modifier = Modifier.automationId("Battery.Dialog"))
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.automationId("Battery.Dialog"))
     }
 
     passwordFor?.let { p ->
@@ -646,21 +639,21 @@ internal fun ConnectingScreen(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = dsh.brandFill,
                             contentColor = dsh.brandText
-                        )
-                    , modifier = Modifier.automationId("Connecting.CancelPrimary")) { Text("返回连接列表") }
+                        ),
+                        modifier = Modifier.automationId("Connecting.CancelPrimary")) { Text("返回连接列表") }
 
                     else -> OutlinedButton(
                         onClick = onCancel,
                         shape = DshControlShape,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent)
-                    , modifier = Modifier.automationId("Connecting.Cancel")) { Text("取消") }
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent),
+                        modifier = Modifier.automationId("Connecting.Cancel")) { Text("取消") }
                 }
                 if (info.status != TunnelState.Status.STOPPED) {
                     TextButton(
                         onClick = onReturnToConnections,
                         shape = DshControlShape,
-                        colors = ButtonDefaults.textButtonColors(contentColor = dsh.textSecondary)
-                    , modifier = Modifier.automationId("Connecting.Library")) {
+                        colors = ButtonDefaults.textButtonColors(contentColor = dsh.textSecondary),
+                        modifier = Modifier.automationId("Connecting.Library")) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("返回连接列表", textAlign = TextAlign.Center)
@@ -715,15 +708,15 @@ internal fun PasswordDialog(
                         TextButton(onClick = { visible = !visible }, modifier = Modifier.automationId("Password.Visibility")) {
                             Text(if (visible) "隐藏" else "显示")
                         }
-                    }
-                , modifier = Modifier.automationId("Password.Value").automationSensitive())
+                    },
+                    modifier = Modifier.automationId("Password.Value").automationSensitive())
             }
         },
         confirmButton = {
             TextButton(
                 enabled = pass.isNotEmpty(),
-                onClick = { onSave(pass) }
-            , modifier = Modifier.automationId("Password.Save")) { Text("保存并连接") }
+                onClick = { onSave(pass) },
+                modifier = Modifier.automationId("Password.Save")) { Text("保存并连接") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss, modifier = Modifier.automationId("Password.Cancel")) { Text("取消") }
@@ -731,6 +724,6 @@ internal fun PasswordDialog(
         shape = DshCardShape,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         titleContentColor = MaterialTheme.colorScheme.onSurface,
-        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-    , modifier = Modifier.automationId("Password.Dialog"))
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.automationId("Password.Dialog"))
 }

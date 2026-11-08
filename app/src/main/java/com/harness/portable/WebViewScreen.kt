@@ -46,7 +46,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.StayCurrentLandscape
 import androidx.compose.material.icons.filled.StayCurrentPortrait
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,7 +58,6 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.ArrowBack
@@ -375,8 +373,8 @@ internal fun WebViewScreen(
                                     shape = DshControlShape,
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         contentColor = dsh.accent
-                                    )
-                                , modifier = Modifier.automationId("Browser.Retry")) { Text("重连") }
+                                    ),
+                                    modifier = Modifier.automationId("Browser.Retry")) { Text("重连") }
                             }
 
                             TunnelState.Status.RETRYING,
@@ -415,8 +413,8 @@ internal fun WebViewScreen(
                                     shape = DshControlShape,
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         contentColor = dsh.accent
-                                    )
-                                , modifier = Modifier.automationId("Browser.Reconnect")) { Text("重连") }
+                                    ),
+                                    modifier = Modifier.automationId("Browser.Reconnect")) { Text("重连") }
                             }
                         }
                         Button(
@@ -425,8 +423,8 @@ internal fun WebViewScreen(
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = dsh.brandFill,
                                 contentColor = dsh.brandText
-                            )
-                        , modifier = Modifier.automationId("Browser.Return")) { Text("返回") }
+                            ),
+                            modifier = Modifier.automationId("Browser.Return")) { Text("返回") }
                     }
                 }
             }
@@ -473,8 +471,8 @@ internal fun WebViewScreen(
                 shape = DshCardShape,
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 titleContentColor = dsh.textPrimary,
-                textContentColor = dsh.textSecondary
-            , modifier = Modifier.automationId("Browser.AuthDialog"))
+                textContentColor = dsh.textSecondary,
+                modifier = Modifier.automationId("Browser.AuthDialog"))
         }
 
         if (visible && fullScreen) Box(Modifier.align(Alignment.TopEnd).padding(12.dp)) {

@@ -157,6 +157,12 @@ try:
     act('DirectEditor.Address','setValue',value=url); until(lambda:find('DirectEditor.Address.Menu')); act('DirectEditor.Address.Menu','dismiss')
     inspect(); act('DirectEditor.Save'); until(lambda:len(call('library.list'))==2)
     direct=next(v for v in call('library.list') if v.get('kind')=='direct'); assert 'token' not in direct['url']
+    call('config.export'); export_dialog=until(lambda:call('dialogs.get') if call('dialogs.get').get('kind')=='create' else None)
+    call('dialogs.choose',{'id':export_dialog['id']})
+    until(lambda:len([f for f in call('files.list') if f['size']>0])==2)
+    for exported_file in call('files.list'):
+        exported_bytes=base64.b64decode(call('files.get',{'fileId':exported_file['fileId']})['base64'])
+        for secret in secret_values: assert secret.encode() not in exported_bytes
     inspect(); call('library.open',{'key':direct['key']})
     until(lambda:call('browser.evaluate',{'script':"document.body ? document.body.innerText.includes('Harness API loopback') : false"}))
     assert 'token' not in call('browser.state')['url']; act('Browser.Toolbar.Collapse'); until(lambda:find('Browser.Toolbar.Expand')); act('Browser.Toolbar.Expand')

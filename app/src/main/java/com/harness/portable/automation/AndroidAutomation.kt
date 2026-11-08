@@ -205,7 +205,7 @@ object AndroidAutomation {
     fun directKey(url: String) = "direct:" + MessageDigest.getInstance("SHA-256").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }
     fun dataKey(key: String) = if (key.startsWith("direct:")) directKey(key.removePrefix("direct:")) else key
     fun publicUrl(url: String): String = runCatching {
-        val u = java.net.URI(url); java.net.URI(u.scheme, null, u.host, u.port, u.path, null, null).toASCIIString()
+        com.harness.portable.SharedConfiguration.portableUrl(url)
     }.getOrDefault("")
     internal fun tunnelState(): JSONObject = TunnelState.flow.value.let { JSONObject().put("profileId", it.profileId ?: JSONObject.NULL).put("status", it.status.name.lowercase()).put("message", it.message ?: JSONObject.NULL).put("localPort", it.localPort) }
 }

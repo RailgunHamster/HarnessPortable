@@ -26,7 +26,8 @@ def arguments(text, opening):
     raise AssertionError('Unterminated Kotlin call')
 
 errors = []; controls = 0; ids = set()
-for path in UI.glob('*.kt'):
+for path in UI.rglob('*.kt'):
+    if path.is_relative_to(UI/'automation'): continue
     text = path.read_text(encoding='utf-8-sig'); code = masked(text)
     def problem(at, reason): errors.append(f'{path.name}:{text.count(chr(10), 0, at)+1}: {reason}')
     for call in re.finditer(r'\b([A-Za-z_]\w*)\s*\(', code):
@@ -37,6 +38,13 @@ for path in UI.glob('*.kt'):
             modifier = next((p for p in args if re.match(r'\s*modifier\s*=', p)), '')
             if kind == 'AlertDialog' or '.automationDismiss' not in modifier:
                 problem(call.start(), 'Use an automation dialog/menu wrapper with the same dismiss callback')
+        if kind in {'TextField', 'BasicTextField', 'RadioButton', 'Slider', 'RangeSlider', 'TriStateCheckbox',
+                    'InputChip', 'SuggestionChip', 'ElevatedButton', 'OutlinedIconButton', 'FilledIconButton',
+                    'FilledTonalButton', 'ExtendedFloatingActionButton', 'FloatingActionButton', 'NavigationBarItem',
+                    'NavigationRailItem', 'NavigationDrawerItem', 'SearchBar', 'DockedSearchBar', 'DatePicker',
+                    'TimePicker', 'PullToRefreshBox', 'SwipeToDismissBox', 'HorizontalPager', 'VerticalPager',
+                    'LazyRow', 'LazyVerticalGrid', 'LazyHorizontalGrid', 'ModalBottomSheet', 'Dialog', 'SelectionContainer'}:
+            problem(call.start(), f'New interactive kind {kind} needs an adapter behavior test and coverage registration')
         if kind not in KINDS and kind not in ('DropdownMenu',): continue
         if re.search(r'\bfun\s*$', code[max(0, call.start()-8):call.start()]): continue
         args = arguments(text, code.index('(', call.start()))
