@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: Git tag or commit to build
-        required: true
-        default: v2.6.27
+        description: Git tag or commit to build (empty uses the selected branch)
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.source_ref }}
+          ref: ${{ inputs.source_ref || github.sha }}
           persist-credentials: false
       - name: Generate Xcode project
         env:

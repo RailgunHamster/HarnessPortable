@@ -11,13 +11,13 @@ public sealed class UpdateServiceTests : IDisposable
     [Fact]
     public async Task SynchronousSourceWorkDoesNotBlockCallerOrStartDuplicateChecks()
     {
-        using var entered = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var release = new ManualResetEventSlim();
         var calls = 0;
         var service = new UpdateService(Settings, (_, _) =>
         {
             Interlocked.Increment(ref calls);
-            entered.Set();
+            entered.TrySetResult();
             release.Wait(TimeSpan.FromSeconds(10));
             throw new IOException("fixture share unavailable");
         }, TimeSpan.FromSeconds(5));
@@ -27,7 +27,7 @@ public sealed class UpdateServiceTests : IDisposable
         try
         {
             Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1), "CheckAsync blocked the calling thread");
-            Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.False(check.IsCompleted);
             Assert.True(service.Busy);
             await service.CheckAsync(@"\\fixture\updates");
@@ -45,34 +45,37 @@ public sealed class UpdateServiceTests : IDisposable
     [InlineData(true)]
     public async Task TimeoutOrCancellationAllowsRetryAndDiscardsLateResults(bool cancel)
     {
-        using var entered = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var release = new ManualResetEventSlim();
         var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cancellation = new CancellationTokenSource();
+        // The blocked source guarantees a timeout; a 200 ms deadline also
+        // timed out the immediate retry on a busy two-core CI worker.
+        // Await entry asynchronously so the test does not starve Task.Run.
         var service = new UpdateService(Settings, (url, _) =>
         {
             if (url.EndsWith("slow"))
             {
-                entered.Set();
-                try { release.Wait(TimeSpan.FromSeconds(10)); }
+                entered.TrySetResult();
+                try { release.Wait(TimeSpan.FromSeconds(30)); }
                 finally { exited.TrySetResult(); }
                 throw new IOException("stale result");
             }
             throw new IOException("retry result");
-        }, cancel ? TimeSpan.FromSeconds(5) : TimeSpan.FromMilliseconds(200));
+        }, TimeSpan.FromSeconds(2));
 
         var notifications = 0;
         service.StateChanged += () => Interlocked.Increment(ref notifications);
         var check = service.CheckAsync(@"\\fixture\slow", cancellation.Token);
         try
         {
-            Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
             if (cancel) cancellation.Cancel();
-            await check.WaitAsync(TimeSpan.FromSeconds(3));
+            await check.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.False(service.Busy);
             Assert.Contains(cancel ? "已取消" : "超时", service.Status);
 
-            await service.CheckAsync(@"\\fixture\retry").WaitAsync(TimeSpan.FromSeconds(3));
+            await service.CheckAsync(@"\\fixture\retry").WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Contains("retry result", service.Status);
             var count = Volatile.Read(ref notifications);
             release.Set();
