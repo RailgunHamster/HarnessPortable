@@ -26,7 +26,8 @@ jobs:
           fi
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'system-images;android-34;google_apis;x86_64' 'emulator'
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'platforms;android-36' 'system-images;android-34;google_apis;x86_64' 'emulator'
       - name: Unit tests, lint, and isolated QA packages
         shell: bash
         run: |
