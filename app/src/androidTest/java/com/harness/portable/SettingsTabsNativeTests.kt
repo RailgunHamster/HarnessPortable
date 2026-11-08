@@ -7,7 +7,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.*
@@ -35,7 +36,7 @@ class SettingsTabsNativeTests {
     }
     private fun click(label: String) {
         if (label in listOf("通用", "数据与安全", "WebDAV 同步", "更新与关于")) {
-            compose.onNodeWithText(label).performScrollTo().performClick()
+            compose.onNode(hasText(label) and hasClickAction()).performScrollTo().performClick()
             instrumentation.waitForIdleSync(); SystemClock.sleep(350)
             return
         }
