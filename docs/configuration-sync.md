@@ -42,7 +42,7 @@ Android 在一次 SharedPreferences 提交中保存链接库、偏好及同步�
 {"method":"sync.cancel"}
 ```
 
-省略 `password` 保留同一地址与账号的已存密码；`clearPassword:true` 清除当前目标的本机密码。更换目标或账号后需重填密码或明确清除。`sync.status` 仅报告 `hasPassword`；`sync.changed` 事件同样不包含密码。API 的任务和等待规则见 [Windows 自动化协议](windows-automation-api.md)。Android、macOS 的同步功能不代表已提供 Windows 运行时自动化 API。
+省略 `password` 保留同一地址与账号的已存密码；`clearPassword:true` 清除当前目标的本机密码。更换目标或账号后需重填密码或明确清除。`sync.status` 仅报告 `hasPassword`；事件不包含密码。API 的任务和等待规则见 [Windows 自动化协议](windows-automation-api.md) 和 [Android 原生适配协议](android-automation-api.md)。macOS 尚未提供运行时自动化 API。
 
 ## 验证
 

@@ -87,6 +87,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlin.math.roundToInt
+import com.harness.portable.automation.*
+import org.json.JSONObject
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -124,7 +128,9 @@ internal fun WebViewScreen(
             .filter { it.isNotEmpty() }
             .ifEmpty { listOf("*/*") }
             .toTypedArray()
-        if (multiple) pickManyFiles.launch(types) else pickOneFile.launch(types)
+        if (!AutomationDialogs.open(types, multiple) { fileChooser.complete(it) }) {
+            if (multiple) pickManyFiles.launch(types) else pickOneFile.launch(types)
+        }
     }
     DisposableEffect(Unit) {
         onDispose { fileChooser.complete(null) }
@@ -170,6 +176,8 @@ internal fun WebViewScreen(
     var showAuthPrompt by remember { mutableStateOf(false) }
     var authInput by remember { mutableStateOf("") }
     var authHint by remember { mutableStateOf<String?>(null) }
+    fun requestWebAuth() { authInput = ""; authHint = null; showAuthPrompt = true }
+    fun browserBack() { if (canGoBack) webRef?.goBack() else onChangeServer() }
 
     fun openAuthInput(raw: String) {
         val input = raw.trim()
@@ -200,15 +208,34 @@ internal fun WebViewScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    AutomationOperations(
+        AndroidReadOperation("browser.state", "Embedded WebView state with login parameters removed") {
+            JSONObject().put("ready", webRef != null).put("visible", visible).put("url", AndroidAutomation.publicUrl(webRef?.url.orEmpty()))
+                .put("canGoBack", canGoBack).put("fullScreen", fullScreen).put("toolbarCollapsed", toolbarCollapsed).put("controlsExpanded", controlsExpanded)
+        },
+        AndroidOperation("browser.reload", "Reload the active embedded page") { (webRef ?: fail("unavailable", "Browser is not ready")).reload(); true },
+        AndroidOperation("browser.back", "Use the embedded page's normal back operation") { browserBack(); true },
+        AndroidOperation("browser.authenticate", "Open the write-only web login input") { requestWebAuth(); true },
+        AndroidOperation("browser.reconnect", "Reconnect the current SSH tunnel") { if (!tunnelMode) fail("unavailable", "This is a direct page"); onReconnect(); true },
+        AndroidOperation("browser.disconnect", "Disconnect through the normal application operation") { onDisconnect(); true },
+        AndroidOperation("browser.controls.collapse", "Collapse or expand the page toolbar", setOf("value")) { setToolbarCollapsed(it.requiredBoolean("value")); true },
+        AndroidOperation("browser.evaluate", "Run JavaScript through WebView's public bridge", setOf("script", "raw")) { args ->
+            val browser = webRef ?: fail("unavailable", "Browser is not ready")
+            val script = args.requiredString("script"); if (script.length > 256 * 1024) fail("limit_exceeded", "Script exceeds the size limit")
+            suspendCancellableCoroutine<Any> { continuation -> browser.evaluateJavascript(script) { result ->
+                if (continuation.isActive) continuation.resume(if (args.optionalBoolean("raw")) result ?: "null" else runCatching { JSONObject("{\"v\":${result ?: "null"}}").get("v") }.getOrDefault(JSONObject.NULL))
+            } }
+        }
+    )
+    Box(modifier = Modifier.fillMaxSize().automationVisible(visible)) {
         Column(Modifier.fillMaxSize().then(if (fullScreen) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing))) {
         if (!fullScreen) Row(Modifier.fillMaxWidth().background(dsh.layer1).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onChangeServer) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回连接列表，保持连接", tint = dsh.textPrimary) }
+            IconButton(onClick = onChangeServer, modifier = Modifier.automationId("Browser.Library")) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回连接列表，保持连接", tint = dsh.textPrimary) }
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, color = dsh.textPrimary)
                 Text(if (tunnelMode) "SSH" else "直连网页", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
             }
-            IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, "设置", tint = dsh.textPrimary) }
+            IconButton(onClick = onOpenSettings, modifier = Modifier.automationId("Browser.Settings")) { Icon(Icons.Filled.Settings, "设置", tint = dsh.textPrimary) }
         }
         AndroidView(
             factory = { ctx ->
@@ -257,9 +284,7 @@ internal fun WebViewScreen(
                                     org.json.JSONObject("{\"v\":$result}").optString("v")
                                 }.getOrDefault("")
                                 if (text.isNotEmpty() && NssmAuthUrl.looksLikeAuthRequired(text)) {
-                                    authInput = ""
-                                    authHint = null
-                                    showAuthPrompt = true
+                                    requestWebAuth()
                                 }
                             }
                         }
@@ -267,7 +292,7 @@ internal fun WebViewScreen(
                     if (tunnelUp) loadUrl(url)
                 }.also { webRef = it; if (tunnelUp) loadedUrl = url }
             },
-            modifier = Modifier.weight(1f).fillMaxWidth().imePadding(),
+            modifier = Modifier.weight(1f).fillMaxWidth().imePadding().automationId("Browser.WebView"),
             update = { browser -> browser.visibility = if (visible) android.view.View.VISIBLE else android.view.View.INVISIBLE },
             onReset = null,
             onRelease = { browser ->
@@ -277,17 +302,17 @@ internal fun WebViewScreen(
             }
         )
         if (!fullScreen && !toolbarCollapsed) Row(Modifier.fillMaxWidth().background(dsh.layer1).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { webRef?.reload() }) {
+            IconButton(onClick = { webRef?.reload() }, modifier = Modifier.automationId("Browser.Reload")) {
                 Icon(Icons.Filled.Refresh, "刷新网页", tint = dsh.textPrimary)
             }
-            IconButton(onClick = onToggleOrientation) {
+            IconButton(onClick = onToggleOrientation, modifier = Modifier.automationId("Browser.Orientation")) {
                 Icon(Icons.Filled.ScreenRotation, "旋转屏幕", tint = dsh.textPrimary)
             }
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = onDisconnect) {
+            IconButton(onClick = onDisconnect, modifier = Modifier.automationId("Browser.Disconnect")) {
                 Icon(Icons.Filled.LinkOff, "断开连接", tint = dsh.danger)
             }
-            IconButton(onClick = { setToolbarCollapsed(true) }) {
+            IconButton(onClick = { setToolbarCollapsed(true) }, modifier = Modifier.automationId("Browser.Toolbar.Collapse")) {
                 Icon(Icons.Filled.KeyboardArrowDown, "收起工具栏", tint = dsh.textSecondary)
             }
         }
@@ -303,7 +328,7 @@ internal fun WebViewScreen(
                     .imePadding()
                     .padding(end = 12.dp, bottom = 8.dp)
             ) {
-                IconButton(onClick = { setToolbarCollapsed(false) }) {
+                IconButton(onClick = { setToolbarCollapsed(false) }, modifier = Modifier.automationId("Browser.Toolbar.Expand")) {
                     Icon(Icons.Filled.KeyboardArrowUp, "展开工具栏", tint = dsh.textSecondary)
                 }
             }
@@ -351,7 +376,7 @@ internal fun WebViewScreen(
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         contentColor = dsh.accent
                                     )
-                                ) { Text("重连") }
+                                , modifier = Modifier.automationId("Browser.Retry")) { Text("重连") }
                             }
 
                             TunnelState.Status.RETRYING,
@@ -391,7 +416,7 @@ internal fun WebViewScreen(
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         contentColor = dsh.accent
                                     )
-                                ) { Text("重连") }
+                                , modifier = Modifier.automationId("Browser.Reconnect")) { Text("重连") }
                             }
                         }
                         Button(
@@ -401,7 +426,7 @@ internal fun WebViewScreen(
                                 containerColor = dsh.brandFill,
                                 contentColor = dsh.brandText
                             )
-                        ) { Text("返回") }
+                        , modifier = Modifier.automationId("Browser.Return")) { Text("返回") }
                     }
                 }
             }
@@ -409,7 +434,7 @@ internal fun WebViewScreen(
 
         // Auth-required paste dialog (manual fallback for token-gated pages).
     if (showAuthPrompt && visible) {
-            AlertDialog(
+            AutomationAlertDialog(
                 onDismissRequest = { showAuthPrompt = false },
                 title = { Text("网页要求重新认证", fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
                 text = {
@@ -432,7 +457,7 @@ internal fun WebViewScreen(
                             shape = DshControlShape,
                             textStyle = dsh.monoStyle(14),
                             colors = dshFieldColors(),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().automationId("Browser.AuthInput").automationSensitive()
                         )
                         authHint?.let {
                             Text(it, fontSize = 11.sp, color = dsh.danger)
@@ -440,35 +465,35 @@ internal fun WebViewScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { openAuthInput(authInput) }) { Text("打开") }
+                    TextButton(onClick = { openAuthInput(authInput) }, modifier = Modifier.automationId("Browser.AuthOpen")) { Text("打开") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showAuthPrompt = false }) { Text("取消") }
+                    TextButton(onClick = { showAuthPrompt = false }, modifier = Modifier.automationId("Browser.AuthCancel")) { Text("取消") }
                 },
                 shape = DshCardShape,
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 titleContentColor = dsh.textPrimary,
                 textContentColor = dsh.textSecondary
-            )
+            , modifier = Modifier.automationId("Browser.AuthDialog"))
         }
 
         if (visible && fullScreen) Box(Modifier.align(Alignment.TopEnd).padding(12.dp)) {
-            SmallFloatingActionButton(onClick = { controlsExpanded = !controlsExpanded }, containerColor = dsh.accent, contentColor = dsh.brandText) {
+            SmallFloatingActionButton(onClick = { controlsExpanded = !controlsExpanded }, containerColor = dsh.accent, contentColor = dsh.brandText, modifier = Modifier.automationId("Browser.MenuButton")) {
                 Icon(Icons.Filled.MoreVert, "服务菜单")
             }
-            DropdownMenu(expanded = controlsExpanded, onDismissRequest = { controlsExpanded = false }) {
-                DropdownMenuItem(text = { Text("刷新网页") }, onClick = { controlsExpanded = false; webRef?.reload() })
-                DropdownMenuItem(text = { Text("旋转屏幕") }, onClick = { controlsExpanded = false; onToggleOrientation() })
-                DropdownMenuItem(text = { Text("返回连接列表（保持连接）") }, onClick = { controlsExpanded = false; onChangeServer() })
-                DropdownMenuItem(text = { Text("设置") }, onClick = { controlsExpanded = false; onOpenSettings() })
-                if (tunnelMode) DropdownMenuItem(text = { Text("重新连接") }, onClick = { controlsExpanded = false; onReconnect() })
-                DropdownMenuItem(text = { Text("断开连接", color = dsh.danger) }, onClick = { controlsExpanded = false; onDisconnect() })
+            AutomationDropdownMenu(expanded = controlsExpanded, onDismissRequest = { controlsExpanded = false }, modifier = Modifier.automationId("Browser.Menu")) {
+                DropdownMenuItem(text = { Text("刷新网页") }, onClick = { controlsExpanded = false; webRef?.reload() }, modifier = Modifier.automationId("Browser.Menu.Reload"))
+                DropdownMenuItem(text = { Text("旋转屏幕") }, onClick = { controlsExpanded = false; onToggleOrientation() }, modifier = Modifier.automationId("Browser.Menu.Orientation"))
+                DropdownMenuItem(text = { Text("返回连接列表（保持连接）") }, onClick = { controlsExpanded = false; onChangeServer() }, modifier = Modifier.automationId("Browser.Menu.Library"))
+                DropdownMenuItem(text = { Text("设置") }, onClick = { controlsExpanded = false; onOpenSettings() }, modifier = Modifier.automationId("Browser.Menu.Settings"))
+                if (tunnelMode) DropdownMenuItem(text = { Text("重新连接") }, onClick = { controlsExpanded = false; onReconnect() }, modifier = Modifier.automationId("Browser.Menu.Reconnect"))
+                DropdownMenuItem(text = { Text("断开连接", color = dsh.danger) }, onClick = { controlsExpanded = false; onDisconnect() }, modifier = Modifier.automationId("Browser.Menu.Disconnect"))
             }
         }
     }
 
     BackHandler(enabled = visible) {
-        if (canGoBack) webRef?.goBack() else onChangeServer()
+        browserBack()
     }
 }
 
@@ -503,7 +528,7 @@ private fun ActionBall(
                 containerColor
             ),
             DshControlShape
-        )
+        ).automationId("Browser.LegacyAction")
     ) {
         Box(contentAlignment = Alignment.Center) { content() }
     }

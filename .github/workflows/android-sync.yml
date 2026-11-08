@@ -1,10 +1,10 @@
-name: Android settings and WebDAV sync
+name: Android native API, settings and WebDAV sync
 
 on:
   push:
-    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'scripts/test-fixtures/config-sync/**', '.github/workflows/android-sync.yml']
+    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'spec/android-ui-api-gestures.json', 'scripts/*HarnessAndroidApi.ps1', 'scripts/test-fixtures/config-sync/**', 'scripts/test-fixtures/android-automation/**', '.github/workflows/android-sync.yml']
   pull_request:
-    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'scripts/test-fixtures/config-sync/**', '.github/workflows/android-sync.yml']
+    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'spec/android-ui-api-gestures.json', 'scripts/*HarnessAndroidApi.ps1', 'scripts/test-fixtures/config-sync/**', 'scripts/test-fixtures/android-automation/**', '.github/workflows/android-sync.yml']
   workflow_dispatch:
 
 permissions:
@@ -32,6 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 scripts/test-fixtures/android-automation/coverage.py
           bash gradlew --init-script scripts/test-fixtures/config-sync/android-qa.init.gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest --console=plain
           python3 - <<'PY'
           import json
@@ -77,6 +78,13 @@ jobs:
               test -s "artifacts/android-sync/$mode/$name.png" || verification_failed=1
             done
           done
+          adb -s emulator-5554 shell wm size reset
+          adb -s emulator-5554 shell wm density reset
+          adb -s emulator-5554 shell settings put system font_scale 1.0
+          timeout 180 adb -s emulator-5554 shell am instrument -w -e class com.harness.portable.automation.AndroidAutomationNativeTests com.harness.portable.syncqa.test/androidx.test.runner.AndroidJUnitRunner | tee artifacts/android-sync/automation-native.log || verification_failed=1
+          grep -F 'OK (4 tests)' artifacts/android-sync/automation-native.log || verification_failed=1
+          timeout 300 python3 -u scripts/test-fixtures/android-automation/smoke.py --serial emulator-5554 --output artifacts/android-sync/automation | tee artifacts/android-sync/automation.log || verification_failed=1
+          timeout 120 pwsh -NoProfile -File scripts/test-fixtures/android-automation/cli-smoke.ps1 -Serial emulator-5554 | tee artifacts/android-sync/automation-cli.log || verification_failed=1
           test "$verification_failed" = 0
       - uses: actions/upload-artifact@v7
         if: always()

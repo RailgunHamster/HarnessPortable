@@ -1,11 +1,20 @@
 package com.harness.portable
 
+import com.harness.portable.automation.*
+
 import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
+import com.harness.portable.automation.AndroidAutomation
+import com.harness.portable.automation.AndroidOperation
+import com.harness.portable.automation.AndroidReadOperation
+import com.harness.portable.automation.AutomationOperations
+import com.harness.portable.automation.fail
+import com.harness.portable.automation.requiredString
+import org.json.JSONObject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -89,6 +98,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AndroidAutomation.attach(this)
         enableEdgeToEdge()
         applyImmersive()
         setContent {
@@ -111,6 +121,11 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         AppVisibility.setVisible(false)
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        AndroidAutomation.detach(this)
+        super.onDestroy()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -319,6 +334,43 @@ fun AppRoot() {
     }
 
     fun openSettings() { settingsReturn = screen; screen = "settings" }
+    AutomationOperations(
+        AndroidReadOperation("app.state", "Application navigation and redacted connection state") {
+            JSONObject().put("screen", screen).put("orientation", orientation.storage).put("tunnel", AndroidAutomation.tunnelState())
+                .put("connectionKey", when(val selected = target) {
+                    is ActiveTarget.Tunnel -> "tunnel:" + selected.profileId
+                    is ActiveTarget.Direct -> AndroidAutomation.directKey(selected.url)
+                    else -> pending?.let { "tunnel:" + it.id } ?: JSONObject.NULL
+                })
+        },
+        AndroidOperation("app.settings", "Open application settings") { openSettings(); true },
+        AndroidOperation("app.connections", "Return to the connection library, retaining the active connection") { screen = "connections"; true },
+        AndroidOperation("connections.stopAll", "Disconnect the active service") { disconnectCurrent(); true },
+        AndroidOperation("library.open", "Open a library entry through the normal switching confirmation", setOf("key")) { args ->
+            val key = args.requiredString("key")
+            val tunnel = tunnels.firstOrNull { "tunnel:" + it.id == key }
+            val direct = directs.firstOrNull { AndroidAutomation.directKey(it) == key }
+            when {
+                tunnel != null -> requestTarget(ActiveTarget.Tunnel(tunnel.id, tunnel.name))
+                direct != null -> requestTarget(ActiveTarget.Direct(direct))
+                else -> fail("not_found", "Connection is unavailable")
+            }; true
+        },
+        AndroidOperation("app.orientation", "Set the service display orientation", setOf("value")) { args ->
+            orientation = OrientationMode.entries.firstOrNull { it.storage == args.requiredString("value") } ?: fail("invalid_argument", "Unknown orientation"); true
+        },
+        AndroidReadOperation("sync.status", "WebDAV status without saved passwords") {
+            val value = configSync.state.value
+            JSONObject().put("url", value.options.url).put("username", value.options.username).put("autoSync", value.options.autoSync).put("allowHttp", value.options.allowHttp)
+                .put("hasPassword", value.hasPassword).put("busy", value.busy).put("phase", value.phase).put("message", value.message).put("conflicts", org.json.JSONArray(value.conflicts)).put("lastSuccess", value.lastSuccess)
+        },
+        AndroidOperation("sync.configure", "Save device-local WebDAV options and write-only credentials", setOf("url", "username", "password", "autoSync", "allowHttp", "clearPassword")) { args ->
+            configSync.configure(WebDavOptions(args.requiredString("url"), if (args.has("username")) args.requiredString("username") else "", args.optionalBoolean("autoSync"), args.optionalBoolean("allowHttp")), if (args.has("password")) args.requiredString("password") else null, args.optionalBoolean("clearPassword")); true
+        },
+        AndroidOperation("sync.test", "Test the saved WebDAV directory") { configSync.test(); true },
+        AndroidOperation("sync.run", "Synchronize through the same operation as the UI", setOf("choice")) { args -> configSync.run(if (args.has("choice")) args.requiredString("choice") else null); true },
+        AndroidOperation("sync.cancel", "Cancel the pending WebDAV request") { configSync.cancel(); true }
+    )
     val current = target
     val activeLabel = when (current) {
         is ActiveTarget.Tunnel -> tunnels.firstOrNull { it.id == current.profileId }?.name ?: current.name
@@ -394,14 +446,14 @@ fun AppRoot() {
 
     switchingTo?.let { next ->
         val nextName = when (next) { is ActiveTarget.Tunnel -> next.name; is ActiveTarget.Direct -> hostOf(next.url) }
-        AlertDialog(onDismissRequest = { switchingTo = null }, title = { Text("切换到 $nextName？") },
+        AutomationAlertDialog(onDismissRequest = { switchingTo = null }, title = { Text("切换到 $nextName？") },
             text = { Text("将断开当前服务，然后连接 $nextName。确认前保持当前连接。") },
-            confirmButton = { TextButton(onClick = { switchingTo = null; openTarget(next) }) { Text("断开并切换") } },
-            dismissButton = { TextButton(onClick = { switchingTo = null }) { Text("取消") } })
+            confirmButton = { TextButton(onClick = { switchingTo = null; openTarget(next) }, modifier = Modifier.automationId("Switch.Confirm")) { Text("断开并切换") } },
+            dismissButton = { TextButton(onClick = { switchingTo = null }, modifier = Modifier.automationId("Switch.Cancel")) { Text("取消") } }, modifier = Modifier.automationId("Switch.Dialog"))
     }
 
     if (batteryPrompt) {
-        AlertDialog(
+        AutomationAlertDialog(
             onDismissRequest = {
                 BatteryExemption.markPrompted(ctx)
                 batteryPrompt = false
@@ -418,19 +470,19 @@ fun AppRoot() {
                 TextButton(onClick = {
                     batteryPrompt = false
                     BatteryExemption.request(ctx)
-                }) { Text("去允许") }
+                }, modifier = Modifier.automationId("Battery.Allow")) { Text("去允许") }
             },
             dismissButton = {
                 TextButton(onClick = {
                     BatteryExemption.markPrompted(ctx)
                     batteryPrompt = false
-                }) { Text("稍后") }
+                }, modifier = Modifier.automationId("Battery.Later")) { Text("稍后") }
             },
             shape = DshCardShape,
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
             textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        , modifier = Modifier.automationId("Battery.Dialog"))
     }
 
     passwordFor?.let { p ->
@@ -488,7 +540,7 @@ internal fun ConnectingScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .automationId("Connecting.Content").verticalScroll(rememberScrollState())
                 .heightIn(min = maxHeight)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -569,17 +621,17 @@ internal fun ConnectingScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         maxItemsInEachRow = 2
                     ) {
-                        if (!closedBeforeAuthentication) {
+                        if (SshFailureDetails.offersPasswordChange(info.message)) {
                             OutlinedButton(
                                 onClick = onChangePassword,
-                                modifier = Modifier.weight(1f).widthIn(min = minActionWidth),
+                                modifier = Modifier.weight(1f).widthIn(min = minActionWidth).automationId("Connecting.Password"),
                                 shape = DshControlShape,
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent)
                             ) { Text("修改密码") }
                         }
                         Button(
                             onClick = onRetry,
-                            modifier = Modifier.weight(1f).widthIn(min = minActionWidth),
+                            modifier = Modifier.weight(1f).widthIn(min = minActionWidth).automationId("Connecting.Retry"),
                             shape = DshControlShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = dsh.brandFill,
@@ -595,20 +647,20 @@ internal fun ConnectingScreen(
                             containerColor = dsh.brandFill,
                             contentColor = dsh.brandText
                         )
-                    ) { Text("返回连接列表") }
+                    , modifier = Modifier.automationId("Connecting.CancelPrimary")) { Text("返回连接列表") }
 
                     else -> OutlinedButton(
                         onClick = onCancel,
                         shape = DshControlShape,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = dsh.accent)
-                    ) { Text("取消") }
+                    , modifier = Modifier.automationId("Connecting.Cancel")) { Text("取消") }
                 }
                 if (info.status != TunnelState.Status.STOPPED) {
                     TextButton(
                         onClick = onReturnToConnections,
                         shape = DshControlShape,
                         colors = ButtonDefaults.textButtonColors(contentColor = dsh.textSecondary)
-                    ) {
+                    , modifier = Modifier.automationId("Connecting.Library")) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("返回连接列表", textAlign = TextAlign.Center)
@@ -635,7 +687,7 @@ internal fun PasswordDialog(
 ) {
     var pass by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
-    AlertDialog(
+    AutomationAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("SSH 密码") },
         text = {
@@ -660,25 +712,25 @@ internal fun PasswordDialog(
                     visualTransformation =
                         if (visible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
-                        TextButton(onClick = { visible = !visible }) {
+                        TextButton(onClick = { visible = !visible }, modifier = Modifier.automationId("Password.Visibility")) {
                             Text(if (visible) "隐藏" else "显示")
                         }
                     }
-                )
+                , modifier = Modifier.automationId("Password.Value").automationSensitive())
             }
         },
         confirmButton = {
             TextButton(
                 enabled = pass.isNotEmpty(),
                 onClick = { onSave(pass) }
-            ) { Text("保存并连接") }
+            , modifier = Modifier.automationId("Password.Save")) { Text("保存并连接") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss, modifier = Modifier.automationId("Password.Cancel")) { Text("取消") }
         },
         shape = DshCardShape,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         titleContentColor = MaterialTheme.colorScheme.onSurface,
         textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+    , modifier = Modifier.automationId("Password.Dialog"))
 }

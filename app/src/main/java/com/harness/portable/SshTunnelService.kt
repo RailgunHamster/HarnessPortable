@@ -469,7 +469,7 @@ class SshTunnelService : Service() {
                 if (g != generation) return
                 val msg = e.message ?: e.javaClass.simpleName
                 Log.w(TAG, "connect failed: ${e.javaClass.simpleName}: $msg", e)
-                val resolveFail = msg.contains("无法解析")
+                val resolveFail = SshFailureDetails.nameResolutionFailure(e)
                 val authFail = !resolveFail && SshIdentity.looksLikeAuthenticationFailure(msg)
                 val hostKeyChanged = e is JSchChangedHostKeyException ||
                         msg.contains("hostkey", ignoreCase = true) ||
@@ -477,7 +477,7 @@ class SshTunnelService : Service() {
                 when {
                     resolveFail -> {
                         TunnelState.set(
-                            TunnelState.Info(p.id, p.name, TunnelState.Status.FAILED, msg)
+                            TunnelState.Info(p.id, p.name, TunnelState.Status.FAILED, SshFailureDetails.dnsExplanation(p.sshHost))
                         )
                         updateNotification("${p.name} 无法解析主机名")
                         svcPrefs().edit().remove(PREF_ACTIVE).apply()

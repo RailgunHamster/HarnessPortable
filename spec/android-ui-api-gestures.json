@@ -1,0 +1,7 @@
+{
+  "MainActivity.SettingsBack": ["app.back"],
+  "WebViewScreen.Back": ["browser.back", "app.back"],
+  "Dialog.BackOrOutsideTap": ["ui.act:dismiss", "app.back"],
+  "LanMachineField.SuggestionDismiss": ["ui.act:dismiss"],
+  "Android.FilePicker": ["dialogs.get", "dialogs.choose", "files.put", "files.get"]
+}

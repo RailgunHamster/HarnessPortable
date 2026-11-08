@@ -1,6 +1,9 @@
 package com.harness.portable
 
+import com.harness.portable.automation.*
+
 import android.net.Uri
+import com.harness.portable.automation.AutomationDialogs
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -179,7 +182,7 @@ private fun BrandButton(
             containerColor = dsh.brandFill,
             contentColor = dsh.brandText
         ),
-        modifier = modifier
+        modifier = modifier.automationId("Legacy.Brand")
     ) { Text(text) }
 }
 
@@ -193,6 +196,7 @@ internal fun LanMachineField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
+    automationId: String,
     placeholder: String? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
@@ -204,6 +208,7 @@ internal fun LanMachineField(
     var discovering by remember { mutableStateOf(false) }
     var hasScanned by remember { mutableStateOf(false) }
     var refreshRequest by remember { mutableStateOf(0) }
+    fun closeSuggestions() { expanded = false }
 
     LaunchedEffect(expanded, refreshRequest) {
         if (!expanded || (hasScanned && refreshRequest == 0)) return@LaunchedEffect
@@ -230,7 +235,7 @@ internal fun LanMachineField(
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = !expanded },
-        modifier = modifier
+        modifier = modifier.automationId(automationId + ".Anchor")
     ) {
         OutlinedTextField(
             value = value,
@@ -254,26 +259,26 @@ internal fun LanMachineField(
             },
             modifier = Modifier
                 .menuAnchor(MenuAnchorType.PrimaryEditable)
-                .fillMaxWidth()
+                .fillMaxWidth().automationId(automationId)
         )
 
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = ::closeSuggestions,
             containerColor = dsh.layer1,
             shape = DshControlShape,
             modifier = Modifier.border(
                 1.dp,
                 dsh.borderOver(dsh.borderL2, dsh.layer1),
                 DshControlShape
-            )
+            ).automationId(automationId + ".Menu").automationDismiss(::closeSuggestions)
         ) {
             if (discovering) {
                 DropdownMenuItem(
                     text = { Text("正在搜索局域网机器…", color = dsh.textTertiary) },
                     onClick = {},
                     enabled = false
-                )
+                , modifier = Modifier.automationId(automationId + ".Scanning"))
             }
 
             if (!discovering && filtered.isEmpty()) {
@@ -287,7 +292,7 @@ internal fun LanMachineField(
                     },
                     onClick = {},
                     enabled = false
-                )
+                , modifier = Modifier.automationId(automationId + ".Empty"))
             }
 
             filtered.forEach { machine ->
@@ -314,7 +319,7 @@ internal fun LanMachineField(
                         onValueChange(machine.name)
                         expanded = false
                     }
-                )
+                , modifier = Modifier.automationId(automationId + ".Machine", machine.name))
             }
 
             DropdownMenuItem(
@@ -323,7 +328,7 @@ internal fun LanMachineField(
                     refreshRequest++
                     expanded = true
                 }
-            )
+            , modifier = Modifier.automationId(automationId + ".Refresh"))
         }
     }
 }
@@ -354,7 +359,7 @@ private fun TunnelRow(
         modifier = Modifier
             .fillMaxWidth()
             .dshCard()
-            .clickable(onClick = onConnect)
+            .automationId("Legacy.Tunnel.Open", "tunnel:" + profile.id).clickable(onClick = onConnect)
             .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -389,7 +394,7 @@ private fun TunnelRow(
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
-        RowActions(onEdit = onEdit, onDelete = onDelete)
+        RowActions(onEdit = onEdit, onDelete = onDelete, dataKey = "tunnel:" + profile.id)
     }
 }
 
@@ -405,7 +410,7 @@ private fun ServerRow(
         modifier = Modifier
             .fillMaxWidth()
             .dshCard()
-            .clickable(onClick = onConnect)
+            .automationId("Legacy.Direct.Open", AndroidAutomation.directKey(url)).clickable(onClick = onConnect)
             .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -426,7 +431,7 @@ private fun ServerRow(
                 color = dsh.textTertiary
             )
         }
-        RowActions(onDelete = onDelete)
+        RowActions(onDelete = onDelete, dataKey = AndroidAutomation.directKey(url))
     }
 }
 
@@ -451,9 +456,7 @@ internal fun TunnelEditorDialog(
     var identityFile by remember { mutableStateOf(initial?.identityFile ?: "") }
     var pendingIdentityUri by remember { mutableStateOf<Uri?>(null) }
     val ctx = LocalContext.current
-    val pickKey = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
+    val onPickKey: (Uri?) -> Unit = { uri ->
         if (uri != null) {
             pendingIdentityUri = uri
             identityFile = uri.lastPathSegment
@@ -462,6 +465,7 @@ internal fun TunnelEditorDialog(
                 ?: "已选择私钥"
         }
     }
+    val pickKey = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), onPickKey)
     var authInput by remember { mutableStateOf(initialAuthInput ?: "") }
     var remoteHost by remember { mutableStateOf(initial?.remoteHost ?: "127.0.0.1") }
     var remotePort by remember { mutableStateOf((initial?.remotePort ?: 3080).toString()) }
@@ -525,7 +529,7 @@ internal fun TunnelEditorDialog(
 
     val dsh = LocalDsh.current
 
-    AlertDialog(
+    AutomationAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -539,7 +543,7 @@ internal fun TunnelEditorDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                    .automationId("TunnelEditor.Content").verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
             OutlinedTextField(
@@ -548,8 +552,9 @@ internal fun TunnelEditorDialog(
                 singleLine = true,
                 shape = DshControlShape,
                 colors = dshFieldColors()
-            )
+            , modifier = Modifier.automationId("TunnelEditor.Name"))
             LanMachineField(
+                automationId = "TunnelEditor.Host",
                 value = host,
                 onValueChange = { host = it },
                 label = "服务器地址",
@@ -562,12 +567,12 @@ internal fun TunnelEditorDialog(
                 textStyle = dsh.monoStyle(),
                 colors = dshFieldColors(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
+            , modifier = Modifier.automationId("TunnelEditor.SshPort"))
             OutlinedTextField(
                 user, { user = it }, label = { Text("用户名") }, singleLine = true,
                 shape = DshControlShape,
                 colors = dshFieldColors()
-            )
+            , modifier = Modifier.automationId("TunnelEditor.User"))
             OutlinedTextField(
                 pass, { pass = it },
                 label = {
@@ -582,11 +587,11 @@ internal fun TunnelEditorDialog(
                 visualTransformation =
                     if (passVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
-                    TextButton(onClick = { passVisible = !passVisible }) {
+                    TextButton(onClick = { passVisible = !passVisible }, modifier = Modifier.automationId("TunnelEditor.PasswordVisibility")) {
                         Text(if (passVisible) "隐藏" else "显示")
                     }
                 }
-            )
+            , modifier = Modifier.automationId("TunnelEditor.Password").automationSensitive())
             OutlinedTextField(
                 identityFile,
                 {
@@ -598,17 +603,19 @@ internal fun TunnelEditorDialog(
                 shape = DshControlShape,
                 textStyle = dsh.monoStyle(),
                 colors = dshFieldColors(),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().automationId("TunnelEditor.IdentityFile").automationSensitive()
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { pickKey.launch(arrayOf("*/*")) }) {
+                TextButton(onClick = {
+                    if (!AutomationDialogs.open(arrayOf("*/*")) { onPickKey(it?.singleOrNull()) }) pickKey.launch(arrayOf("*/*"))
+                }, modifier = Modifier.automationId("TunnelEditor.ChooseKey")) {
                     Text("选择私钥", color = dsh.accent)
                 }
                 if (identityFile.isNotBlank()) {
                     TextButton(onClick = {
                         identityFile = ""
                         pendingIdentityUri = null
-                    }) { Text("清除", color = dsh.danger) }
+                    }, modifier = Modifier.automationId("TunnelEditor.ClearKey")) { Text("清除", color = dsh.danger) }
                 }
             }
             OutlinedTextField(
@@ -617,21 +624,21 @@ internal fun TunnelEditorDialog(
                 shape = DshControlShape,
                 textStyle = dsh.monoStyle(),
                 colors = dshFieldColors()
-            )
+            , modifier = Modifier.automationId("TunnelEditor.RemoteHost"))
             OutlinedTextField(
                 remotePort, { remotePort = it }, label = { Text("远程端口") }, singleLine = true,
                 shape = DshControlShape,
                 textStyle = dsh.monoStyle(),
                 colors = dshFieldColors(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
+            , modifier = Modifier.automationId("TunnelEditor.RemotePort"))
             OutlinedTextField(
                 localPort, { localPort = it }, label = { Text("本地端口") }, singleLine = true,
                 shape = DshControlShape,
                 textStyle = dsh.monoStyle(),
                 colors = dshFieldColors(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
+            , modifier = Modifier.automationId("TunnelEditor.LocalPort"))
             SectionLabel("Web 登录方式")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
@@ -651,7 +658,7 @@ internal fun TunnelEditorDialog(
                         borderColor = dsh.borderOver(dsh.inputBorder, dsh.inputBg),
                         selectedBorderColor = dsh.borderOver(dsh.borderL2, dsh.layer3)
                     )
-                )
+                , modifier = Modifier.automationId("TunnelEditor.Mode.nssm"))
                 FilterChip(
                     selected = authMode == TunnelProfile.AUTH_MODE_MANUAL,
                     onClick = { authMode = TunnelProfile.AUTH_MODE_MANUAL },
@@ -669,7 +676,7 @@ internal fun TunnelEditorDialog(
                         borderColor = dsh.borderOver(dsh.inputBorder, dsh.inputBg),
                         selectedBorderColor = dsh.borderOver(dsh.borderL2, dsh.layer3)
                     )
-                )
+                , modifier = Modifier.automationId("TunnelEditor.Mode.manual"))
             }
             FilterChip(
                 selected = authMode == TunnelProfile.AUTH_MODE_SYSTEMD,
@@ -688,28 +695,28 @@ internal fun TunnelEditorDialog(
                     borderColor = dsh.borderOver(dsh.inputBorder, dsh.inputBg),
                     selectedBorderColor = dsh.borderOver(dsh.borderL2, dsh.layer3)
                 )
-            )
+            , modifier = Modifier.automationId("TunnelEditor.Mode.systemd"))
             if (authMode == TunnelProfile.AUTH_MODE_SYSTEMD) {
                 OutlinedTextField(
                     systemdUnit, { systemdUnit = it }, label = { Text("systemd 服务名") },
                     singleLine = true, shape = DshControlShape,
                     textStyle = dsh.monoStyle(), colors = dshFieldColors()
-                )
+                , modifier = Modifier.automationId("TunnelEditor.SystemdUnit"))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = systemdScope == "user", onClick = { systemdScope = "user" },
                         label = { Text("用户服务") }, shape = DshControlShape
-                    )
+                    , modifier = Modifier.automationId("TunnelEditor.Scope.user"))
                     FilterChip(
                         selected = systemdScope == "system", onClick = { systemdScope = "system" },
                         label = { Text("系统服务") }, shape = DshControlShape
-                    )
+                    , modifier = Modifier.automationId("TunnelEditor.Scope.system"))
                 }
                 OutlinedTextField(
                     systemdLogPath, { systemdLogPath = it }, label = { Text("日志路径（可选）") },
                     singleLine = true, shape = DshControlShape,
                     textStyle = dsh.monoStyle(), colors = dshFieldColors()
-                )
+                , modifier = Modifier.automationId("TunnelEditor.SystemdLogPath"))
                 Text(
                     "用户服务对应 SSH 登录用户。日志路径留空时读取本次启动的 journal；服务将 stdout 重定向到文件时，填写该文件的完整路径。SSH 用户需要有日志读取权限。获取失败时回退到保存的认证输入或页面粘贴。",
                     fontSize = 12.sp, color = dsh.textTertiary
@@ -724,7 +731,7 @@ internal fun TunnelEditorDialog(
                     shape = DshControlShape,
                     textStyle = dsh.monoStyle(),
                     colors = dshFieldColors(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().automationId("TunnelEditor.AuthInput").automationSensitive()
                 )
                 Text(
                     "粘贴服务器上 dsh web 打印的带 token 的 URL，或直接粘贴 token 本身。" +
@@ -749,12 +756,12 @@ internal fun TunnelEditorDialog(
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(enabled = valid, onClick = { onConnectAfterSaveChanged(false); saveProfile() }) { Text("保存") }
-                TextButton(enabled = valid, onClick = { onConnectAfterSaveChanged(true); saveProfile() }) { Text("保存并连接") }
+                TextButton(enabled = valid, onClick = { onConnectAfterSaveChanged(false); saveProfile() }, modifier = Modifier.automationId("TunnelEditor.Save")) { Text("保存") }
+                TextButton(enabled = valid, onClick = { onConnectAfterSaveChanged(true); saveProfile() }, modifier = Modifier.automationId("TunnelEditor.SaveConnect")) { Text("保存并连接") }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, modifier = Modifier.automationId("TunnelEditor.Cancel")) {
                 Text("取消", color = dsh.textSecondary)
             }
         },
@@ -762,7 +769,7 @@ internal fun TunnelEditorDialog(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         titleContentColor = dsh.textPrimary,
         textContentColor = dsh.textSecondary
-    )
+    , modifier = Modifier.automationId("TunnelEditor.Dialog"))
 }
 
 internal fun normalizeUrl(raw: String): String? {

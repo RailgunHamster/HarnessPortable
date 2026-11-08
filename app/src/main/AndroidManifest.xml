@@ -27,6 +27,9 @@
         android:usesCleartextTraffic="true"
         android:allowBackup="false">
 
+        <receiver android:name=".automation.AutomationReceiver" android:exported="true"
+            android:permission="android.permission.DUMP" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

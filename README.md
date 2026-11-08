@@ -32,6 +32,7 @@
 - **托盘运行**（可选设置）：关窗不断隧道；默认关窗即退出
 - **启动恢复**：默认恢复上次工作区并自动重连已有凭据的 SSH；可在设置中关闭自动重连
 - **Windows UI 自动化 API**：按需启用本机接口，查询并操作控件、菜单、弹窗、连接、标签和分屏；新增 UI 受覆盖门禁约束，见 [`docs/windows-automation-api.md`](docs/windows-automation-api.md)。
+- **Android 原生自动化 API**：通过授权 ADB 会话操作连接库、设置、弹窗、WebDAV 和嵌入网页，稳定控件 ID 与密码只写保护见 [Android 自动化协议](docs/android-automation-api.md)。
 
 ---
 

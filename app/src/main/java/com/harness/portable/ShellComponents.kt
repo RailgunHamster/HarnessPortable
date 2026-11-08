@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.harness.portable.automation.*
 
 @Composable
 internal fun ShellIcon(icon: ImageVector) {
@@ -54,7 +55,7 @@ internal fun ShellStatusPill(label: String, color: Color) {
 @Composable
 internal fun ShellEmptyState(
     icon: ImageVector, title: String, message: String,
-    actionLabel: String, onAction: () -> Unit
+    actionLabel: String, onAction: () -> Unit, actionId: String
 ) {
     val dsh = LocalDsh.current
     Column(
@@ -65,27 +66,27 @@ internal fun ShellEmptyState(
         ShellIcon(icon)
         Text(title, style = MaterialTheme.typography.titleMedium, color = dsh.textPrimary, textAlign = TextAlign.Center)
         Text(message, style = MaterialTheme.typography.bodyMedium, color = dsh.textSecondary, textAlign = TextAlign.Center)
-        Button(onClick = onAction, shape = DshControlShape) { Text(actionLabel) }
+        Button(onClick = onAction, shape = DshControlShape, modifier = Modifier.automationId(actionId)) { Text(actionLabel) }
     }
 }
 
 @Composable
-internal fun RowActions(onDelete: () -> Unit, onEdit: (() -> Unit)? = null) {
+internal fun RowActions(onDelete: () -> Unit, dataKey: String, onEdit: (() -> Unit)? = null) {
     var expanded by remember { mutableStateOf(false) }
     val dsh = LocalDsh.current
     Box {
-        IconButton(onClick = { expanded = true }) {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.automationId("Legacy.Row.More", dataKey)) {
             Icon(Icons.Filled.MoreVert, contentDescription = "更多操作", tint = dsh.textSecondary)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false },
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.automationId("Legacy.Row.Menu", dataKey).automationDismiss { expanded = false },
             containerColor = dsh.layer1, tonalElevation = 0.dp, shadowElevation = 0.dp) {
             if (onEdit != null) {
                 DropdownMenuItem(text = { Text("编辑连接") }, leadingIcon = { Icon(Icons.Filled.Edit, null) },
-                    onClick = { expanded = false; onEdit() })
+                    onClick = { expanded = false; onEdit() }, modifier = Modifier.automationId("Legacy.Row.Edit", dataKey))
             }
             DropdownMenuItem(text = { Text("删除连接", color = dsh.danger) },
                 leadingIcon = { Icon(Icons.Filled.DeleteOutline, null, tint = dsh.danger) },
-                onClick = { expanded = false; onDelete() })
+                onClick = { expanded = false; onDelete() }, modifier = Modifier.automationId("Legacy.Row.Delete", dataKey))
         }
     }
 }
