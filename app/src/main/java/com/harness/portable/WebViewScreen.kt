@@ -217,11 +217,12 @@ internal fun WebViewScreen(
         AndroidOperation("browser.reconnect", "Reconnect the current SSH tunnel") { if (!tunnelMode) fail("unavailable", "This is a direct page"); onReconnect(); true },
         AndroidOperation("browser.disconnect", "Disconnect through the normal application operation") { onDisconnect(); true },
         AndroidOperation("browser.controls.collapse", "Collapse or expand the page toolbar", setOf("value")) { setToolbarCollapsed(it.requiredBoolean("value")); true },
-        AndroidOperation("browser.evaluate", "Run JavaScript through WebView's public bridge", setOf("script", "raw")) { args ->
+        AndroidOperation("browser.evaluate", "Run JavaScript through WebView's public bridge", setOf("script", "raw", "userGesture")) { args ->
             val browser = webRef ?: fail("unavailable", "Browser is not ready")
             val script = args.requiredString("script"); if (script.length > 256 * 1024) fail("limit_exceeded", "Script exceeds the size limit")
             val raw = args.optionalBoolean("raw")
-            suspendCancellableCoroutine<Any> { continuation -> browser.evaluateJavascript(script) { result ->
+            if (args.optionalBoolean("userGesture")) AndroidBrowserAutomation.evaluate(browser, script, raw)
+            else suspendCancellableCoroutine<Any> { continuation -> browser.evaluateJavascript(script) { result ->
                 if (continuation.isActive) continuation.resume(if (raw) result ?: "null" else runCatching { JSONObject("{\"v\":${result ?: "null"}}").get("v") }.getOrDefault(JSONObject.NULL))
             } }
         }

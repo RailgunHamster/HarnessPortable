@@ -174,7 +174,10 @@ internal object AndroidUiAutomation {
             "selectText" -> {
                 val start = args.getInt("start"); val length = args.getInt("length")
                 if (start < 0 || length < 0 || start.toLong() + length > (c.getOrNull(SemanticsProperties.EditableText)?.length ?: 0)) fail("invalid_argument", "Invalid text selection")
-                c[SemanticsActions.SetSelection].action?.invoke(start, start + length, false)
+                val prior = c.getOrNull(SemanticsProperties.TextSelectionRange)
+                val accepted = if (prior?.start == start && prior.end == start + length) true
+                    else c[SemanticsActions.SetSelection].action?.invoke(start, start + length, true)
+                frame(); frame(); accepted
             }
             "scroll" -> {
                 val x = args.optDouble("horizontal", 0.0); val y = args.optDouble("vertical", 0.0)
@@ -196,7 +199,7 @@ internal object AndroidUiAutomation {
                 "copy" -> c.getOrNull(SemanticsActions.CopyText)?.action?.invoke()
                 "cut" -> c.getOrNull(SemanticsActions.CutText)?.action?.invoke()
                 "paste" -> c.getOrNull(SemanticsActions.PasteText)?.action?.invoke()
-                "selectAll" -> c.getOrNull(SemanticsActions.SetSelection)?.action?.invoke(0, c.getOrNull(SemanticsProperties.EditableText)?.length ?: 0, false)
+                "selectAll" -> c.getOrNull(SemanticsActions.SetSelection)?.action?.invoke(0, c.getOrNull(SemanticsProperties.EditableText)?.length ?: 0, true)
                 else -> fail("invalid_argument", "Unsupported edit action")
             }
             else -> false

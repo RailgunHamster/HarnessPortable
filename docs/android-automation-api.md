@@ -56,6 +56,8 @@ $endpoint = $session.EndpointFile
 
 密码、私钥位置、认证令牌输入只写，快照仅报告 `sensitive/hasValue`。切换“显示密码”仍会屏蔽。包含敏感子项的合并节点也屏蔽文本。链接库与浏览器状态去除直连 URL 的用户信息、查询和片段。任务快照和事件不保留输入参数。`browser.evaluate` 是可信自动化的网页脚本能力，脚本及其返回值由调用者负责，不能把它当作网页数据脱敏接口。
 
+`browser.evaluate` 的 `userGesture:true` 用于文件上传等需要用户激活的网页操作。它为单次调用临时启用公开 DevTools 协议，通过本进程的 Android Unix 域套接字调用 `Runtime.evaluate`，不注入屏幕输入，也不开放额外 TCP 端口；调用结束或会话停止后关闭调试。普通脚本使用 WebView 的公开 JavaScript 接口。`raw:true` 返回 JSON 编码后的值。
+
 ## 弹窗、导出及上传
 
 Compose 确认框和菜单可通过 `ui.act` 操作或 `app.back` 返回。文件选择在普通模式保留系统界面；API 模式由 `dialogs.get` 返回 `id`、`kind` 和要求，`dialogs.choose` 调用原来的选择结果回调。传入 `cancel:true` 取消；过期 ID 被拒绝。

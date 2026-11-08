@@ -180,7 +180,7 @@ try:
     assert call('browser.evaluate',{'script':"document.getElementById('entry').value"})=='retained-page-state'
     upload=call('files.put',{'name':'fixture.txt','base64':base64.b64encode(b'loopback upload fixture').decode()})
     assert request('files.get',{'fileId':upload['fileId']})['error']['code']=='write_only'
-    call('browser.evaluate',{'script':"document.getElementById('upload').click(); true"})
+    call('browser.evaluate',{'script':"document.getElementById('upload').click(); true",'userGesture':True})
     chooser=until(lambda:call('dialogs.get') if call('dialogs.get').get('kind')=='open' else None)
     call('dialogs.choose',{'id':chooser['id'],'fileIds':[upload['fileId']]})
     until(lambda:call('browser.evaluate',{'script':"document.getElementById('upload').files.length"})==1)

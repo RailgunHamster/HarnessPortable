@@ -100,7 +100,7 @@ object AndroidAutomation {
     }
     internal fun stop(expectedSession: String? = null) {
         if (server != null && expectedSession != null && expectedSession != sessionId) fail("stale", "Automation session has changed")
-        server?.close(); server = null; sessionId = ""; queued.clear(); AutomationDialogs.reset()
+        server?.close(); server = null; sessionId = ""; queued.clear(); AndroidBrowserAutomation.reset(); AutomationDialogs.reset()
     }
     internal fun belongsToCurrentActivity(context: Context): Boolean = when {
         context === activity.get() -> true

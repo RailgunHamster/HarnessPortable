@@ -133,7 +133,7 @@ class AndroidAutomationNativeTests {
         val tree = rpc("ui.tree").getJSONArray("result").toString()
         assertFalse(tree.contains("fixture-private-password"))
         val field = waitNode("Fixture.Credential"); assertTrue(field.getBoolean("sensitive")); assertTrue(field.getBoolean("hasValue")); assertFalse(field.has("value"))
-        act("Fixture.Credential", "selectText", JSONObject().put("start", 1).put("length", 3))
+        assertTrue((act("Fixture.Credential", "selectText", JSONObject().put("start", 1).put("length", 3)) as JSONObject).optBoolean("accepted"))
         assertEquals(1, model.input.selection.start); assertEquals(4, model.input.selection.end)
         act("Fixture.Credential", "focus"); act("Fixture.Credential", "ime"); assertEquals(1, model.ime)
     }
