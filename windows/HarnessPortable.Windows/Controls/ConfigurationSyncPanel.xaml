@@ -1,0 +1,37 @@
+<UserControl x:Class="HarnessPortable.Windows.Controls.ConfigurationSyncPanel"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ AutomationProperties.AutomationId="ConfigurationSync.Panel">
+ <StackPanel>
+  <TextBlock Text="WebDAV 配置同步" Style="{StaticResource DshSectionHeader}"/>
+  <TextBlock Text="三端共用链接库、收藏、分组、排序与外观；各平台界面偏好分别保存。连接密码、私钥、网页登录令牌及 WebDAV 账号不上传。" Style="{StaticResource DshMuted}" Margin="0,10,0,16"/>
+  <TextBlock Text="WebDAV 私有目录（请先创建）" Style="{StaticResource DshLabel}"/>
+  <TextBox x:Name="Address" Style="{StaticResource ModernTextBox}" Margin="0,6,0,12" AutomationProperties.AutomationId="ConfigurationSync.Address"/>
+  <TextBlock Text="WebDAV 用户名" Style="{StaticResource DshLabel}"/>
+  <TextBox x:Name="Username" Style="{StaticResource ModernTextBox}" Margin="0,6,0,12" AutomationProperties.AutomationId="ConfigurationSync.Username"/>
+  <TextBlock Text="WebDAV 密码（留空保留已保存密码）" Style="{StaticResource DshLabel}"/>
+  <PasswordBox x:Name="Password" Style="{StaticResource ModernPasswordBox}" Margin="0,6,0,8" AutomationProperties.AutomationId="ConfigurationSync.Password"/>
+  <CheckBox x:Name="ClearPassword" Content="清除本机保存的 WebDAV 密码" Style="{StaticResource DshCheckBox}" Margin="0,4,0,8" AutomationProperties.AutomationId="ConfigurationSync.ClearPassword"/>
+  <CheckBox x:Name="AllowHttp" Content="允许可信局域网的明文 HTTP（账号密码会明文传输）" Style="{StaticResource DshCheckBox}" Margin="0,4,0,8" AutomationProperties.AutomationId="ConfigurationSync.AllowHttp"/>
+  <CheckBox x:Name="AutoSync" Content="自动同步：启动、回到应用、配置修改及前台每 5 分钟" Style="{StaticResource DshCheckBox}" Margin="0,4,0,12" AutomationProperties.AutomationId="ConfigurationSync.AutoSync"/>
+  <TextBlock Text="同步配置文件不含凭据，但包含服务器地址与账号名；请使用自己的私有目录。直连地址中的登录参数只留在本机。" Style="{StaticResource DshMuted}"/>
+  <WrapPanel Margin="0,14,0,0">
+   <Button x:Name="Save" Content="保存同步设置" Style="{StaticResource ModernPrimaryButton}" Click="Save_Click" AutomationProperties.AutomationId="ConfigurationSync.Save"/>
+   <Button x:Name="Reset" Content="撤销草稿" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="Reset_Click" AutomationProperties.AutomationId="ConfigurationSync.Reset"/>
+  </WrapPanel>
+  <WrapPanel Margin="0,12,0,0">
+   <Button x:Name="Test" Content="测试目录" Style="{StaticResource ModernToolbarButton}" Click="Test_Click" AutomationProperties.AutomationId="ConfigurationSync.Test"/>
+   <Button x:Name="Run" Content="立即同步" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="Run_Click" AutomationProperties.AutomationId="ConfigurationSync.Run"/>
+   <Button x:Name="Cancel" Content="取消" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="Cancel_Click" AutomationProperties.AutomationId="ConfigurationSync.Cancel"/>
+  </WrapPanel>
+  <TextBlock x:Name="Status" Style="{StaticResource DshMuted}" Margin="0,14,0,0"/>
+  <TextBlock x:Name="LastSuccess" Style="{StaticResource DshMuted}" Margin="0,6,0,0"/>
+  <StackPanel x:Name="ConflictPanel" Visibility="Collapsed" Margin="0,14,0,0">
+   <TextBlock Text="两端都修改了同一项目。下面的选择仅处理冲突项，其余项目仍双向合并。" Style="{StaticResource DshMuted}"/>
+   <TextBlock x:Name="ConflictItems" Style="{StaticResource DshMuted}" Margin="0,8,0,8"/>
+   <WrapPanel>
+    <Button Content="冲突项保留本机" Style="{StaticResource ModernToolbarButton}" Click="Local_Click" AutomationProperties.AutomationId="ConfigurationSync.KeepLocal"/>
+    <Button Content="冲突项保留云端" Style="{StaticResource ModernToolbarButton}" Margin="8,0,0,0" Click="Remote_Click" AutomationProperties.AutomationId="ConfigurationSync.KeepRemote"/>
+   </WrapPanel>
+  </StackPanel>
+ </StackPanel>
+</UserControl>

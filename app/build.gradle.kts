@@ -57,6 +57,8 @@ android {
     }
     packaging.resources.excludes += "META-INF/versions/**/OSGI-INF/MANIFEST.MF"
     sourceSets.getByName("main").assets.srcDir(rootProject.file("shared"))
+    sourceSets.getByName("test").resources.srcDir(rootProject.file("spec/fixtures"))
+    sourceSets.getByName("androidTest").assets.srcDir(rootProject.file("spec/fixtures"))
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -70,6 +72,9 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     implementation("androidx.core:core-ktx:1.13.1")

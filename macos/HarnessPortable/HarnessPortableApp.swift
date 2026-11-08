@@ -58,7 +58,7 @@ struct HarnessPortableApp: App {
         // reachable from the toolbar and the menu bar even when the workspace
         // window is closed to the tray or misbehaving.
         Window("设置 · Harness Portable", id: "settings") {
-            SettingsWindowView(settings: services.settings, profiles: services.profiles, updater: services.updater)
+            SettingsWindowView(settings: services.settings, profiles: services.profiles, updater: services.updater, sync: services.sync)
         }
         .windowResizability(.contentSize)
         .defaultSize(width: 960, height: 680)

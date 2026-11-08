@@ -33,6 +33,14 @@ public partial class MainWindow
         surface.Track(()=>_services.Profiles.Changed+=ProfilesChanged,()=>_services.Profiles.Changed-=ProfilesChanged);
         surface.Track(()=>_services.Settings.Changed+=SettingsChanged,()=>_services.Settings.Changed-=SettingsChanged);
         surface.Track(()=>_services.Updates.StateChanged+=UpdatesChanged,()=>_services.Updates.StateChanged-=UpdatesChanged);
+        void SyncChanged() => surface.Events.Publish("sync.changed", _services.Sync.Status());
+        surface.Track(()=>_services.Sync.Changed+=SyncChanged,()=>_services.Sync.Changed-=SyncChanged);
+        surface.RegisterQuery("sync.status", "Read WebDAV sync state; passwords are write-only.", [], _ => _services.Sync.Status());
+        Command("sync.configure", "Save local-only WebDAV settings and credentials.", ["url", "username", "autoSync", "allowHttp", "password", "clearPassword"], a =>
+            _services.Sync.Configure(new(a.String("url"), a.String("username"), a.Boolean("autoSync"), a.Boolean("allowHttp")), a.OptionalString("password"), a.Boolean("clearPassword")), ["password", "clearPassword"]);
+        surface.RegisterCommand("sync.test", "Test the saved WebDAV directory without modifying configuration.", [], async _ => { await _services.Sync.TestAsync(); return _services.Sync.Status(); });
+        surface.RegisterCommand("sync.run", "Merge and synchronize configuration; choice local/remote resolves only confirmed conflicts.", ["choice"], async a => { await _services.Sync.RunAsync(a.OptionalString("choice")); return _services.Sync.Status(); }, ["choice"]);
+        Command("sync.cancel", "Cancel in-flight configuration synchronization.", [], _ => _services.Sync.Cancel());
         surface.Track(()=>_services.Tunnels.StateChanged+=TunnelChanged,()=>_services.Tunnels.StateChanged-=TunnelChanged);
         void Command(string name, string description, string[] parameters, Action<JsonObject> action, string[]? optional = null) => surface.RegisterCommand(name, description, parameters, action, optional);
         surface.RegisterQuery("app.state", "Read window, workspace, connection and update state; credentials and URL queries are omitted.", [], _ => CaptureAutomationState());

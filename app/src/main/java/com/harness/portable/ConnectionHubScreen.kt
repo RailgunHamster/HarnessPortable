@@ -86,7 +86,16 @@ fun SettingsScreen(
     val versionName = remember { ApkUpdate.currentVersionName(ctx) }
     val versionCode = remember { ApkUpdate.currentVersionCode(ctx) }
     val homeScroll = rememberLazyListState()
-    val settingsScroll = rememberLazyListState()
+    var settingsTab by rememberSaveable { mutableStateOf(0) }
+    val settingsScrollStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
+    val settingsScroll = settingsScrollStates[settingsTab]
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == UiPreferences.FAVORITES) favorites = prefs.getStringSet(UiPreferences.FAVORITES, emptySet()).orEmpty().toSet()
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     fun typedSources() = draftSources.withUrl(draftSources.selected, updateUrl.trim())
     fun selectSource(kind: UpdateSourceKind) {
@@ -156,14 +165,19 @@ fun SettingsScreen(
 
     if (!visible) return
     Scaffold(containerColor = dsh.base, topBar = {
-        Column(Modifier.fillMaxWidth().background(dsh.layer1).statusBarsPadding().padding(horizontal = 20.dp, vertical = 14.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.fillMaxWidth().background(dsh.layer1).statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (settingsOnly) IconButton(onClick = onBackSettings) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = dsh.textPrimary) }
                 Column(Modifier.weight(1f)) {
                     Text(if (settingsOnly) "设置" else "Harness Portable", style = MaterialTheme.typography.titleLarge, color = dsh.textPrimary)
-                    Text(if (settingsOnly) "本设备" else "连接", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
+                    Text(if (settingsOnly) "外观、同步与更新" else "连接", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
                 }
                 if (!settingsOnly) IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, "设置", tint = dsh.textPrimary) }
+            }
+            if (settingsOnly) ScrollableTabRow(selectedTabIndex = settingsTab, edgePadding = 16.dp, containerColor = dsh.layer1, contentColor = dsh.accent) {
+                listOf("通用", "数据与安全", "WebDAV 同步", "更新与关于").forEachIndexed { index, label ->
+                    Tab(selected = settingsTab == index, onClick = { settingsTab = index }, text = { Text(label, maxLines = 1) })
+                }
             }
         }
     }) { padding ->
@@ -206,7 +220,7 @@ fun SettingsScreen(
                         }
                     }
                 } else {
-                    item("general") {
+                    if (settingsTab == 0) item("general") {
                         HubHeading("通用")
                         Column(Modifier.fillMaxWidth().dshCard().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("外观", color = dsh.textPrimary)
@@ -222,7 +236,7 @@ fun SettingsScreen(
                             Text("偏好立即保存", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
                         }
                     }
-                    item("security") {
+                    if (settingsTab == 1) item("security") {
                         HubHeading("连接与安全")
                         Column(Modifier.fillMaxWidth().dshCard().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("连接凭据", color = dsh.textPrimary)
@@ -232,7 +246,8 @@ fun SettingsScreen(
                             if (!BatteryExemption.isExempt(ctx)) TextButton(onClick = { BatteryExemption.request(ctx) }) { Text("允许 SSH 隧道在后台运行") }
                         }
                     }
-                    item("updates") {
+                    if (settingsTab == 2) item("sync") { ConfigurationSyncSettings() }
+                    if (settingsTab == 3) item("updates") {
                         HubHeading("更新与关于")
                         Column(Modifier.fillMaxWidth().dshCard().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("Harness Portable · $versionName", color = dsh.textPrimary)

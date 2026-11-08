@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Compile Include="..\..\scripts\test-fixtures\config-sync\WebDavFixture.cs" Link="Fixtures\WebDavFixture.cs" />
+    <Content Include="..\..\spec\fixtures\shared-configuration-v1.json" Link="Fixtures\shared-configuration-v1.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

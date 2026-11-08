@@ -10,6 +10,7 @@ final class AppServices: ObservableObject {
     let knownHosts: KnownHostsStore
     let tunnels: TunnelManager
     let updater: UpdateService
+    let sync: ConfigurationSync
 
     private var didShutdown = false
 
@@ -23,6 +24,8 @@ final class AppServices: ObservableObject {
         knownHosts = KnownHostsStore()
         tunnels = TunnelManager(keychain: keychain, knownHosts: knownHosts)
         updater = UpdateService(settings: settings)
+        sync = ConfigurationSync(profiles: profiles, settings: settings, keychain: keychain)
+        sync.startAutoSync()
     }
 
     func stopAll() {

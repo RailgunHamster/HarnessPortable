@@ -102,6 +102,7 @@ public partial class MainWindow : Window
         InitializeWorkspaceUx();
         Loaded += (_, _) =>
         {
+            _services.Sync.StartAutoSync(Dispatcher);
             // Resolve the two-slot selection rather than the retired single
             // URL, so startup follows whichever source is picked.
             var settings = _services.Settings.Load();
@@ -109,6 +110,7 @@ public partial class MainWindow : Window
             if (!Environment.GetCommandLineArgs().Contains("--automation-api"))
                 _ = _services.Updates.CheckAsync(UpdateSelection.From(settings).Url());
         };
+        Activated += (_, _) => { _ = _services.Sync.RunAsync(automatic: true); };
     }
 
     private void InitializeDockLayout()

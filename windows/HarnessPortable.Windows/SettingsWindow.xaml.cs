@@ -18,6 +18,7 @@ public partial class SettingsWindow : Window
     {
         _services = services;
         InitializeComponent();
+        SyncPanel.Bind(services.Sync);
         AppTheme.Track(this);
         var settings = services.Settings.Load();
         SelectTag(AppearanceBox, settings.Appearance);

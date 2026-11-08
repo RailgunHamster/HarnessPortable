@@ -1,0 +1,17 @@
+{
+  "format": "harness-portable-settings",
+  "version": 1,
+  "entries": {
+    "tunnel:shared-fixture-1": {
+      "id": "shared-fixture-1", "name": "测试服务器", "sshHost": "qa-server.invalid", "sshPort": 2222, "user": "fixture",
+      "remoteHost": "127.0.0.1", "remotePort": 3080, "localPort": 3081, "authMode": "systemd",
+      "systemdUnit": "dsh-web.service", "systemdScope": "user", "systemdLogPath": "", "favorite": true, "group": "测试分组", "label": "", "rank": 0
+    },
+    "direct:https://fixture.invalid/console": { "url": "https://fixture.invalid/console", "favorite": false, "group": "", "label": "测试网页", "rank": 1 },
+    "shared:appearance": "dark",
+    "windows:closeBehavior": "tray",
+    "macos:restoreLastLayoutOnStartup": false,
+    "android:browserFullscreen": true,
+    "android:orientation": "auto"
+  }
+}

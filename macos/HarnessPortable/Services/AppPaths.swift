@@ -2,6 +2,9 @@ import Foundation
 
 enum AppPaths {
     static let dataDirectory: URL = {
+        if let path = ProcessInfo.processInfo.environment["HARNESS_PORTABLE_DATA_DIRECTORY"], path.hasPrefix("/") {
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return base.appendingPathComponent("HarnessPortable", isDirectory: true)
     }()

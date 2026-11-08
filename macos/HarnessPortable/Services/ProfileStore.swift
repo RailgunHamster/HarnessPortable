@@ -7,13 +7,15 @@ final class ProfileStore: ObservableObject {
     @Published private(set) var directs: [String] = []
 
     private(set) var version = 1
+    private let path: URL
 
-    init() {
+    init(path: URL = AppPaths.profilesFile) {
+        self.path = path
         load()
     }
 
     func load() {
-        guard let data = try? Data(contentsOf: AppPaths.profilesFile),
+        guard let data = try? Data(contentsOf: path),
               let config = try? decodeJSON(ProfileConfig.self, from: data) else {
             tunnels = []
             directs = []
@@ -30,10 +32,16 @@ final class ProfileStore: ObservableObject {
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try writeAtomically(encoder.encode(config), to: AppPaths.profilesFile)
+            try writeAtomically(encoder.encode(config), to: path)
         } catch {
             // Keep the in-memory configuration usable; the next save retries.
         }
+    }
+
+    func replaceForSync(_ config: ProfileConfig) throws {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        try writeAtomically(encoder.encode(config), to: path)
+        version = config.version; tunnels = config.tunnels; directs = config.directs
     }
 
     func upsertTunnel(_ profile: TunnelProfile) {

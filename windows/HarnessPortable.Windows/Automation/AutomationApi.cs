@@ -18,7 +18,7 @@ public sealed record AutomationMethod(string Name, string Description, string[] 
                 properties[name] = ParameterTypes?.TryGetValue(name,out var declaredType)==true ? new JsonObject{["type"]=declaredType} : name switch
                 {
                     "target" or "selector" or "parameters" => new JsonObject { ["type"]="object", ["minProperties"]=name=="parameters" ? 0 : 1 },
-                    "includeHidden" or "exists" or "enabled" or "after" or "regroup" or "commit" or "raw" => new JsonObject { ["type"]="boolean" },
+                    "includeHidden" or "exists" or "enabled" or "after" or "regroup" or "commit" or "raw" or "autoSync" or "allowHttp" or "clearPassword" => new JsonObject { ["type"]="boolean" },
                     "timeoutMs" or "index" or "start" or "length" => new JsonObject { ["type"]="integer" },
                     "vertical" or "horizontal" or "widthPixels" or "heightPixels" => new JsonObject { ["type"]="number" },
                     "value" or "equals" => new JsonObject(),

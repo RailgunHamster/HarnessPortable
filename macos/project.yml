@@ -48,6 +48,8 @@ targets:
     platform: macOS
     sources:
       - path: HarnessPortableTests
+      - path: ../spec/fixtures/shared-configuration-v1.json
+        buildPhase: resources
     dependencies:
       - target: HarnessPortable
     settings:

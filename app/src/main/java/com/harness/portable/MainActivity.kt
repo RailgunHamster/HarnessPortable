@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +72,11 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 
 class MainActivity : ComponentActivity() {
     private var immersive = false
@@ -193,6 +199,32 @@ fun AppRoot() {
     var settingsReturn by rememberSaveable { mutableStateOf("connections") }
     var switchingTo by remember { mutableStateOf<ActiveTarget?>(null) }
     val uiPreferences = rememberUiPreferences()
+    val configSync = remember { ConfigurationSync.get(ctx) }
+    val syncState by configSync.state.collectAsState()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var syncChange by remember { mutableStateOf(0) }
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            when (key) {
+                "tunnels" -> { tunnels.clear(); tunnels.addAll(ProfileStore.loadTunnels(ctx)) }
+                "direct_urls" -> { directs.clear(); directs.addAll(ProfileStore.loadDirect(ctx)) }
+                KEY_ORIENTATION -> orientation = OrientationMode.fromStorage(prefs.getString(KEY_ORIENTATION, null))
+            }
+            if (key in setOf("tunnels", "direct_urls", KEY_ORIENTATION, UiPreferences.FAVORITES, UiPreferences.APPEARANCE, UiPreferences.FULLSCREEN) && !configSync.state.value.busy) syncChange++
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    LaunchedEffect(syncChange, syncState.options) {
+        delay(2000)
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) configSync.run(automatic = true)
+    }
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            configSync.run(automatic = true)
+            while (isActive) { delay(5 * 60 * 1000L); configSync.run(automatic = true) }
+        }
+    }
     val darkAppearance = LocalDsh.current.isDark
     LaunchedEffect(screen, target, pending?.id, uiPreferences.browserFullscreen, darkAppearance) {
         (activity as? MainActivity)?.setUiPresentation(screen == "browser" && target != null && pending == null && uiPreferences.browserFullscreen, darkAppearance)

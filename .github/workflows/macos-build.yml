@@ -47,7 +47,7 @@ jobs:
               if name == 'TestAction':
                   action.set('shouldUseLaunchSchemeArgsEnv', 'NO')
               variables = ET.SubElement(action, 'EnvironmentVariables')
-              for key, value in [('CI', 'true'), ('HP_UI_PREVIEW_DIR', os.environ['HP_UI_PREVIEW_DIR'])]:
+              for key, value in [('CI', 'true'), ('HP_UI_PREVIEW_DIR', os.environ['HP_UI_PREVIEW_DIR']), ('HARNESS_PORTABLE_DATA_DIRECTORY', os.path.join(os.environ['HP_UI_PREVIEW_DIR'], 'isolated-config'))]:
                   ET.SubElement(variables, 'EnvironmentVariable', key=key, value=value, isEnabled='YES')
           tree.write(path, encoding='utf-8', xml_declaration=True)
           PY

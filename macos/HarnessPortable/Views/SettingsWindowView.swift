@@ -7,6 +7,7 @@ struct SettingsWindowView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var profiles: ProfileStore
     @ObservedObject var updater: UpdateService
+    @ObservedObject var sync: ConfigurationSync
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openWindow) private var openWindow
     @State private var category = "general"
@@ -17,8 +18,8 @@ struct SettingsWindowView: View {
     @State private var proxyStatus = ""
     @State private var status = "偏好立即保存；地址修改需要明确保存。"
     private var dsh: DshPalette { Dsh.palette(colorScheme) }
-    init(settings: SettingsStore, profiles: ProfileStore, updater: UpdateService) {
-        self.settings = settings; self.profiles = profiles; self.updater = updater
+    init(settings: SettingsStore, profiles: ProfileStore, updater: UpdateService, sync: ConfigurationSync) {
+        self.settings = settings; self.profiles = profiles; self.updater = updater; self.sync = sync
         _draftSource = State(initialValue: settings.value.updateSourceSelected)
         _draftGithub = State(initialValue: settings.value.updateGithubUrl)
         _draftCnb = State(initialValue: settings.value.updateCnbUrl)
@@ -66,6 +67,8 @@ struct SettingsWindowView: View {
                             Text("导出连接配置").font(.headline)
                             Text("只导出服务器和端口等连接信息，不包含密码、私钥内容和服务令牌。").font(.callout).foregroundStyle(dsh.textSecondary)
                             Button("导出配置…") { exportConfig() }
+                            Divider()
+                            ConfigurationSyncView(sync: sync)
                         } else {
                             Text("更新与关于").font(.headline)
                             Text("Harness Portable · \(UpdateService.currentVersion)").font(Dsh.mono(12))
