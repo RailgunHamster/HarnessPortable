@@ -53,7 +53,7 @@ class ConfigurationSyncNativeTests {
             server.start(InetAddress.getByName("127.0.0.1"), 0)
         }
         fun replace(value: String) = synchronized(this) { document = value; revision++ }
-        fun options() = WebDavOptions(server.url("/dav/Harness/").toString(), "fixture", allowHttp = true)
+        fun options() = WebDavOptions("http://127.0.0.1:${server.port}/dav/Harness/", "fixture", allowHttp = true)
         override fun close() = server.close()
     }
     @Test fun twoNativeDevicesMergeWithoutTransferringPasswordsOrPrivateKeys() = runBlocking {
@@ -111,7 +111,7 @@ class ConfigurationSyncNativeTests {
             val sync = ConfigurationSync.isolated(context); sync.configure(cloud.options(), "local-dav-secret"); sync.run(automatic = true)
             assertEquals(0, cloud.server.requestCount)
             assertFalse(UiPreferences.prefs(context).all.toString().contains("local-dav-secret"))
-            assertTrue(runCatching { sync.configure(cloud.options().copy(url = cloud.server.url("/different/").toString())) }.isFailure)
+            assertTrue(runCatching { sync.configure(cloud.options().copy(url = "http://127.0.0.1:${cloud.server.port}/different/")) }.isFailure)
         } } } finally { clean() }
     }
 }
