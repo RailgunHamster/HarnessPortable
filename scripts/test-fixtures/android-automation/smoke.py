@@ -177,8 +177,14 @@ try:
     failure=until(lambda:(j if (j:=call('operations.get',{'operationId':rejected['operationId']}))['state']=='failed' else None))
     assert failure['error']['code']=='invalid_argument' and [v['key'] for v in call('library.list')]==desired
     call('library.reorder',{'keys':original}); until(lambda:[v['key'] for v in call('library.list')]==original)
+    dav_options={'url':f'http://127.0.0.1:{http_port}/dav/Harness/','username':'fixture','allowHttp':True}
+    revision=Cloud.revision; call('sync.configure',dict(dav_options,autoSync=True))
+    until(lambda:Cloud.revision>revision and not call('sync.status')['busy'])
+    revision=Cloud.revision; call('library.reorder',{'keys':desired})
+    until(lambda:Cloud.revision>revision and json.loads(Cloud.body)['entries'][ssh['key']]['rank']==1 and not call('sync.status')['busy'])
+    call('sync.configure',dict(dav_options,autoSync=False)); call('library.reorder',{'keys':original})
     assert next(v for v in call('library.list') if v['key']==ssh['key'])['hasPassword']
-    checks.append('mixed library ordering through actual UI and API, cancel, validation, persistence, and WebDAV ranks without credentials')
+    checks.append('mixed library ordering through actual UI and API, cancel, validation, persistence, and automatic WebDAV ranks without credentials')
     call('config.export'); export_dialog=until(lambda:call('dialogs.get') if call('dialogs.get').get('kind')=='create' else None)
     call('dialogs.choose',{'id':export_dialog['id']})
     until(lambda:len([f for f in call('files.list') if f['size']>0])==2)
