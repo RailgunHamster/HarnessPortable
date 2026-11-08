@@ -188,7 +188,7 @@ try:
 
     call('app.connections'); available('library.delete'); call('library.delete',{'key':direct['key']}); until(lambda:find('Library.DeleteConfirm')); act('Library.DeleteConfirm')
     until(lambda:len(call('library.list'))==1); call('app.settings'); call('settings.tab',{'value':'about'}); until(lambda:find('Updates.Check')); inspect()
-    act('Updates.Source.GITHUB','selectItem'); act('Updates.Source.CNB','selectItem'); assert call('updates.status')['source']=='CNB'
+    act('Updates.Source.GitHub','selectItem'); act('Updates.Source.CNB','selectItem'); assert call('updates.status')['source']=='CNB'
     call('settings.tab',{'value':'general'}); act('Settings.Appearance.dark','selectItem'); inspect(); act('Settings.Appearance.light','selectItem')
     checks.append('confirmed deletion, update-source controls, category tabs, and appearance callbacks')
     events=call('events.read'); assert any(event['name']=='operation.returned' for event in events)
