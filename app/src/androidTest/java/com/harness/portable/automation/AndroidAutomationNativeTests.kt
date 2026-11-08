@@ -103,7 +103,13 @@ class AndroidAutomationNativeTests {
                 }
                 port = AndroidAutomation.start(token, 0, UUID.randomUUID().toString()).getInt("port")
             }
-            try { waitFocusedNode("Fixture.Credential"); run(model) }
+            try {
+                // A display-size reset can leave the launcher's task in front.
+                // Use the same public foreground operation as API consumers.
+                call("app.show")
+                waitFocusedNode("Fixture.Credential")
+                run(model)
+            }
             finally { scenario.onActivity { AndroidAutomation.stop() } }
         }
     }
