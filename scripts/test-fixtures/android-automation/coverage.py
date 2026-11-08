@@ -63,6 +63,10 @@ for path in UI.rglob('*.kt'):
         if '.automationId(' not in prefix: problem(match.start(), 'Gesture/scroll host requires a stable ID')
     for match in re.finditer(r'\b(pointerInput|detectTapGestures|detectDragGestures|onKeyEvent|onPreviewKeyEvent)\s*\(', code):
         problem(match.start(), 'New custom input needs a semantic operation, gesture mapping, and behavior test')
+    for match in re.finditer(r'\b(?:setOnClickListener|setOnTouchListener|setOnLongClickListener|setOnKeyListener)\s*[{(]', code):
+        problem(match.start(), 'Native View input needs an adapter, semantic operation, and behavior test')
+    for match in re.finditer(r'import android\.(?:widget\.|app\.(?:AlertDialog|Dialog)\b)', text):
+        problem(match.start(), 'A native widget/dialog needs explicit API coverage before introduction')
     for match in re.finditer(r'import androidx\.compose\.(?:material3|foundation)\.([A-Za-z_]\w*)', text):
         kind = match.group(1)
         if re.search(r'(?:Button|TextField|Checkbox|Switch|Chip|Slider|RadioButton|Tab|LazyRow|LazyColumn)$', kind) and kind not in KINDS:
