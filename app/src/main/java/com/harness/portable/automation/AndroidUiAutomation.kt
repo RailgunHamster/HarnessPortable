@@ -195,12 +195,17 @@ internal object AndroidUiAutomation {
                 c[SemanticsActions.SetProgress].action?.invoke(it.toFloat())
             }
             "ime" -> c[SemanticsActions.OnImeAction].action?.invoke()
-            "edit" -> when (args.requiredString("value")) {
-                "copy" -> c.getOrNull(SemanticsActions.CopyText)?.action?.invoke()
-                "cut" -> c.getOrNull(SemanticsActions.CutText)?.action?.invoke()
-                "paste" -> c.getOrNull(SemanticsActions.PasteText)?.action?.invoke()
-                "selectAll" -> c.getOrNull(SemanticsActions.SetSelection)?.action?.invoke(0, c.getOrNull(SemanticsProperties.EditableText)?.length ?: 0, true)
-                else -> fail("invalid_argument", "Unsupported edit action")
+            "edit" -> {
+                val edited = when (args.requiredString("value")) {
+                    "copy" -> c.getOrNull(SemanticsActions.CopyText)?.action?.invoke()
+                    "cut" -> c.getOrNull(SemanticsActions.CutText)?.action?.invoke()
+                    "paste" -> c.getOrNull(SemanticsActions.PasteText)?.action?.invoke()
+                    "selectAll" -> c.getOrNull(SemanticsActions.SetSelection)?.action?.invoke(0, c.getOrNull(SemanticsProperties.EditableText)?.length ?: 0, true)
+                    else -> fail("invalid_argument", "Unsupported edit action")
+                }
+                // The next command must observe the updated selection/value, including
+                // consecutive select-all/cut/paste on a write-only input.
+                frame(); frame(); edited
             }
             else -> false
         }
