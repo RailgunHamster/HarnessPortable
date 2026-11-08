@@ -77,7 +77,6 @@ jobs:
               test -s "artifacts/android-sync/$mode/$name.png" || verification_failed=1
             done
           done
-          adb -s emulator-5554 emu kill
           test "$verification_failed" = 0
       - uses: actions/upload-artifact@v7
         if: always()
