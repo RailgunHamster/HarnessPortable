@@ -66,7 +66,10 @@ final class ConfigurationSyncTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true); defer { try? FileManager.default.removeItem(at: root) }
         let profiles = ProfileStore(path: root.appendingPathComponent("profiles.json")); let settings = SettingsStore(path: root.appendingPathComponent("settings.json")); let vault = KeychainStore()
         let id = "fixture-" + UUID().uuidString; let p = TunnelProfile(id: id, name: "测试", sshHost: "fixture.invalid", user: "fixture", identityFile: "/private/fixture-key")
-        try profiles.replaceForSync(ProfileConfig(tunnels: [p])); try vault.setPassword("local-ssh-secret", for: id); defer { vault.deletePassword(for: id) }
+        let direct = "https://fixture.invalid/console"
+        try profiles.replaceForSync(ProfileConfig(tunnels: [p], directs: [direct])); try vault.setPassword("local-ssh-secret", for: id); defer { vault.deletePassword(for: id) }
+        let ordered = ["direct:" + direct, "tunnel:" + id]
+        settings.update { $0.connectionOrder = ordered }
         let sync = ConfigurationSync(profiles: profiles, settings: settings, keychain: vault, directory: root, secretPrefix: "#sync-test-\(UUID().uuidString):")
         let options = WebDavOptions(url: cloud.url, username: "fixture", allowHttp: true)
         try sync.configure(options, password: "dav-secret"); defer { try? sync.configure(options, clearPassword: true) }
@@ -74,6 +77,20 @@ final class ConfigurationSyncTests: XCTestCase {
         XCTAssertEqual(vault.password(for: id), "local-ssh-secret"); XCTAssertEqual(profiles.tunnels.first?.identityFile, "/private/fixture-key")
         let body = String(data: cloud.document()!, encoding: .utf8)!
         for secret in ["local-ssh-secret", "dav-secret", "identityFile", "/private/"] { XCTAssertFalse(body.contains(secret)) }
+        XCTAssertEqual(SettingsStore(path: root.appendingPathComponent("settings.json")).value.connectionOrder, ordered)
+        let client = WebDavConfigurationClient(); client.begin()
+        let remote = try await client.read(options, password: "dav-secret")
+        var document = remote.document; var entries = SharedConfiguration.entries(document)
+        for (rank, key) in ordered.enumerated() {
+            let entry = try XCTUnwrap(entries[key] as? [String: Any]); XCTAssertEqual(entry["rank"] as? Int, rank)
+            var moved = entry; moved["rank"] = ordered.count - 1 - rank; entries[key] = moved
+        }
+        document["entries"] = entries
+        let written = try await client.write(options, password: "dav-secret", document: document, etag: remote.etag, missing: false)
+        XCTAssertTrue(written)
+        await sync.run(); XCTAssertEqual(sync.phase, "success", sync.message)
+        XCTAssertEqual(SettingsStore(path: root.appendingPathComponent("settings.json")).value.connectionOrder, Array(ordered.reversed()))
+        XCTAssertEqual(vault.password(for: id), "local-ssh-secret")
     }
     func testCancellationInterruptsAnActualPendingReadWithoutReplacingLocalLibrary() async throws {
         let cloud = try await SyncLoopback.start(); cloud.holdReads = true; defer { cloud.close() }

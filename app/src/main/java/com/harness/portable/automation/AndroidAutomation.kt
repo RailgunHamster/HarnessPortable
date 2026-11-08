@@ -202,7 +202,10 @@ object AndroidAutomation {
         val items = JSONArray()
         ProfileStore.loadTunnels(context).forEach { p -> items.put(JSONObject().put("key", "tunnel:" + p.id).put("id", p.id).put("name", p.name).put("sshHost", p.sshHost).put("sshPort", p.sshPort).put("user", p.user).put("remoteHost", p.remoteHost).put("remotePort", p.remotePort).put("localPort", p.localPort).put("authMode", p.authMode).put("hasPassword", SecureStore.hasPassword(context, p.id)).put("hasAuthInput", SecureStore.hasAuthInput(context, p.id))) }
         ProfileStore.loadDirect(context).forEach { url -> items.put(JSONObject().put("key", directKey(url)).put("url", publicUrl(url)).put("kind", "direct")) }
-        return items
+        val byKey = (0 until items.length()).map { items.getJSONObject(it) }.associateBy { it.getString("key") }
+        return JSONArray(com.harness.portable.ConnectionOrdering.load(context).mapIndexedNotNull { index, key ->
+            byKey[dataKey(key)]?.put("order", index)
+        })
     }
     fun directKey(url: String) = "direct:" + MessageDigest.getInstance("SHA-256").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }
     fun dataKey(key: String) = if (key.startsWith("direct:")) directKey(key.removePrefix("direct:")) else key

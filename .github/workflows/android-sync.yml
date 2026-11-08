@@ -2,9 +2,9 @@ name: Android native API, settings and WebDAV sync
 
 on:
   push:
-    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'spec/android-ui-api-gestures.json', 'scripts/*HarnessAndroidApi.ps1', 'scripts/test-fixtures/config-sync/**', 'scripts/test-fixtures/android-automation/**', '.github/workflows/android-sync.yml']
+    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'spec/android-ui-api-gestures.json', 'scripts/*HarnessAndroidApi.ps1', 'scripts/test-fixtures/config-sync/**', 'scripts/test-fixtures/android-automation/**', 'scripts/test-fixtures/ssh-*.py', '.github/workflows/android-sync.yml']
   pull_request:
-    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'spec/android-ui-api-gestures.json', 'scripts/*HarnessAndroidApi.ps1', 'scripts/test-fixtures/config-sync/**', 'scripts/test-fixtures/android-automation/**', '.github/workflows/android-sync.yml']
+    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'spec/android-ui-api-gestures.json', 'scripts/*HarnessAndroidApi.ps1', 'scripts/test-fixtures/config-sync/**', 'scripts/test-fixtures/android-automation/**', 'scripts/test-fixtures/ssh-*.py', '.github/workflows/android-sync.yml']
   workflow_dispatch:
 
 permissions:
@@ -62,6 +62,21 @@ jobs:
           adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
           adb -s emulator-5554 install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           verification_failed=0
+          python3 -m venv "$RUNNER_TEMP/ssh-fixtures"
+          "$RUNNER_TEMP/ssh-fixtures/bin/pip" install 'paramiko==3.5.1'
+          "$RUNNER_TEMP/ssh-fixtures/bin/python" -u scripts/test-fixtures/ssh-authentication-server.py > artifacts/android-sync/ssh-auth-server.log 2>&1 &
+          "$RUNNER_TEMP/ssh-fixtures/bin/python" -u scripts/test-fixtures/ssh-hostkey-server.py > artifacts/android-sync/ssh-hostkey-server.log 2>&1 &
+          for i in $(seq 1 50); do
+            if grep -Fq 'Authentication fixture ready' artifacts/android-sync/ssh-auth-server.log && grep -Fq 'Host-key fixture ready' artifacts/android-sync/ssh-hostkey-server.log; then break; fi
+            sleep .2
+          done
+          grep -F 'Authentication fixture ready' artifacts/android-sync/ssh-auth-server.log
+          grep -F 'Host-key fixture ready' artifacts/android-sync/ssh-hostkey-server.log
+          for port in 22221 22222 22223; do adb -s emulator-5554 reverse tcp:$port tcp:$port; done
+          timeout 150 adb -s emulator-5554 shell am instrument -w -e class com.harness.portable.SshAuthenticationTests -e ssh_auth_fixture 22223 com.harness.portable.syncqa.test/androidx.test.runner.AndroidJUnitRunner | tee artifacts/android-sync/ssh-auth.log || verification_failed=1
+          grep -F 'OK (7 tests)' artifacts/android-sync/ssh-auth.log || verification_failed=1
+          timeout 150 adb -s emulator-5554 shell am instrument -w -e class com.harness.portable.SshHostKeyTests -e ssh_fixture 22221 -e ssh_changed_fixture 22222 com.harness.portable.syncqa.test/androidx.test.runner.AndroidJUnitRunner | tee artifacts/android-sync/ssh-hostkey.log || verification_failed=1
+          grep -F 'OK (4 tests)' artifacts/android-sync/ssh-hostkey.log || verification_failed=1
           timeout 150 adb -s emulator-5554 shell am instrument -w -e class com.harness.portable.ConfigurationSyncNativeTests com.harness.portable.syncqa.test/androidx.test.runner.AndroidJUnitRunner | tee artifacts/android-sync/native.log || verification_failed=1
           grep -F 'OK (4 tests)' artifacts/android-sync/native.log || verification_failed=1
           for mode in normal small; do
@@ -72,8 +87,10 @@ jobs:
             fi
             timeout 120 adb -s emulator-5554 shell am instrument -w -e class com.harness.portable.SettingsTabsNativeTests com.harness.portable.syncqa.test/androidx.test.runner.AndroidJUnitRunner | tee "artifacts/android-sync/tabs-$mode.log" || verification_failed=1
             grep -F 'OK (1 test)' "artifacts/android-sync/tabs-$mode.log" || verification_failed=1
+            timeout 120 adb -s emulator-5554 shell am instrument -w -e class com.harness.portable.LibraryOrderNativeTests com.harness.portable.syncqa.test/androidx.test.runner.AndroidJUnitRunner | tee "artifacts/android-sync/order-$mode.log" || verification_failed=1
+            grep -F 'OK (1 test)' "artifacts/android-sync/order-$mode.log" || verification_failed=1
             mkdir -p "artifacts/android-sync/$mode"
-            for name in general-light security sync-light updates sync-dark; do
+            for name in general-light security sync-light updates sync-dark order-light order-dark; do
               adb -s emulator-5554 exec-out run-as com.harness.portable.syncqa cat "files/qa-shots/$name.png" > "artifacts/android-sync/$mode/$name.png" || verification_failed=1
               test -s "artifacts/android-sync/$mode/$name.png" || verification_failed=1
             done

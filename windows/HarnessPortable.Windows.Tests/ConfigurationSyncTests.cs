@@ -70,6 +70,19 @@ public sealed class ConfigurationSyncTests : IDisposable
         foreach (var secret in new[] { "local-ssh-secret", "local-web-secret", "dav-secret", "identityFile", "C:/private" }) Assert.DoesNotContain(secret, cloud.Document!);
         Assert.Contains(cloud.Requests, q => q.Method == "PUT" && q.Headers.GetValueOrDefault("If-None-Match") == "*");
         Assert.Contains(cloud.Requests, q => q.Method == "PUT" && q.Headers.ContainsKey("If-Match"));
+        a.Profiles.SaveDirects(["https://fixture.invalid/console"]);
+        var ordered = new[] { "direct:https://fixture.invalid/console", "tunnel:qa-2", "tunnel:qa-1" };
+        var preferences = a.Settings.Load(); preferences.ConnectionOrder = [.. ordered]; a.Settings.Save(preferences);
+        await a.Sync.RunAsync(); await b.Sync.RunAsync();
+        Assert.Equal("success", b.Sync.Phase);
+        Assert.Equal(ordered, Device("b").Settings.Load().ConnectionOrder);
+        Assert.Equal(ordered, new ConnectionLibrary(b.Profiles, b.Settings).Load().Select(entry => entry.Key));
+        preferences = b.Settings.Load(); preferences.ConnectionOrder.Reverse(); b.Settings.Save(preferences);
+        await b.Sync.RunAsync(); await a.Sync.RunAsync();
+        Assert.Equal(ordered.Reverse(), Device("a").Settings.Load().ConnectionOrder);
+        foreach (var (key, rank) in ordered.Reverse().Select((key, rank) => (key, rank)))
+            Assert.Equal(rank, JsonNode.Parse(cloud.Document!)!["entries"]![key]!["rank"]!.GetValue<int>());
+        Assert.Equal("local-ssh-secret", a.Secrets.GetPassword("qa-1")); Assert.False(b.Secrets.HasPassword("qa-1"));
     }
     [Fact] public async Task ConcurrentConflictIsVisibleAndRemoteChoiceDoesNotLoseIndependentEntries()
     {

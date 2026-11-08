@@ -218,7 +218,7 @@ fun AppRoot() {
                 "direct_urls" -> { directs.clear(); directs.addAll(ProfileStore.loadDirect(ctx)) }
                 KEY_ORIENTATION -> orientation = OrientationMode.fromStorage(prefs.getString(KEY_ORIENTATION, null))
             }
-            if (key in setOf("tunnels", "direct_urls", KEY_ORIENTATION, UiPreferences.FAVORITES, UiPreferences.APPEARANCE, UiPreferences.FULLSCREEN) && !configSync.state.value.busy) syncChange++
+            if (key in setOf("tunnels", "direct_urls", KEY_ORIENTATION, UiPreferences.FAVORITES, UiPreferences.APPEARANCE, UiPreferences.FULLSCREEN, ConnectionOrdering.PREFERENCE) && !configSync.state.value.busy) syncChange++
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }

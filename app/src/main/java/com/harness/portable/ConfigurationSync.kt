@@ -96,9 +96,7 @@ internal class ConfigurationSync private constructor(private val ctx: Context) {
         for (key in prior.keys()) if (key.startsWith("windows:") || key.startsWith("macos:")) entries.put(key, prior.get(key))
         val favorites = prefs.getStringSet(UiPreferences.FAVORITES, emptySet())!!.toSet()
         val tunnels = ProfileStore.loadTunnels(ctx); val directs = ProfileStore.loadDirect(ctx)
-        val savedOrder = JSONArray(prefs.getString("sync_connection_order", "[]"))
-        val keys = tunnels.map { "tunnel:${it.id}" } + directs.map { "direct:$it" }
-        val order = ((0 until savedOrder.length()).map { savedOrder.getString(it) }.filter { it in keys } + keys).distinct()
+        val order = ConnectionOrdering.load(ctx)
         fun metadata(item: JSONObject, key: String, sharedKey: String) {
             val old = prior.optJSONObject(sharedKey)
             item.put("favorite", key in favorites).put("group", old?.optString("group") ?: "").put("label", old?.optString("label") ?: "").put("rank", order.indexOf(key))
@@ -147,7 +145,7 @@ internal class ConfigurationSync private constructor(private val ctx: Context) {
         val tunnelsJson = JSONArray()
         for (p in next) tunnelsJson.put(JSONObject().put("id", p.id).put("name", p.name).put("host", p.sshHost).put("port", p.sshPort).put("user", p.user).put("remote_host", p.remoteHost).put("remote_port", p.remotePort).put("local_port", p.localPort).put("auth_mode", p.authMode).put("identity_file", p.identityFile).put("systemd_unit", p.systemdUnit).put("systemd_scope", p.systemdScope).put("systemd_log_path", p.systemdLogPath))
         val edit = prefs.edit().putString("tunnels", tunnelsJson.toString()).putString("direct_urls", JSONArray(directs).toString()).putStringSet(UiPreferences.FAVORITES, favorites)
-            .putString("sync_connection_order", JSONArray(order).toString()).putString("sync_base", document.toString()).putLong("sync_last_success", System.currentTimeMillis()).putBoolean("seeded_v1", true)
+            .putString(ConnectionOrdering.PREFERENCE, JSONArray(order).toString()).putString("sync_base", document.toString()).putLong("sync_last_success", System.currentTimeMillis()).putBoolean("seeded_v1", true)
         if (entries.has("shared:appearance")) edit.putString(UiPreferences.APPEARANCE, entries.getString("shared:appearance"))
         if (entries.has("android:browserFullscreen")) edit.putBoolean(UiPreferences.FULLSCREEN, entries.getBoolean("android:browserFullscreen"))
         if (entries.has("android:orientation")) edit.putString("orientation", entries.getString("android:orientation"))

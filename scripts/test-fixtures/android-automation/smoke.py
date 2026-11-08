@@ -142,11 +142,12 @@ try:
     call('sync.test'); call('sync.run'); assert call('sync.status')['phase']=='success'
     assert Cloud.body and b'If-Match' not in Cloud.body
     for secret in secret_values: assert secret.encode() not in Cloud.body
-    before=call('library.list'); Cloud.body=b'<html>invalid document</html>'; call('sync.run')
+    valid_cloud=Cloud.body; before=call('library.list'); Cloud.body=b'<html>invalid document</html>'; call('sync.run')
     assert call('sync.status')['phase']=='failed' and call('library.list')==before
     Cloud.hold=True; Cloud.entered.clear(); pending=call('sync.run',wait=False)
     assert Cloud.entered.wait(5); call('sync.cancel'); until(lambda:not call('sync.status')['busy']); Cloud.hold=False; Cloud.release.set()
-    assert call('sync.status')['phase']=='cancelled'; checks.append('real conditional WebDAV requests, write-only saved credentials, corrupt-cloud protection, and cancellation')
+    assert call('sync.status')['phase']=='cancelled'; Cloud.body=valid_cloud; Cloud.revision+=1
+    checks.append('real conditional WebDAV requests, write-only saved credentials, corrupt-cloud protection, and cancellation')
 
     call('settings.tab',{'value':'security'}); until(lambda:find('Settings.Export')); inspect(); act('Settings.Export')
     dialog=until(lambda:call('dialogs.get') if call('dialogs.get').get('kind')=='create' else None)
@@ -161,6 +162,23 @@ try:
     act('DirectEditor.Address','setValue',value=url); until(lambda:find('DirectEditor.Address.Menu')); inspect(); act('DirectEditor.Address.Menu','dismiss')
     inspect(); act('DirectEditor.Save'); until(lambda:len(call('library.list'))==2)
     direct=next(v for v in call('library.list') if v.get('kind')=='direct'); assert 'token' not in direct['url']
+    original=[v['key'] for v in call('library.list')]; desired=original[::-1]
+    call('library.order.open'); until(lambda:find('Library.Order.Save')); inspect()
+    act('Library.Order.Down',key=original[0]); act('Library.Order.Cancel')
+    assert [v['key'] for v in call('library.list')]==original
+    act('Library.Order'); act('Library.Order.Down',key=original[0]); inspect(); act('Library.Order.Save')
+    until(lambda:[v['key'] for v in call('library.list')]==desired)
+    assert [v['order'] for v in call('library.list')]==[0,1]
+    call('sync.run'); assert call('sync.status')['phase']=='success'
+    entries=json.loads(Cloud.body)['entries']
+    assert entries[f'direct:http://127.0.0.1:{http_port}/fixture']['rank']==0 and entries[ssh['key']]['rank']==1
+    assert all(secret.encode() not in Cloud.body for secret in secret_values)
+    rejected=call('library.reorder',{'keys':[original[0],original[0]]},wait=False)
+    failure=until(lambda:(j if (j:=call('operations.get',{'operationId':rejected['operationId']}))['state']=='failed' else None))
+    assert failure['error']['code']=='invalid_argument' and [v['key'] for v in call('library.list')]==desired
+    call('library.reorder',{'keys':original}); until(lambda:[v['key'] for v in call('library.list')]==original)
+    assert next(v for v in call('library.list') if v['key']==ssh['key'])['hasPassword']
+    checks.append('mixed library ordering through actual UI and API, cancel, validation, persistence, and WebDAV ranks without credentials')
     call('config.export'); export_dialog=until(lambda:call('dialogs.get') if call('dialogs.get').get('kind')=='create' else None)
     call('dialogs.choose',{'id':export_dialog['id']})
     until(lambda:len([f for f in call('files.list') if f['size']>0])==2)

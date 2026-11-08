@@ -34,6 +34,7 @@ $endpoint = $session.EndpointFile
 | `ui.tree/find/actions/act` | 原生控件快照、选择、动作目录及语义操作 |
 | `app.state/back/show/exit/settings/connections/orientation` | 导航、返回、方向及窗口生命周期 |
 | `library.list/create/edit/delete/favorite/open` | 链接库操作；删除和切换保留正常确认流程 |
+| `library.order.open/reorder` | 打开排序界面，或用完整 `keys` 数组保存 SSH / 直连混合顺序 |
 | `connections.stopAll` | 通过正常应用操作断开连接 |
 | `network.status/resolve` | 当前网络与 DNS、主机名解析；不修改连接配置 |
 | `sync.status/configure/test/run/cancel` | WebDAV 设置、检测、同步及取消 |
@@ -44,6 +45,8 @@ $endpoint = $session.EndpointFile
 | `dialogs.get/choose`、`files.put/get/list` | 自动化文件选择与会话暂存文件 |
 
 ## 控件与敏感信息
+
+`library.list` 按保存的顺序返回，并为每项提供从 0 开始的 `order`。`library.reorder` 的 `keys` 使用 `library.list` 返回的公开键，必须恰好包含每个当前连接一次；遗漏、重复、未知键均拒绝。界面的上移、下移仅修改草稿，保存和 API 调用共用持久化操作，并触发已启用的 WebDAV 自动同步。
 
 `ui.find` 的 `selector` 支持 `automationId`、`dataKey`、临时 `id`、非敏感 `name` 及 `includeHidden`。`ui.act` 使用相同的 `target` 选择器。重复列表项共享稳定 ID，以 `dataKey` 区分；匹配多项返回 `ambiguous`。隐藏、禁用或被模态弹窗阻挡的控件不能操作。未创建的懒加载项需先滚动或 `realize`。
 
@@ -71,3 +74,5 @@ Compose 确认框和菜单可通过 `ui.act` 操作或 `app.back` 返回。文�
 `scripts/test-fixtures/android-automation/coverage.py` 检查交互控件自己的稳定 ID、新控件类型和手势映射。原生 `AndroidAutomationNativeTests` 用真实 TCP 请求验证文本/选择/IME、切换/范围/长按/展开、模态与可见性、懒加载及会话认证。跨进程 `smoke.py` 驱动完整应用、回环 WebDAV 和网页文件选择，拒绝出现没有稳定 ID 的交互节点或未屏蔽的测试凭据。
 
 测试只允许独立模拟器中的 `.syncqa` 包，使用全新配置和回环服务。构建沿用 `scripts/test-fixtures/config-sync/android-qa.init.gradle`；CI 同时保留同步、密钥存储和大小屏设置布局测试，不使用真实服务器账号，也不安装到使用者的正式应用。
+
+Android CI 另运行 `SshAuthenticationTests` 与 `SshHostKeyTests`：回环 SSH 夹具验证密码和交互认证回退、OTP 拒绝、历史主机密钥迁移、真正的密钥变更拒绝，以及实际端口转发。`LibraryOrderNativeTests` 在普通和小屏大字体环境验证保存、取消、滚动及重建后的顺序，并输出浅色和深色截图。

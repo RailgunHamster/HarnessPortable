@@ -70,6 +70,19 @@ class ConfigurationSyncNativeTests {
             assertEquals(2, ProfileStore.loadTunnels(a).size); assertEquals(2, ProfileStore.loadTunnels(b).size)
             assertEquals("native-ssh-secret", SecureStore.getPassword(a, first.id)); assertFalse(SecureStore.hasPassword(b, first.id))
             assertEquals("/private/fixture-key", ProfileStore.findTunnel(a, first.id)!!.identityFile); assertEquals("", ProfileStore.findTunnel(b, first.id)!!.identityFile)
+            ProfileStore.saveDirect(a, listOf("https://fixture.invalid/console"))
+            val desired = listOf("direct:https://fixture.invalid/console", "tunnel:qa-2", "tunnel:qa-1")
+            ConnectionOrdering.save(a, desired)
+            sa.run(); assertEquals(sa.state.value.message, "success", sa.state.value.phase)
+            sb.run(); assertEquals(sb.state.value.message, "success", sb.state.value.phase)
+            assertEquals(desired, ConnectionOrdering.load(b))
+            val reversed = desired.reversed(); ConnectionOrdering.save(b, reversed)
+            sb.run(); sa.run()
+            assertEquals(reversed, ConnectionOrdering.load(a)); assertEquals(reversed, ConnectionOrdering.load(b))
+            // A new adapter instance reads the persisted order and the cloud ranks agree.
+            ConfigurationSync.isolated(a).run(); assertEquals(reversed, ConnectionOrdering.load(a))
+            reversed.forEachIndexed { index, key -> assertEquals(index, SharedConfiguration.entries(JSONObject(cloud.document!!)).getJSONObject(key).getInt("rank")) }
+            assertEquals("native-ssh-secret", SecureStore.getPassword(a, first.id)); assertFalse(SecureStore.hasPassword(b, first.id))
             for (secret in listOf("native-ssh-secret", "native-web-secret", "native-dav-secret", "identityFile", "/private/")) assertFalse(cloud.document!!.contains(secret))
         } } } finally { cleanA(); cleanB() }
     }

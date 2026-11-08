@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -63,6 +64,7 @@ fun SettingsScreen(
     var editorFor by remember { mutableStateOf<TunnelProfile?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var showAddMenu by remember { mutableStateOf(false) }
+    var showOrderDialog by remember { mutableStateOf(false) }
     var showDirectEditor by remember { mutableStateOf(false) }
     var directFor by remember { mutableStateOf<String?>(null) }
     var directInput by remember { mutableStateOf("") }
@@ -91,18 +93,30 @@ fun SettingsScreen(
     val settingsScrollStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     val settingsScroll = settingsScrollStates[settingsTab]
     fun syncedMetadata() = runCatching { JSONObject(prefs.getString("sync_base", "{}")!!).optJSONObject("entries") ?: JSONObject() }.getOrElse { JSONObject() }
-    fun syncedOrder() = runCatching { JSONArray(prefs.getString("sync_connection_order", "[]")) }.getOrElse { JSONArray() }
+    fun syncedOrder() = runCatching { JSONArray(prefs.getString(ConnectionOrdering.PREFERENCE, "[]")) }.getOrElse { JSONArray() }
     var libraryMetadata by remember { mutableStateOf(syncedMetadata()) }
     var libraryOrder by remember { mutableStateOf(syncedOrder()) }
     DisposableEffect(prefs) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == UiPreferences.FAVORITES) favorites = prefs.getStringSet(UiPreferences.FAVORITES, emptySet()).orEmpty().toSet()
             if (key == "sync_base") libraryMetadata = syncedMetadata()
-            if (key == "sync_connection_order") libraryOrder = syncedOrder()
+            if (key == ConnectionOrdering.PREFERENCE) libraryOrder = syncedOrder()
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
+
+    val orderIndex = (0 until libraryOrder.length()).associate { libraryOrder.getString(it) to it }
+    val entries = (tunnels.map { p ->
+        val meta = libraryMetadata.optJSONObject("tunnel:" + p.id)
+        val label = meta?.optString("label").orEmpty().takeIf { meta?.optString("name") == p.name }.orEmpty()
+        PhoneConnection("tunnel:" + p.id, label.ifBlank { p.name.ifBlank { p.sshHost } }, "${p.user}@${p.sshHost}:${p.sshPort}", profile = p, group = meta?.optString("group").orEmpty())
+    } + directs.map { url ->
+        val meta = libraryMetadata.optJSONObject("direct:" + runCatching { SharedConfiguration.portableUrl(url) }.getOrDefault(url))
+        PhoneConnection("direct:" + url, meta?.optString("label").orEmpty().ifBlank { hostOf(url) }, url, url = url, group = meta?.optString("group").orEmpty())
+    }).sortedWith(compareBy<PhoneConnection> { orderIndex[it.key] ?: Int.MAX_VALUE }.thenByDescending { it.key in favorites })
+    fun openOrdering() { onManageConnections(); showOrderDialog = true }
+    fun saveOrder(keys: List<String>) { ConnectionOrdering.save(ctx, keys) }
 
     fun typedSources() = draftSources.withUrl(draftSources.selected, updateUrl.trim())
     fun selectSource(kind: UpdateSourceKind) {
@@ -196,6 +210,17 @@ fun SettingsScreen(
         AndroidOperation("library.edit", "Edit an existing connection through its normal dialog", setOf("key")) { editEntry(entryFor(it.requiredString("key"))); true },
         AndroidOperation("library.delete", "Ask for confirmation before deleting a connection", setOf("key")) { askDelete(entryFor(it.requiredString("key"))); true },
         AndroidOperation("library.favorite", "Set the saved favorite state", setOf("key", "value")) { val entry = entryFor(it.requiredString("key")); setFavorite(entry.key, it.requiredBoolean("value")); true },
+        AndroidOperation("library.order.open", "Open the connection-order editor") { openOrdering(); true },
+        AndroidOperation("library.reorder", "Persist the complete SSH/direct library order for WebDAV sync", setOf("keys")) { args ->
+            val requested = args.optJSONArray("keys") ?: fail("invalid_argument", "keys must be an array")
+            val mapping = entries.associateBy { AndroidAutomation.dataKey(it.key) }
+            val keys = (0 until requested.length()).map { index ->
+                val key = requested.opt(index) as? String ?: fail("invalid_argument", "Each key must be a string")
+                mapping[key]?.key ?: fail("invalid_argument", "Connection is unavailable")
+            }
+            if (keys.size != entries.size || keys.distinct().size != keys.size) fail("invalid_argument", "Provide each current connection exactly once")
+            saveOrder(keys); true
+        },
         AndroidOperation("settings.tab", "Select a settings category", setOf("value")) { args ->
             settingsTab = listOf("general", "security", "sync", "about").indexOf(args.requiredString("value")).takeIf { it >= 0 } ?: fail("invalid_argument", "Unknown settings category")
             onOpenSettings(); true
@@ -215,7 +240,10 @@ fun SettingsScreen(
                     Text(if (settingsOnly) "设置" else "Harness Portable", style = MaterialTheme.typography.titleLarge, color = dsh.textPrimary)
                     Text(if (settingsOnly) "外观、同步与更新" else "连接", style = MaterialTheme.typography.bodySmall, color = dsh.textSecondary)
                 }
-                if (!settingsOnly) IconButton(onClick = onOpenSettings, modifier = Modifier.automationId("Library.Settings")) { Icon(Icons.Filled.Settings, "设置", tint = dsh.textPrimary) }
+                if (!settingsOnly) {
+                    IconButton(onClick = { openOrdering() }, enabled = entries.size > 1, modifier = Modifier.automationId("Library.Order")) { Icon(Icons.AutoMirrored.Filled.Sort, "调整连接顺序", tint = dsh.textPrimary) }
+                    IconButton(onClick = onOpenSettings, modifier = Modifier.automationId("Library.Settings")) { Icon(Icons.Filled.Settings, "设置", tint = dsh.textPrimary) }
+                }
             }
             if (settingsOnly) ScrollableTabRow(selectedTabIndex = settingsTab, edgePadding = 16.dp, containerColor = dsh.layer1, contentColor = dsh.accent, modifier = Modifier.automationId("Settings.Categories").automationScrollOwner()) {
                 listOf("通用", "数据与安全", "WebDAV 同步", "更新与关于").forEachIndexed { index, label ->
@@ -239,15 +267,6 @@ fun SettingsScreen(
                         }
                     }
                     item("heading") { HubHeading("我的连接") }
-                    val orderIndex = (0 until libraryOrder.length()).associate { libraryOrder.getString(it) to it }
-                    val entries = (tunnels.map { p ->
-                        val meta = libraryMetadata.optJSONObject("tunnel:" + p.id)
-                        val label = meta?.optString("label").orEmpty().takeIf { meta?.optString("name") == p.name }.orEmpty()
-                        PhoneConnection("tunnel:" + p.id, label.ifBlank { p.name.ifBlank { p.sshHost } }, "${p.user}@${p.sshHost}:${p.sshPort}", profile = p, group = meta?.optString("group").orEmpty())
-                    } + directs.map { url ->
-                        val meta = libraryMetadata.optJSONObject("direct:" + runCatching { SharedConfiguration.portableUrl(url) }.getOrDefault(url))
-                        PhoneConnection("direct:" + url, meta?.optString("label").orEmpty().ifBlank { hostOf(url) }, url, url = url, group = meta?.optString("group").orEmpty())
-                    }).sortedWith(compareBy<PhoneConnection> { orderIndex[it.key] ?: Int.MAX_VALUE }.thenByDescending { it.key in favorites })
                     if (entries.isEmpty()) item("empty") {
                         ShellEmptyState(icon = Icons.Filled.Dns, title = "添加第一个连接", message = "通过 SSH 隧道或直连地址打开服务网页。", actionLabel = "添加连接", onAction = { showAddMenu = true }, actionId = "Library.Empty.Add")
                     }
@@ -366,6 +385,11 @@ fun SettingsScreen(
                 if (connectAfterSave) onSaveAndConnectTunnel(profile)
             }, onConnectAfterSaveChanged = { connectAfterSave = it })
     }
+    if (showOrderDialog) LibraryOrderDialog(
+        entries.map { LibraryOrderItem(it.key, it.name, if (it.profile == null) "直连网页" else "SSH 隧道") },
+        onDismiss = { showOrderDialog = false },
+        onSave = { keys -> runCatching { saveOrder(keys) }.exceptionOrNull()?.message }
+    )
     if (showDirectEditor) AutomationAlertDialog(onDismissRequest = { showDirectEditor = false }, title = { Text(if (directFor == null) "添加直连网页" else "编辑直连网页") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             LanMachineField(value = directInput, onValueChange = { directInput = it; directError = null }, label = "IP、机器名或完整 URL", automationId = "DirectEditor.Address", placeholder = "server.example.test", modifier = Modifier.fillMaxWidth().automationSensitive())
