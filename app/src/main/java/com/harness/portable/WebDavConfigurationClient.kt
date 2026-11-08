@@ -19,6 +19,7 @@ internal class WebDavConfigurationClient {
     @Volatile private var cancelled = false
     fun begin() { cancelled = false }
     fun cancel() { cancelled = true; active?.cancel() }
+    fun isCancelled() = cancelled
     fun checkCancelled() { check(!cancelled) { "同步已取消；下次同步会重新检查云端。" } }
     companion object {
         fun folder(options: WebDavOptions): String {

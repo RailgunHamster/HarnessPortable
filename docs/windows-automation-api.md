@@ -77,6 +77,7 @@ $endpoint = $api.EndpointFile
 | 布局 | `workspace.layouts`、`workspace.layout.save/load/delete` |
 | 浏览器 | `browser.state/reload/authenticate/reconnect/disconnect/evaluate/capture/cdp` |
 | 更新 | `updates.check/apply` |
+| WebDAV 配置同步 | `sync.status/configure/test/run/cancel`，`sync.run` 的可选 `choice` 为 local / remote，仅处理已经展示且未过期的冲突 |
 | 托盘 | 从 `TrayIconService.Actions` 自动注册，例如 `tray.open/settings/update/exit` |
 
 应用状态提供当前窗格、标签、连接和更新状态。直接网页的连接 key 是 URL 的 SHA-256 标识；展示地址去掉凭据、查询和 fragment。不要自行拼接连接 key，使用 `library.list` 返回的值。

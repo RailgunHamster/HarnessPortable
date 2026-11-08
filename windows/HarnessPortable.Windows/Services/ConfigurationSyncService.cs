@@ -65,6 +65,7 @@ public sealed class ConfigurationSyncService
         if (!same) { state.Base = SharedConfiguration.Empty(); state.LastSuccess = null; }
         state.Options = options; JsonFile.Write(_statePath, state);
         Conflicts = []; _conflictLocal = null; Phase = "idle"; Message = "同步设置已保存 · 连接密码始终只保存在本机"; Changed?.Invoke();
+        if (options.AutoSync) { _debounce?.Stop(); _debounce?.Start(); }
     }
     public void Cancel() => _cancel?.Cancel();
     public async Task TestAsync() => await ExecuteAsync(async (state, password, token) =>
@@ -73,7 +74,7 @@ public sealed class ConfigurationSyncService
     {
         if (automatic)
         {
-            try { if (Busy || Phase == "conflict" || !Load().Options.AutoSync) return; }
+            try { if (Busy || Phase == "conflict" || !Load().Options.AutoSync || System.Windows.Application.Current?.Windows.OfType<System.Windows.Window>().Any(w => w.IsActive) != true) return; }
             catch { Phase = "failed"; Message = "本机同步记录损坏，未发起网络请求。"; Changed?.Invoke(); return; }
         }
         await ExecuteAsync(async (state, password, token) =>

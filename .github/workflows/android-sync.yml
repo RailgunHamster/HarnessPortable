@@ -1,0 +1,80 @@
+name: Android settings and WebDAV sync
+
+on:
+  push:
+    paths: ['app/**', 'spec/fixtures/**', 'scripts/test-fixtures/config-sync/**', '.github/workflows/android-sync.yml']
+  pull_request:
+    paths: ['app/**', 'spec/fixtures/**', 'scripts/test-fixtures/config-sync/**', '.github/workflows/android-sync.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepare the disposable Android SDK and KVM
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${JAVA_HOME_21_X64:-}" ]; then
+            echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+            echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          fi
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'system-images;android-34;google_apis;x86_64' 'emulator'
+      - name: Unit tests, lint, and isolated QA packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash gradlew --init-script scripts/test-fixtures/config-sync/android-qa.init.gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest --console=plain
+          python3 - <<'PY'
+          import json
+          data=json.load(open('app/build/outputs/apk/debug/output-metadata.json'))
+          assert data['applicationId']=='com.harness.portable.syncqa', data['applicationId']
+          PY
+      - name: Real Android Keystore, conditional WebDAV, and settings tabs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/android-sync
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --name HarnessSyncCI --package 'system-images;android-34;google_apis;x86_64' --device pixel_5
+          "$ANDROID_HOME/emulator/emulator" -avd HarnessSyncCI -port 5554 -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 3072 -cores 2 > artifacts/android-sync/emulator.log 2>&1 &
+          adb -s emulator-5554 wait-for-device
+          for i in $(seq 1 100); do
+            if [ "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
+            sleep 2
+          done
+          test "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = 1
+          adb -s emulator-5554 shell input keyevent 82
+          adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+          adb -s emulator-5554 install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          adb -s emulator-5554 shell am instrument -w -e class com.harness.portable.ConfigurationSyncNativeTests com.harness.portable.syncqa.test/androidx.test.runner.AndroidJUnitRunner | tee artifacts/android-sync/native.log
+          grep -F 'OK (4 tests)' artifacts/android-sync/native.log
+          for mode in normal small; do
+            if [ "$mode" = small ]; then
+              adb -s emulator-5554 shell wm size 720x1280
+              adb -s emulator-5554 shell wm density 360
+              adb -s emulator-5554 shell settings put system font_scale 1.3
+            fi
+            adb -s emulator-5554 shell am instrument -w -e class com.harness.portable.SettingsTabsNativeTests com.harness.portable.syncqa.test/androidx.test.runner.AndroidJUnitRunner | tee "artifacts/android-sync/tabs-$mode.log"
+            grep -F 'OK (1 test)' "artifacts/android-sync/tabs-$mode.log"
+            mkdir -p "artifacts/android-sync/$mode"
+            for name in general-light security sync-light updates sync-dark; do
+              adb -s emulator-5554 exec-out run-as com.harness.portable.syncqa cat "files/qa-shots/$name.png" > "artifacts/android-sync/$mode/$name.png"
+              test -s "artifacts/android-sync/$mode/$name.png"
+            done
+          done
+          adb -s emulator-5554 emu kill
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: android-sync-verification
+          path: |
+            artifacts/android-sync/**
+            app/build/test-results/testDebugUnitTest/**
+            app/build/reports/lint-results-debug.html

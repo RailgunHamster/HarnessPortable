@@ -35,7 +35,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private data class PhoneConnection(val key: String, val name: String, val address: String,
-    val profile: TunnelProfile? = null, val url: String? = null)
+    val profile: TunnelProfile? = null, val url: String? = null, val group: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -89,9 +89,15 @@ fun SettingsScreen(
     var settingsTab by rememberSaveable { mutableStateOf(0) }
     val settingsScrollStates = listOf(rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState())
     val settingsScroll = settingsScrollStates[settingsTab]
+    fun syncedMetadata() = runCatching { JSONObject(prefs.getString("sync_base", "{}")!!).optJSONObject("entries") ?: JSONObject() }.getOrElse { JSONObject() }
+    fun syncedOrder() = runCatching { JSONArray(prefs.getString("sync_connection_order", "[]")) }.getOrElse { JSONArray() }
+    var libraryMetadata by remember { mutableStateOf(syncedMetadata()) }
+    var libraryOrder by remember { mutableStateOf(syncedOrder()) }
     DisposableEffect(prefs) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == UiPreferences.FAVORITES) favorites = prefs.getStringSet(UiPreferences.FAVORITES, emptySet()).orEmpty().toSet()
+            if (key == "sync_base") libraryMetadata = syncedMetadata()
+            if (key == "sync_connection_order") libraryOrder = syncedOrder()
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
@@ -196,8 +202,15 @@ fun SettingsScreen(
                         }
                     }
                     item("heading") { HubHeading("我的连接") }
-                    val entries = (tunnels.map { PhoneConnection("tunnel:" + it.id, it.name.ifBlank { it.sshHost }, "${it.user}@${it.sshHost}:${it.sshPort}", profile = it) } +
-                        directs.map { PhoneConnection("direct:" + it, hostOf(it), it, url = it) }).sortedByDescending { it.key in favorites }
+                    val orderIndex = (0 until libraryOrder.length()).associate { libraryOrder.getString(it) to it }
+                    val entries = (tunnels.map { p ->
+                        val meta = libraryMetadata.optJSONObject("tunnel:" + p.id)
+                        val label = meta?.optString("label").orEmpty().takeIf { meta?.optString("name") == p.name }.orEmpty()
+                        PhoneConnection("tunnel:" + p.id, label.ifBlank { p.name.ifBlank { p.sshHost } }, "${p.user}@${p.sshHost}:${p.sshPort}", profile = p, group = meta?.optString("group").orEmpty())
+                    } + directs.map { url ->
+                        val meta = libraryMetadata.optJSONObject("direct:" + runCatching { SharedConfiguration.portableUrl(url) }.getOrDefault(url))
+                        PhoneConnection("direct:" + url, meta?.optString("label").orEmpty().ifBlank { hostOf(url) }, url, url = url, group = meta?.optString("group").orEmpty())
+                    }).sortedWith(compareBy<PhoneConnection> { orderIndex[it.key] ?: Int.MAX_VALUE }.thenByDescending { it.key in favorites })
                     if (entries.isEmpty()) item("empty") {
                         ShellEmptyState(icon = Icons.Filled.Dns, title = "添加第一个连接", message = "通过 SSH 隧道或直连地址打开服务网页。", actionLabel = "添加连接", onAction = { showAddMenu = true })
                     }
@@ -366,7 +379,7 @@ private fun PhoneConnectionRow(entry: PhoneConnection, favorite: Boolean, runnin
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = dsh.textPrimary)
-                Text((if (entry.profile == null) "直连" else "SSH") + (if (favorite) " · 常用" else "") + (if (running) " · 已连接" else ""), style = MaterialTheme.typography.bodySmall, color = if (running) dsh.success else dsh.textSecondary)
+                Text((if (entry.profile == null) "直连" else "SSH") + (if (favorite) " · 常用" else "") + (if (running) " · 已连接" else "") + (if (entry.group.isNotBlank()) " · ${entry.group}" else ""), style = MaterialTheme.typography.bodySmall, color = if (running) dsh.success else dsh.textSecondary)
                 Text(entry.address, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, color = dsh.textTertiary)
             }
         }

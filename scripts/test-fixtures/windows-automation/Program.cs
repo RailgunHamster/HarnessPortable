@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using HarnessPortable.Testing;
 
 if(args.Length!=2)throw new ArgumentException("Usage: Smoke <product-exe> <new-empty-output-directory>");
 var executable=Path.GetFullPath(args[0]); var output=Path.GetFullPath(args[1]);
@@ -24,6 +25,7 @@ start.Environment["HARNESS_PORTABLE_DATA_DIRECTORY"]=data;
 using var product=Process.Start(start)??throw new InvalidOperationException("Product did not start.");
 string pipeName="";
 var checks=new List<string>();
+await using var dav = new WebDavFixture();
 try
 {
     await Until(()=>Task.FromResult(File.Exists(endpoint)),"endpoint ready",30);
@@ -128,6 +130,42 @@ try
         catch (JsonException) { return Task.FromResult(false); }
     }, "export completed with valid JSON");
     Check(exportedJson!.Contains("127.0.0.1"),"file picker and export complete without native-dialog automation");
+    Check(names.Contains("sync.configure") && names.Contains("sync.run") && names.Contains("sync.cancel"), "WebDAV application operations are discoverable");
+    await Act("ConfigurationSync.Address", "setValue", new(){["value"]=dav.Url});
+    await Act("ConfigurationSync.Username", "setValue", new(){["value"]="fixture-dav"});
+    await Act("ConfigurationSync.Password", "setValue", new(){["value"]="fixture-dav-secret"});
+    Check(!(await Call("ui.tree")).ToJsonString().Contains("fixture-dav-secret"), "WebDAV password is write-only in real UI snapshots");
+    await Act("ConfigurationSync.AllowHttp", "setChecked", new(){["value"]=true});
+    await Act("ConfigurationSync.Save", "invoke");
+    Check((await Call("sync.status"))["hasPassword"]!.GetValue<bool>(), "WebDAV UI saves credentials through the shared application operation");
+    await Command("sync.test"); await Command("sync.run");
+    Check((await Call("sync.status"))["phase"]!.GetValue<string>()=="success" && dav.Document != null && !dav.Document.Contains("fixture-dav-secret"), "public sync API performs real conditional WebDAV requests without uploading credentials");
+    var remoteDoc=JsonNode.Parse(dav.Document!)!.AsObject();
+    var incomingUrl=$"http://127.0.0.1:{port}/synced";
+    remoteDoc["entries"]!["direct:"+incomingUrl]=new JsonObject{["url"]=incomingUrl,["favorite"]=true,["group"]="Synced group",["label"]="Synced connection",["rank"]=1};
+    dav.Document=remoteDoc.ToJsonString();
+    await Act("ConfigurationSync.Run", "invoke");
+    await Until(async()=>
+    {
+        File.WriteAllText(Path.Combine(output,"sync-wait.json"),(await Call("sync.status")).ToJsonString());
+        return (await Call("library.list")).AsArray().Any(n=>n!["name"]!.GetValue<string>()=="Synced connection");
+    },"WebDAV UI sync applied the imported connection",15);
+    var imported=(await Call("library.list")).AsArray().Single(n=>n!["name"]!.GetValue<string>()=="Synced connection")!;
+    Check(imported["favorite"]!.GetValue<bool>(), "WebDAV UI sync immediately updates the actual connection library and favorites");
+    var removeImported=await Call("library.delete",new(){["key"]=imported["key"]!.GetValue<string>()});
+    await Find("dialog.choice.yes");await Act("dialog.choice.yes","invoke");await Job(removeImported);
+    var localBefore=(await Call("library.list")).ToJsonString();var validCloud=dav.Document;
+    dav.Document="<html>invalid cloud document</html>";await Command("sync.run");
+    Check((await Call("sync.status"))["phase"]!.GetValue<string>()=="failed" && (await Call("library.list")).ToJsonString()==localBefore,"corrupt cloud data preserves the real local library");
+    dav.Document=validCloud;
+    await using(var pausedDav = new WebDavFixture { HangReads=true })
+    {
+        await Command("sync.configure",new(){["url"]=pausedDav.Url,["username"]="",["autoSync"]=false,["allowHttp"]=true,["clearPassword"]=true});
+        var syncing=await Call("sync.run");
+        await Until(async()=>(await Call("sync.status"))["busy"]!.GetValue<bool>(),"in-flight WebDAV request");
+        await Command("sync.cancel"); await Job(syncing);
+        Check((await Call("sync.status"))["phase"]!.GetValue<string>()=="cancelled" && (await Call("library.list")).ToJsonString()==localBefore,"public cancellation interrupts WebDAV without replacing local configuration");
+    }
     await Act("SettingsWindow.Categories","select",new(){["index"]=3});
     await Act("SettingsWindow.Expander","setExpanded",new(){["value"]=true});
     var sources=await Job(await Call("ui.act",new(){["target"]=new JsonObject{["automationId"]="SettingsWindow.SourceBox"},["action"]="items"}));

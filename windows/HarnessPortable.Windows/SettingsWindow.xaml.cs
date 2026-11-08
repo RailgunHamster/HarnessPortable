@@ -28,9 +28,19 @@ public partial class SettingsWindow : Window
         ResetDraft();
         ResetProxyDraft();
         VersionLabel.Text = $"Harness Portable · {services.Updates.CurrentVersion} · {services.Updates.DeploymentLabel}";
-        Loaded += (_, _) => { services.Updates.StateChanged += RefreshUpdates; RefreshUpdates(); };
-        Closed += (_, _) => services.Updates.StateChanged -= RefreshUpdates;
+        Loaded += (_, _) => { services.Updates.StateChanged += RefreshUpdates; services.Sync.Changed += RefreshSyncedPreferences; RefreshUpdates(); };
+        Closed += (_, _) => { services.Updates.StateChanged -= RefreshUpdates; services.Sync.Changed -= RefreshSyncedPreferences; };
         _loading = false;
+    }
+
+    private void RefreshSyncedPreferences()
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(RefreshSyncedPreferences); return; }
+        if (_services.Sync.Phase != "success") return;
+        var value = _services.Settings.Load(); var loading = _loading; _loading = true;
+        SelectTag(AppearanceBox, value.Appearance); SelectTag(CloseBox, value.CloseBehavior);
+        RestoreBox.IsChecked = value.RestoreLastLayoutOnStartup; ReconnectBox.IsChecked = value.ReconnectRestoredWorkspace;
+        _loading = loading;
     }
 
     private static void SelectTag(ComboBox box, string tag) => box.SelectedItem = box.Items.OfType<ComboBoxItem>()

@@ -30,14 +30,18 @@ internal class ConfigurationSync private constructor(private val ctx: Context) {
         return WebDavOptions(o.optString("url"), o.optString("username"), o.optBoolean("autoSync"), o.optBoolean("allowHttp"))
     }
     private fun base(): JSONObject = JSONObject(prefs.getString("sync_base", null) ?: SharedConfiguration.empty().toString()).also(SharedConfiguration::validate)
-    private fun refresh() { mutableState.value = mutableState.value.copy(options = options(), hasPassword = SecureStore.hasPassword(ctx, secret(options())), lastSuccess = prefs.getLong("sync_last_success", 0)) }
+    private fun refresh() {
+        runCatching { val value = options(); mutableState.value = mutableState.value.copy(options = value, hasPassword = SecureStore.hasPassword(ctx, secret(value)), lastSuccess = prefs.getLong("sync_last_success", 0)) }
+            .onFailure { mutableState.value = mutableState.value.copy(options = WebDavOptions(), phase = "failed", message = "本机同步设置损坏，未启用自动同步；请重新保存同步设置。") }
+    }
     fun configure(next: WebDavOptions, password: String? = null, clearPassword: Boolean = false) {
         check(!state.value.busy) { "请等待同步完成" }
         val value = next.copy(url = next.url.trim(), username = next.username.trim())
         if (value.url.isNotEmpty() || value.autoSync) WebDavConfigurationClient.folder(value)
         require((password?.length ?: 0) <= 8192) { "同步密码过长" }
-        val same = value.url == options().url && value.username == options().username
-        require(same || password != null || clearPassword || !SecureStore.hasPassword(ctx, secret(options()))) { "更换 WebDAV 地址或账号时，请重填同步密码或选择清除密码。" }
+        val old = runCatching { options() }.getOrNull()
+        val same = old != null && value.url == old.url && value.username == old.username
+        require(same || password != null || clearPassword || old == null || !SecureStore.hasPassword(ctx, secret(old))) { "更换 WebDAV 地址或账号时，请重填同步密码或选择清除密码。" }
         if (clearPassword) SecureStore.clearPassword(ctx, secret(value)) else if (password != null) SecureStore.setPassword(ctx, secret(value), password)
         val editor = prefs.edit().putString("sync_options", JSONObject().put("url", value.url).put("username", value.username).put("autoSync", value.autoSync).put("allowHttp", value.allowHttp).toString())
         if (!same) editor.remove("sync_base").remove("sync_last_success")
@@ -47,7 +51,10 @@ internal class ConfigurationSync private constructor(private val ctx: Context) {
     fun cancel() = client.cancel()
     suspend fun test() = execute { options, password -> withContext(Dispatchers.IO) { client.test(options, password) }; mutableState.value = state.value.copy(phase = "success", message = "WebDAV 目录可访问；首次同步会验证写入权限。") }
     suspend fun run(choice: String? = null, automatic: Boolean = false) {
-        if (automatic && (!options().autoSync || state.value.busy || state.value.phase == "conflict")) return
+        if (automatic) {
+            val stored = runCatching { options() }.getOrElse { refresh(); return }
+            if (!stored.autoSync || state.value.busy || state.value.phase == "conflict") return
+        }
         execute { options, password ->
             require(choice == null || choice in listOf("local", "remote") && conflictLocal != null) { "请先查看同步冲突再选择保留哪一端。" }
             val baseline = base(); val local = snapshot(baseline)
@@ -78,7 +85,10 @@ internal class ConfigurationSync private constructor(private val ctx: Context) {
         mutableState.value = state.value.copy(busy = true, phase = "syncing", message = "正在同步…")
         client.begin()
         try { val options = options(); WebDavConfigurationClient.folder(options); operation(options, SecureStore.getPassword(ctx, secret(options)) ?: "") }
-        catch (e: Exception) { mutableState.value = state.value.copy(phase = "failed", message = if (e is IllegalArgumentException || e is IllegalStateException) e.message ?: "同步失败" else "同步失败，未应用云端配置；请检查网络与 WebDAV 设置。") }
+        catch (e: Exception) {
+            mutableState.value = if (client.isCancelled()) state.value.copy(phase = "cancelled", message = "同步已取消，本机配置未替换；下次同步会重新检查云端。")
+            else state.value.copy(phase = "failed", message = if (e is IllegalArgumentException || e is IllegalStateException) e.message ?: "同步失败" else "同步失败，未应用云端配置；请检查网络与 WebDAV 设置。")
+        }
         finally { mutableState.value = state.value.copy(busy = false); refresh() }
     }
     internal fun snapshot(baseline: JSONObject): JSONObject {
@@ -98,7 +108,9 @@ internal class ConfigurationSync private constructor(private val ctx: Context) {
             val item = JSONObject().put("id", p.id).put("name", p.name).put("sshHost", p.sshHost).put("sshPort", p.sshPort).put("user", p.user)
                 .put("remoteHost", p.remoteHost).put("remotePort", p.remotePort).put("localPort", p.localPort).put("authMode", p.authMode)
                 .put("systemdUnit", p.systemdUnit).put("systemdScope", p.systemdScope).put("systemdLogPath", p.systemdLogPath)
-            metadata(item, key, key); entries.put(key, item)
+            metadata(item, key, key)
+            if (prior.optJSONObject(key)?.optString("name")?.let { it != p.name } == true) item.put("label", "")
+            entries.put(key, item)
         }
         for (url in directs) {
             val safe = SharedConfiguration.portableUrl(url); val key = "direct:$safe"

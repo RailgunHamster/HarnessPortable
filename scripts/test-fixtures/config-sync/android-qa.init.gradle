@@ -1,0 +1,4 @@
+// Dedicated application identity: never install over a user's normal application.
+gradle.projectsEvaluated {
+    rootProject.findProject(':app').extensions.getByName('android').buildTypes.getByName('debug').applicationIdSuffix = '.syncqa'
+}

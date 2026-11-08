@@ -48,6 +48,9 @@ public partial class MainWindow
         ConnectionLibraryView.AddRequested += ShowAddMenu;
         ConnectionLibraryView.SettingsRequested += ShowSettings;
         ApplySidebarVisibility();
+        void SyncedPreferencesChanged() { if (_services.Sync.Phase == "success") Dispatcher.BeginInvoke(ApplySidebarVisibility); }
+        _services.Sync.Changed += SyncedPreferencesChanged;
+        Closed += (_, _) => _services.Sync.Changed -= SyncedPreferencesChanged;
         _workspaceSaveTimer.Tick += (_, _) => { _workspaceSaveTimer.Stop(); SaveWorkspaceSnapshot(); };
         DockManager.LayoutChanged += (_, _) => ObserveWorkspaceRoot();
         ObserveWorkspaceRoot();

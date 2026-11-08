@@ -13,6 +13,7 @@ final class AppServices: ObservableObject {
     let sync: ConfigurationSync
 
     private var didShutdown = false
+    private var subscriptions = Set<AnyCancellable>()
 
     init() {
         AppPaths.ensure()
@@ -26,6 +27,8 @@ final class AppServices: ObservableObject {
         updater = UpdateService(settings: settings)
         sync = ConfigurationSync(profiles: profiles, settings: settings, keychain: keychain)
         sync.startAutoSync()
+        settings.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &subscriptions)
+        profiles.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &subscriptions)
     }
 
     func stopAll() {

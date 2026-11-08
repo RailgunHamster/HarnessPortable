@@ -18,6 +18,7 @@ public sealed class WebDavFixture : IAsyncDisposable
     public bool OmitETag { get; set; }
     public string? Redirect { get; set; }
     public int RejectCode { get; set; }
+    public bool HangReads { get; set; }
     public Action? BeforeNextPut;
     public List<Request> Requests { get; } = [];
     public string Url => "http://127.0.0.1:" + ((IPEndPoint)_listener.LocalEndpoint).Port + "/dav/Harness/";
@@ -45,6 +46,7 @@ public sealed class WebDavFixture : IAsyncDisposable
                 if (length > 2 * 1024 * 1024) throw new IOException("Fixture request too large");
                 var body = new byte[length]; await stream.ReadExactlyAsync(body, _stop.Token);
                 var request = new Request(first[0], first[1], headers, Encoding.UTF8.GetString(body));
+                if (HangReads && request.Method == "GET") { await Task.Delay(Timeout.Infinite, _stop.Token); continue; }
                 if (request.Method == "PUT") Interlocked.Exchange(ref BeforeNextPut, null)?.Invoke();
                 int code; string response; string etag;
                 lock (_gate)
