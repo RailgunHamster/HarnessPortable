@@ -160,8 +160,7 @@ internal object AndroidUiAutomation {
                 // text-layout cursor during Material's expansion side effect.
                 c.getOrNull(SemanticsActions.RequestFocus)?.action?.invoke()
                 frame()
-                val accepted = c[SemanticsActions.SetText].action?.invoke(AnnotatedString(value))
-                frame(); frame(); accepted
+                c[SemanticsActions.SetText].action?.invoke(AnnotatedString(value))
             }
             "focus" -> c[SemanticsActions.RequestFocus].action?.invoke()
             "dismiss" -> c[SemanticsActions.Dismiss].action?.invoke()
@@ -175,9 +174,8 @@ internal object AndroidUiAutomation {
                 val start = args.getInt("start"); val length = args.getInt("length")
                 if (start < 0 || length < 0 || start.toLong() + length > (c.getOrNull(SemanticsProperties.EditableText)?.length ?: 0)) fail("invalid_argument", "Invalid text selection")
                 val prior = c.getOrNull(SemanticsProperties.TextSelectionRange)
-                val accepted = if (prior?.start == start && prior.end == start + length) true
+                if (prior?.start == start && prior.end == start + length) true
                     else c[SemanticsActions.SetSelection].action?.invoke(start, start + length, true)
-                frame(); frame(); accepted
             }
             "scroll" -> {
                 val x = args.optDouble("horizontal", 0.0); val y = args.optDouble("vertical", 0.0)
@@ -203,13 +201,14 @@ internal object AndroidUiAutomation {
                     "selectAll" -> c.getOrNull(SemanticsActions.SetSelection)?.action?.invoke(0, c.getOrNull(SemanticsProperties.EditableText)?.length ?: 0, true)
                     else -> fail("invalid_argument", "Unsupported edit action")
                 }
-                // The next command must observe the updated selection/value, including
-                // consecutive select-all/cut/paste on a write-only input.
-                frame(); frame(); edited
+                edited
             }
             else -> false
         }
         if (succeeded != true) fail("action_failed", "Control did not accept the action")
+        // Compose publishes semantics during frames, after state callbacks return.
+        // Commit that update before the next command can use stale toggle/text state.
+        frame(); frame()
         return JSONObject().put("accepted", true)
     }
     fun back() {

@@ -150,6 +150,9 @@ class AndroidAutomationNativeTests {
     }
     @Test fun nativeToggleRangeLongClickAndExpansionUseActualCallbacks() = fixture { model ->
         act("Fixture.Check", "setChecked", JSONObject().put("value", true)); assertTrue(model.checked)
+        act("Fixture.Check", "setChecked", JSONObject().put("value", false)); assertFalse(model.checked)
+        assertFalse(waitNode("Fixture.Check").getBoolean("checked"))
+        act("Fixture.Check", "setChecked", JSONObject().put("value", false)); assertFalse(model.checked)
         act("Fixture.Check", "setChecked", JSONObject().put("value", true)); assertTrue(model.checked)
         act("Fixture.Range", "setProgress", JSONObject().put("value", 0.8)); assertEquals(0.8f, model.progress, 0.001f)
         assertEquals("invalid_argument", (act("Fixture.Range", "setProgress", JSONObject().put("value", 20)) as JSONObject).getString("failure"))
