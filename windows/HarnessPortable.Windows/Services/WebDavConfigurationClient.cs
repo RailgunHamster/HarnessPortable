@@ -11,9 +11,11 @@ public sealed record WebDavOptions(string Url = "", string Username = "", bool A
 public sealed class WebDavConfigurationClient : IDisposable
 {
     private readonly HttpClient _http;
-    public WebDavConfigurationClient(HttpMessageHandler? handler = null)
+    private readonly TimeSpan _timeout;
+    public WebDavConfigurationClient(HttpMessageHandler? handler = null, TimeSpan? timeout = null)
     {
-        _http = new(handler ?? new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(25) };
+        _timeout = timeout ?? TimeSpan.FromSeconds(25);
+        _http = new(handler ?? new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = _timeout };
     }
     public static Uri Folder(WebDavOptions options)
     {
@@ -34,6 +36,7 @@ public sealed class WebDavConfigurationClient : IDisposable
     }
     public async Task TestAsync(WebDavOptions options, string password, CancellationToken token)
     {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(token); budget.CancelAfter(_timeout); token = budget.Token;
         using var request = Request(options, password, new HttpMethod("PROPFIND"), true);
         request.Headers.Add("Depth", "0");
         using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
@@ -41,6 +44,7 @@ public sealed class WebDavConfigurationClient : IDisposable
     }
     public async Task<(JsonObject Document, string? ETag, bool Missing)> ReadAsync(WebDavOptions options, string password, CancellationToken token)
     {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(token); budget.CancelAfter(_timeout); token = budget.Token;
         using var request = Request(options, password, HttpMethod.Get);
         using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
         if (response.StatusCode == HttpStatusCode.NotFound) return (SharedConfiguration.Empty(), null, true);
@@ -59,12 +63,13 @@ public sealed class WebDavConfigurationClient : IDisposable
     }
     public async Task<bool> WriteAsync(WebDavOptions options, string password, JsonObject document, string? etag, bool missing, CancellationToken token)
     {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(token); budget.CancelAfter(_timeout); token = budget.Token;
         SharedConfiguration.Validate(document);
         if (!missing && (string.IsNullOrWhiteSpace(etag) || !EntityTagHeaderValue.TryParse(etag, out var tag) || tag.IsWeak || tag.Tag == "*"))
             throw new InvalidDataException("服务器未提供强 ETag，已停止上传，避免覆盖其他设备的修改。");
         using var request = Request(options, password, HttpMethod.Put);
         request.Headers.TryAddWithoutValidation(missing ? "If-None-Match" : "If-Match", missing ? "*" : etag);
-        var bytes = Encoding.UTF8.GetBytes(document.ToJsonString());
+        var bytes = Encoding.UTF8.GetBytes(document.ToJsonString(SharedConfiguration.JsonOptions));
         if (bytes.Length > SharedConfiguration.Limit) throw new InvalidDataException("同步文件超过 1 MiB");
         request.Content = new ByteArrayContent(bytes); request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json; charset=utf-8");
         using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);

@@ -2,9 +2,9 @@ name: Android settings and WebDAV sync
 
 on:
   push:
-    paths: ['app/**', 'spec/fixtures/**', 'scripts/test-fixtures/config-sync/**', '.github/workflows/android-sync.yml']
+    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'scripts/test-fixtures/config-sync/**', '.github/workflows/android-sync.yml']
   pull_request:
-    paths: ['app/**', 'spec/fixtures/**', 'scripts/test-fixtures/config-sync/**', '.github/workflows/android-sync.yml']
+    paths: ['app/**', 'settings.gradle.kts', 'spec/fixtures/**', 'scripts/test-fixtures/config-sync/**', '.github/workflows/android-sync.yml']
   workflow_dispatch:
 
 permissions:

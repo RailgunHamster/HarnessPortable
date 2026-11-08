@@ -8,6 +8,7 @@ public static class SharedConfiguration
 {
     public const int Limit = 1024 * 1024;
     public const string FileName = "harness-settings-v1.json";
+    public static System.Text.Json.JsonSerializerOptions JsonOptions { get; } = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     public static JsonObject Empty() => new() { ["format"] = "harness-portable-settings", ["version"] = 1, ["entries"] = new JsonObject() };
     public static JsonObject Entries(JsonObject document) => (JsonObject)document["entries"]!;
     public static bool Same(JsonNode? left, JsonNode? right) => JsonNode.DeepEquals(left, right);
@@ -24,7 +25,7 @@ public static class SharedConfiguration
     public static void Validate(JsonObject document)
     {
         Require(document.Count == 3 && document["format"]?.ToString() == "harness-portable-settings" && document["version"] is JsonValue v && v.TryGetValue<int>(out var version) && version == 1, "不支持的同步文件格式");
-        Require(document.ToJsonString().Length <= Limit && document["entries"] is JsonObject, "同步文件无效或过大");
+        Require(System.Text.Encoding.UTF8.GetByteCount(document.ToJsonString(JsonOptions)) <= Limit && document["entries"] is JsonObject, "同步文件无效或过大");
         var entries = Entries(document);
         Require(entries.Count <= 2000, "同步项目超过上限");
         foreach (var (key, value) in entries)

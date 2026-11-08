@@ -121,7 +121,11 @@ public sealed class ConfigurationSyncService
             await action(state, _app.Secrets.GetPassword(PasswordKey(state.Options)) ?? "", _cancel.Token);
             if (Phase == "syncing") Phase = "success";
         }
-        catch (OperationCanceledException) { Phase = "cancelled"; Message = "同步已取消，本机配置未替换；下次同步会重新检查云端。"; }
+        catch (OperationCanceledException)
+        {
+            Phase = _cancel.IsCancellationRequested ? "cancelled" : "failed";
+            Message = _cancel.IsCancellationRequested ? "同步已取消，本机配置未替换；下次同步会重新检查云端。" : "WebDAV 请求超时，未应用云端配置，请稍后重试。";
+        }
         catch (Exception error) { Phase = "failed"; Message = error is InvalidDataException ? error.Message : "同步失败，未应用云端配置；请检查网络与 WebDAV 设置。"; }
         finally { Busy = false; _cancel.Dispose(); _cancel = null; Changed?.Invoke(); }
     }

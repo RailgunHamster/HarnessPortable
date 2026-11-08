@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json.Nodes;
+using System.Net.Http;
 using HarnessPortable.Windows.Models;
 using HarnessPortable.Windows.Services;
 using HarnessPortable.Testing;
@@ -122,5 +123,35 @@ public sealed class ConfigurationSyncTests : IDisposable
         var a = Device("a"); a.Sync.Configure(new("https://one.invalid/dav/", "user"), "secret");
         Assert.Throws<InvalidDataException>(() => a.Sync.Configure(new("https://two.invalid/dav/", "user")));
         a.Sync.Configure(new("https://two.invalid/dav/", "user"), clearPassword: true); Assert.False(a.Sync.Status()["hasPassword"]!.GetValue<bool>());
+    }
+
+    [Fact] public void UnicodePayloadLimitUsesTheSameUtf8ByteBudgetAsOtherPlatforms()
+    {
+        var doc = SharedConfiguration.Empty();
+        for (var i = 0; i < 40; i++) Add(i);
+        SharedConfiguration.Validate(doc);
+        for (var i = 40; i < 60; i++) Add(i);
+        Assert.Throws<InvalidDataException>(() => SharedConfiguration.Validate(doc));
+        void Add(int i) { var url = "https://fixture.invalid/" + i; doc["entries"]!["direct:" + url] = new JsonObject { ["url"] = url, ["favorite"] = false, ["group"] = "", ["label"] = new string('中', 6000), ["rank"] = i }; }
+    }
+
+    [Fact] public async Task ReceivingHeadersDoesNotRemoveTheResponseBodyTimeout()
+    {
+        using var handler = new StallingHandler(); using var client = new WebDavConfigurationClient(handler, TimeSpan.FromMilliseconds(100));
+        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+        try { await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.ReadAsync(new("https://fixture.invalid/dav/"), "", cleanup.Token).WaitAsync(TimeSpan.FromSeconds(2))); }
+        finally { cleanup.Cancel(); }
+    }
+    private sealed class StallingHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StreamContent(new StallingStream()) });
+    }
+    private sealed class StallingStream : Stream
+    {
+        public override bool CanRead => true; public override bool CanWrite => false; public override bool CanSeek => false;
+        public override long Length => throw new NotSupportedException(); public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) { await Task.Delay(Timeout.Infinite, cancellationToken); return 0; }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() { } public override void SetLength(long value) => throw new NotSupportedException(); public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException(); public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
