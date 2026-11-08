@@ -6,7 +6,12 @@ import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -14,6 +19,7 @@ import java.io.File
 /** Exercises the actual Compose settings UI in a dedicated QA application identity. */
 @RunWith(AndroidJUnit4::class)
 class SettingsTabsNativeTests {
+    @get:Rule val compose = createEmptyComposeRule()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private fun nodes(): List<AccessibilityNodeInfo> {
@@ -29,14 +35,9 @@ class SettingsTabsNativeTests {
     }
     private fun click(label: String) {
         if (label in listOf("通用", "数据与安全", "WebDAV 同步", "更新与关于")) {
-            repeat(8) {
-                if (find(label) == null) {
-                    val horizontal = nodes().firstOrNull { it.isScrollable && (it.className?.toString() == "android.widget.HorizontalScrollView" || it.actionList.any { action -> action.id == AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT.id }) }
-                        ?: error("Missing horizontal category scroller for $label")
-                    assertTrue(horizontal.performAction(if (label == "通用") AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD else AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
-                    instrumentation.waitForIdleSync(); SystemClock.sleep(200)
-                }
-            }
+            compose.onNodeWithText(label).performScrollTo().performClick()
+            instrumentation.waitForIdleSync(); SystemClock.sleep(350)
+            return
         }
         var node = waitFor(label)
         while (!node.isClickable) node = node.parent ?: error("No clickable ancestor for $label")
