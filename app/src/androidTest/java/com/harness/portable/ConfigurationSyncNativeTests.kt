@@ -79,6 +79,9 @@ class ConfigurationSyncNativeTests {
             val fixture = JSONObject(InstrumentationRegistry.getInstrumentation().context.assets.open("shared-configuration-v1.json").bufferedReader().use { it.readText() }); cloud.replace(fixture.toString())
             withContext(Dispatchers.Main) {
                 val sync = ConfigurationSync.isolated(context); sync.configure(cloud.options(), "dav-secret"); sync.run()
+                assertEquals("conflict", sync.state.value.phase)
+                assertTrue(sync.state.value.conflicts.contains("shared:appearance"))
+                sync.run("remote")
                 assertEquals(sync.state.value.message, "success", sync.state.value.phase)
                 assertTrue(UiPreferences.prefs(context).getStringSet(UiPreferences.FAVORITES, emptySet())!!.contains("tunnel:shared-fixture-1"))
                 sync.run(); assertEquals(sync.state.value.message, "success", sync.state.value.phase)
