@@ -11,6 +11,7 @@ checks = []; seen_ids = set(); secret_values = ['qa-ssh-credential', 'qa-web-cre
 class Checks(list):
     def append(self, value):
         super().append(value); print('PASS: '+value, flush=True)
+        (out/'progress.json').write_text(json.dumps(self,ensure_ascii=False,indent=2),encoding='utf-8')
 checks = Checks()
 
 def adb(*args):

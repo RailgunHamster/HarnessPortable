@@ -141,7 +141,10 @@ internal object AndroidUiAutomation {
         val item = found.single(); val c = item.config
         if (!item.visible || c.contains(SemanticsProperties.Disabled)) fail("unavailable", "Control is hidden or disabled")
         val dialogRoot = all.lastOrNull { it.visible && it.config.contains(SemanticsProperties.IsDialog) }?.root
-        if (dialogRoot != null && dialogRoot !== item.root) fail("unavailable", "A modal dialog is open")
+        // A menu opened inside the active dialog is a newer, separate Compose root.
+        // Reject windows below the modal while keeping its child popup actionable.
+        val windows = all.map { it.root }.distinct()
+        if (dialogRoot != null && windows.indexOf(item.root) < windows.indexOf(dialogRoot)) fail("unavailable", "A modal dialog is open")
         if (!item.root.view.hasWindowFocus() && all.any { it.root.view.hasWindowFocus() }) fail("unavailable", "A different application dialog owns input focus")
         val action = args.requiredString("action")
         if (action !in actions(c)) fail("unsupported_action", "Action is not supported by this control")

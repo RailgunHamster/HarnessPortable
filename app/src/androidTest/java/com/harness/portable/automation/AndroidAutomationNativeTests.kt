@@ -50,6 +50,7 @@ class AndroidAutomationNativeTests {
         var ime by mutableStateOf(0)
         var expanded by mutableStateOf(false)
         var dialog by mutableStateOf(false)
+        var menu by mutableStateOf(false)
         var visible by mutableStateOf(false)
     }
     @OptIn(ExperimentalFoundationApi::class)
@@ -82,7 +83,13 @@ class AndroidAutomationNativeTests {
                             }
                         }
                         if (model.dialog) AutomationAlertDialog(onDismissRequest = { model.dialog = false }, modifier = Modifier.automationId("Fixture.Dialog"),
-                            title = { Text("Fixture dialog") }, confirmButton = { Button(onClick = { model.dialog = false }, modifier = Modifier.automationId("Fixture.Dialog.Close")) { Text("Close") } })
+                            title = { Text("Fixture dialog") }, confirmButton = {
+                                Column {
+                                    Button(onClick = { model.menu = true }, modifier = Modifier.automationId("Fixture.Dialog.Menu.Open")) { Text("Menu") }
+                                    AutomationDropdownMenu(model.menu, { model.menu = false }, Modifier.automationId("Fixture.Dialog.Menu")) { Text("Nested menu") }
+                                    Button(onClick = { model.dialog = false }, modifier = Modifier.automationId("Fixture.Dialog.Close")) { Text("Close") }
+                                }
+                            })
                     }
                 }
                 port = AndroidAutomation.start(token, 0, UUID.randomUUID().toString()).getInt("port")
@@ -146,6 +153,8 @@ class AndroidAutomationNativeTests {
         call("ui.act", JSONObject().put("target", JSONObject().put("automationId", "Fixture.Repeated").put("dataKey", "b")).put("action", "invoke")); assertEquals(2, model.counter)
         act("Fixture.OpenDialog", "invoke"); waitNode("Fixture.Dialog")
         assertEquals("unavailable", (act("Fixture.Action", "invoke") as JSONObject).getString("failure"))
+        act("Fixture.Dialog.Menu.Open", "invoke"); waitNode("Fixture.Dialog.Menu")
+        act("Fixture.Dialog.Menu", "dismiss"); assertFalse(model.menu)
         call("app.back"); assertFalse(model.dialog)
         assertEquals("android.permission.DUMP", InstrumentationRegistry.getInstrumentation().targetContext.packageManager.getReceiverInfo(
             android.content.ComponentName(InstrumentationRegistry.getInstrumentation().targetContext, AutomationReceiver::class.java), 0).permission)

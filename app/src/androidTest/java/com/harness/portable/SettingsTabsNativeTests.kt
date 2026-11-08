@@ -26,7 +26,10 @@ class SettingsTabsNativeTests {
     private val context get() = instrumentation.targetContext
     private fun waitFor(label: String) {
         compose.waitUntil(15000) {
-            compose.onAllNodes(hasText(label) or hasContentDescription(label), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+            try { compose.onAllNodes(hasText(label) or hasContentDescription(label), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+            catch (error: IllegalStateException) {
+                if (error.message?.startsWith("No compose hierarchies found") == true) false else throw error
+            }
         }
     }
     private fun click(label: String) {

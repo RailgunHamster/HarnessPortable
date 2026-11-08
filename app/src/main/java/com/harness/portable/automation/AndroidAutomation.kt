@@ -84,7 +84,8 @@ object AndroidAutomation {
     internal fun <T> onMain(block: () -> T): T {
         if (Looper.myLooper() == Looper.getMainLooper()) return block()
         val task = FutureTask(block); main.post(task)
-        return task.get(15, TimeUnit.SECONDS)
+        return try { task.get(15, TimeUnit.SECONDS) }
+        catch (error: java.util.concurrent.ExecutionException) { throw error.cause ?: error }
     }
     internal fun start(token: String, port: Int, sessionId: String): JSONObject {
         check(Looper.myLooper() == Looper.getMainLooper())
