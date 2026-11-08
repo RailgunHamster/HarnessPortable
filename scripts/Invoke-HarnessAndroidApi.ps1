@@ -36,7 +36,7 @@ function Invoke-AndroidCall([string]$CallMethod,$CallParameters){
     }finally{$client.Dispose()}
 }
 $result=Invoke-AndroidCall $Method $parametersValue
-if($Wait -and $result.operationId){
+if($Wait -and $result.operationId -and !$result.state){
     $operationId=$result.operationId
     while($watch.Elapsed.TotalSeconds -lt $TimeoutSeconds){
         $operation=Invoke-AndroidCall 'operations.get' @{operationId=$operationId}

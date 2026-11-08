@@ -106,7 +106,7 @@ class AndroidAutomationNativeTests {
     private fun call(method: String, params: JSONObject = JSONObject()): Any {
         val reply = rpc(method, params); check(!reply.has("error")) { reply.optJSONObject("error")?.toString().orEmpty() }
         val result = reply.get("result")
-        if (result !is JSONObject || !result.has("operationId")) return result
+        if (result !is JSONObject || !result.has("operationId") || result.has("state")) return result
         val id = result.getString("operationId"); val end = android.os.SystemClock.elapsedRealtime() + 10000
         while (android.os.SystemClock.elapsedRealtime() < end) {
             val job = rpc("operations.get", JSONObject().put("operationId", id)).getJSONObject("result")

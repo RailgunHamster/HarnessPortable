@@ -53,8 +53,8 @@ internal object AndroidBrowserAutomation {
             if (!debugging) fail("stale", "Browser automation has ended")
             val socket = LocalSocket(); sockets.add(socket)
             try {
-                socket.soTimeout = 10000
                 socket.connect(LocalSocketAddress("webview_devtools_remote_${android.os.Process.myPid()}", LocalSocketAddress.Namespace.ABSTRACT))
+                socket.soTimeout = 10000
                 return socket
             } catch (error: java.io.IOException) {
                 sockets.remove(socket); socket.close()

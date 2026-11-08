@@ -52,7 +52,7 @@ def request(method, params=None, auth=None):
 def call(method, params=None, wait=True):
     reply=request(method, params); assert 'error' not in reply, (method, reply.get('error'))
     result=reply['result']
-    if wait and isinstance(result, dict) and 'operationId' in result:
+    if wait and isinstance(result, dict) and 'operationId' in result and 'state' not in result:
         ident=result['operationId']; end=time.monotonic()+30
         while time.monotonic()<end:
             job=request('operations.get', {'operationId':ident})['result']

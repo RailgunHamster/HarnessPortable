@@ -12,6 +12,9 @@ try{
     if($catalog.methods.name -notcontains 'ui.act'){throw 'Missing native UI methods.'}
     $answer=& (Join-Path $scripts 'Invoke-HarnessAndroidApi.ps1') -EndpointFile $endpoint -Method network.resolve -Parameters @{host='127.0.0.1'} -Wait
     if($answer.address -ne '127.0.0.1'){throw 'The native resolver did not return the loopback fixture.'}
+    $pending=& (Join-Path $scripts 'Invoke-HarnessAndroidApi.ps1') -EndpointFile $endpoint -Method network.resolve -Parameters @{host='127.0.0.1'}
+    $job=& (Join-Path $scripts 'Invoke-HarnessAndroidApi.ps1') -EndpointFile $endpoint -Method operations.get -Parameters @{operationId=$pending.operationId} -Wait
+    if(!$job.state -or $job.operationId -ne $pending.operationId){throw 'A status query was incorrectly treated as a new operation.'}
     & (Join-Path $scripts 'Invoke-HarnessAndroidApi.ps1') -EndpointFile $endpoint -Method app.settings -Wait | Out-Null
     & (Join-Path $scripts 'Invoke-HarnessAndroidApi.ps1') -EndpointFile $endpoint -Method settings.tab -Arguments '{"value":"sync"}' -Wait | Out-Null
     $controls=@(& (Join-Path $scripts 'Invoke-HarnessAndroidApi.ps1') -EndpointFile $endpoint -Method ui.find -Parameters @{selector=@{automationId='ConfigurationSync.Address'}})
