@@ -58,7 +58,11 @@ jobs:
             sleep 2
           done
           test "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = 1
+          # Public semantic UI actions do not reset Android's inactivity timer.
+          adb -s emulator-5554 shell svc power stayon true
+          adb -s emulator-5554 shell settings put system screen_off_timeout 1800000
           adb -s emulator-5554 shell input keyevent 82
+          adb -s emulator-5554 shell wm dismiss-keyguard
           adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
           adb -s emulator-5554 install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           verification_failed=0
@@ -98,6 +102,8 @@ jobs:
           adb -s emulator-5554 shell wm size reset
           adb -s emulator-5554 shell wm density reset
           adb -s emulator-5554 shell settings put system font_scale 1.0
+          adb -s emulator-5554 shell am force-stop com.harness.portable.syncqa
+          adb -s emulator-5554 shell wm dismiss-keyguard
           timeout 180 adb -s emulator-5554 shell am instrument -w -e class com.harness.portable.automation.AndroidAutomationNativeTests com.harness.portable.syncqa.test/androidx.test.runner.AndroidJUnitRunner | tee artifacts/android-sync/automation-native.log || verification_failed=1
           grep -F 'OK (4 tests)' artifacts/android-sync/automation-native.log || verification_failed=1
           timeout 300 python3 -u scripts/test-fixtures/android-automation/smoke.py --serial emulator-5554 --output artifacts/android-sync/automation | tee artifacts/android-sync/automation.log || verification_failed=1

@@ -60,6 +60,15 @@ class AndroidAutomationNativeTests {
         val model = Model()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
+                // Semantic actions do not count as physical user activity for
+                // Android's screen timeout. Clipboard tests need a real awake,
+                // focused window even after the longer settings/layout suite.
+                activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                if (android.os.Build.VERSION.SDK_INT >= 27) {
+                    activity.setTurnScreenOn(true)
+                    activity.setShowWhenLocked(true)
+                    activity.getSystemService(android.app.KeyguardManager::class.java).requestDismissKeyguard(activity, null)
+                }
                 activity.setContent {
                     MaterialTheme {
                         Column {
@@ -133,7 +142,10 @@ class AndroidAutomationNativeTests {
             if (node.getBoolean("activeWindow")) return node
             Thread.sleep(30)
         }
-        error("Native window did not acquire foreground input focus: $id")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val power = context.getSystemService(android.os.PowerManager::class.java)
+        val keyguard = context.getSystemService(android.app.KeyguardManager::class.java)
+        error("Native window did not acquire foreground input focus: $id; interactive=${power.isInteractive}; keyguardLocked=${keyguard.isKeyguardLocked}")
     }
     @Test fun actualNativeTextSelectionImeAndWriteOnlySnapshots() = fixture { model ->
         act("Fixture.Credential", "setValue", JSONObject().put("value", "fixture-private-password"))
