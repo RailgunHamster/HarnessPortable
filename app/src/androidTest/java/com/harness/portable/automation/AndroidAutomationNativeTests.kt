@@ -94,7 +94,7 @@ class AndroidAutomationNativeTests {
                 }
                 port = AndroidAutomation.start(token, 0, UUID.randomUUID().toString()).getInt("port")
             }
-            try { waitNode("Fixture.Credential"); run(model) }
+            try { waitFocusedNode("Fixture.Credential"); run(model) }
             finally { scenario.onActivity { AndroidAutomation.stop() } }
         }
     }
@@ -126,6 +126,15 @@ class AndroidAutomationNativeTests {
         }
         error("Missing native control: $id")
     }
+    private fun waitFocusedNode(id: String): JSONObject {
+        val deadline = android.os.SystemClock.elapsedRealtime() + 10000
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            val node = waitNode(id)
+            if (node.getBoolean("activeWindow")) return node
+            Thread.sleep(30)
+        }
+        error("Native window did not acquire foreground input focus: $id")
+    }
     @Test fun actualNativeTextSelectionImeAndWriteOnlySnapshots() = fixture { model ->
         act("Fixture.Credential", "setValue", JSONObject().put("value", "fixture-private-password"))
         waitNode("Fixture.Credential")
@@ -140,12 +149,16 @@ class AndroidAutomationNativeTests {
             while (model.input.text != expected && android.os.SystemClock.elapsedRealtime() < deadline) Thread.sleep(20)
             assertEquals(expected, model.input.text)
         }
-        assertTrue((act("Fixture.Credential", "edit", JSONObject().put("value", "copy")) as JSONObject).optBoolean("accepted"))
+        fun clipboard(action: String) {
+            waitFocusedNode("Fixture.Credential")
+            assertTrue((act("Fixture.Credential", "edit", JSONObject().put("value", action)) as JSONObject).optBoolean("accepted"))
+        }
+        clipboard("copy")
         act("Fixture.Credential", "setValue", JSONObject().put("value", ""))
-        act("Fixture.Credential", "edit", JSONObject().put("value", "paste")); inputBecomes("ixt")
+        clipboard("paste"); inputBecomes("ixt")
         act("Fixture.Credential", "edit", JSONObject().put("value", "selectAll"))
-        act("Fixture.Credential", "edit", JSONObject().put("value", "cut")); inputBecomes("")
-        act("Fixture.Credential", "edit", JSONObject().put("value", "paste")); inputBecomes("ixt")
+        clipboard("cut"); inputBecomes("")
+        clipboard("paste"); inputBecomes("ixt")
         act("Fixture.Credential", "focus"); act("Fixture.Credential", "ime"); assertEquals(1, model.ime)
     }
     @Test fun nativeToggleRangeLongClickAndExpansionUseActualCallbacks() = fixture { model ->

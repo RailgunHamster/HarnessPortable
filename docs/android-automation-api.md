@@ -54,6 +54,8 @@ $endpoint = $session.EndpointFile
 
 支持的动作包括 `invoke`、`longClick`、`setValue`、`setChecked`、`selectItem`、`selectText`、`scroll`、`realize`、`focus`、`setExpanded`、`dismiss`、`setProgress`、`ime` 和 `edit`。每个控件在快照中声明实际支持的动作。滚动参数 `horizontal/vertical` 是相对内容偏移，不是屏幕坐标；`selectText` 使用 `start/length`，`realize` 使用 `index`。新控件和自定义手势必须有稳定 ID、注册操作及行为测试；手势映射见 `spec/android-ui-api-gestures.json`。
 
+复制、剪切和粘贴沿用 Android 的剪贴板权限规则，需等待目标控件所在窗口的 `activeWindow:true`；控件取得文本焦点与窗口取得前台焦点是两件事。
+
 密码、私钥位置、认证令牌输入只写，快照仅报告 `sensitive/hasValue`。切换“显示密码”仍会屏蔽。包含敏感子项的合并节点也屏蔽文本。链接库与浏览器状态去除直连 URL 的用户信息、查询和片段。任务快照和事件不保留输入参数。`browser.evaluate` 是可信自动化的网页脚本能力，脚本及其返回值由调用者负责，不能把它当作网页数据脱敏接口。
 
 `browser.evaluate` 的 `userGesture:true` 用于文件上传等需要用户激活的网页操作。它为单次调用临时启用公开 DevTools 协议，通过本进程的 Android Unix 域套接字调用 `Runtime.evaluate`，不注入屏幕输入，也不开放额外 TCP 端口；调用结束或会话停止后关闭调试。普通脚本使用 WebView 的公开 JavaScript 接口。`raw:true` 返回 JSON 编码后的值。
