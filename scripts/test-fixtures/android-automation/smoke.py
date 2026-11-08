@@ -170,6 +170,9 @@ try:
     inspect(); call('library.open',{'key':direct['key']})
     available('browser.state'); until(lambda:call('browser.state')['ready'])
     until(lambda:call('browser.evaluate',{'script':"document.body ? document.body.innerText.includes('Harness API loopback') : false"}))
+    rejected=call('browser.evaluate',{'script':'true','raw':'false'},wait=False)
+    bad_job=until(lambda:(value if (value:=call('operations.get',{'operationId':rejected['operationId']}))['state']=='failed' else None))
+    assert bad_job['error']['code']=='invalid_argument' and call('app.state')['screen']=='browser'
     assert 'token' not in call('browser.state')['url']; act('Browser.Toolbar.Collapse'); until(lambda:find('Browser.Toolbar.Expand')); act('Browser.Toolbar.Expand')
     call('browser.authenticate'); until(lambda:find('Browser.AuthInput')); act('Browser.AuthInput','setValue',value=secret_values[1]); inspect(); act('Browser.AuthCancel')
     call('browser.evaluate',{'script':"document.getElementById('entry').value='retained-page-state'; true"})

@@ -220,8 +220,9 @@ internal fun WebViewScreen(
         AndroidOperation("browser.evaluate", "Run JavaScript through WebView's public bridge", setOf("script", "raw")) { args ->
             val browser = webRef ?: fail("unavailable", "Browser is not ready")
             val script = args.requiredString("script"); if (script.length > 256 * 1024) fail("limit_exceeded", "Script exceeds the size limit")
+            val raw = args.optionalBoolean("raw")
             suspendCancellableCoroutine<Any> { continuation -> browser.evaluateJavascript(script) { result ->
-                if (continuation.isActive) continuation.resume(if (args.optionalBoolean("raw")) result ?: "null" else runCatching { JSONObject("{\"v\":${result ?: "null"}}").get("v") }.getOrDefault(JSONObject.NULL))
+                if (continuation.isActive) continuation.resume(if (raw) result ?: "null" else runCatching { JSONObject("{\"v\":${result ?: "null"}}").get("v") }.getOrDefault(JSONObject.NULL))
             } }
         }
     )
