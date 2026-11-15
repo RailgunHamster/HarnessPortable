@@ -75,8 +75,8 @@ struct SettingsWindowView: View {
                             Text("正在使用：\(settings.value.updateSourceSelected == "github" ? "GitHub" : "CNB")").foregroundStyle(dsh.textSecondary)
                             Button("检查更新") { updater.check() }.buttonStyle(DshPrimaryButtonStyle()).disabled(busy)
                             Text(updateStatus).font(.callout).foregroundStyle(dsh.textSecondary)
-                            if case .available = updater.phase { Button("下载并安装") { updater.download() }.buttonStyle(DshPrimaryButtonStyle()) }
-                            if case .readyToInstall = updater.phase { Button("打开安装镜像") { updater.openInstaller() } }
+                            if case .available = updater.phase { Button("下载更新") { updater.download() }.buttonStyle(DshPrimaryButtonStyle()) }
+                            if case .readyToInstall = updater.phase { MacUpdateInstallActions(updater: updater) }
                             if case .downloading(let fraction) = updater.phase { ProgressView(value: fraction) }
                             Divider()
                             Toggle("更新使用代理", isOn: Binding(get: { draftProxy.enabled }, set: { draftProxy.enabled = $0; proxyStatus = "修改后请保存代理设置" })).disabled(busy)
@@ -114,7 +114,7 @@ struct SettingsWindowView: View {
     private func preference<Value>(_ key: WritableKeyPath<AppSettings, Value>) -> Binding<Value> {
         Binding(get: { settings.value[keyPath: key] }, set: { value in settings.update { $0[keyPath: key] = value }; status = "已保存 · 本设备偏好立即生效" })
     }
-    private var busy: Bool { switch updater.phase { case .checking, .downloading: return true; default: return false } }
+    private var busy: Bool { updater.isBusy }
     private var updateStatus: String {
         switch updater.phase {
         case .idle: return "尚未检查更新"
@@ -123,6 +123,7 @@ struct SettingsWindowView: View {
         case .available(let version): return "发现新版本 \(version)"
         case .downloading: return "正在下载更新…"
         case .readyToInstall(let version): return "版本 \(version) 已就绪"
+        case .installing: return "正在准备安装…"
         case .failed(let message): return message
         }
     }

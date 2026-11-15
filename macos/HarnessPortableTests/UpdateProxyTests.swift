@@ -1,6 +1,7 @@
 import XCTest
 import Network
 import CFNetwork
+import CryptoKit
 @testable import HarnessPortable
 
 final class UpdateProxyTests: XCTestCase {
@@ -77,6 +78,44 @@ final class UpdateProxyTests: XCTestCase {
         catch { }
         XCTAssertTrue(server.requests.contains(where: { $0.hasPrefix("CONNECT update.invalid:443 ") }))
     }
+
+    @MainActor
+    func testAbsoluteDownloadURLHandsOffTheExactVerifiedFileEvenWhenItsNameAlreadyExists() async throws {
+        let ready = expectation(description: "update feed ready")
+        let server = try ProxyFixture(ready: ready, absoluteFeed: true)
+        defer { server.stop() }
+        await fulfillment(of: [ready], timeout: 5)
+        let base = URL(string: "http://127.0.0.1:\(try XCTUnwrap(server.port))")!
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let preexisting = directory.appendingPathComponent("official.dmg")
+        try Data("earlier file".utf8).write(to: preexisting)
+        var opened: URL?
+        let settings = SettingsStore(path: directory.appendingPathComponent("settings.json"))
+        let update = UpdateService(settings: settings, feedBaseOverride: base, downloadFolder: directory,
+            openImage: { opened = $0; return true })
+        update.check()
+        try await waitForUpdate(update, .available(version: "9.0.0"))
+        update.download()
+        try await waitForUpdate(update, .readyToInstall(version: "9.0.0"))
+        update.openInstaller()
+        let actual = try XCTUnwrap(opened)
+        XCTAssertEqual(actual.deletingLastPathComponent().path, directory.path)
+        XCTAssertNotEqual(actual, preexisting)
+        XCTAssertEqual(try String(contentsOf: actual), "image")
+        XCTAssertEqual(try String(contentsOf: preexisting), "earlier file")
+        XCTAssertFalse(update.canInstallAutomatically)
+    }
+
+    @MainActor
+    private func waitForUpdate(_ update: UpdateService, _ expected: UpdatePhase) async throws {
+        let deadline = ProcessInfo.processInfo.systemUptime + 8
+        while update.phase != expected && update.isBusy && ProcessInfo.processInfo.systemUptime < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertEqual(update.phase, expected)
+    }
 }
 
 private final class ProxyFixture: @unchecked Sendable {
@@ -84,9 +123,11 @@ private final class ProxyFixture: @unchecked Sendable {
     private let queue = DispatchQueue(label: "HarnessPortable.ProxyTest")
     private let lock = NSLock()
     private var recorded: [String] = []
+    private let absoluteFeed: Bool
     var port: UInt16? { listener.port?.rawValue }
     var requests: [String] { lock.lock(); defer { lock.unlock() }; return recorded }
-    init(ready: XCTestExpectation) throws {
+    init(ready: XCTestExpectation, absoluteFeed: Bool = false) throws {
+        self.absoluteFeed = absoluteFeed
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         listener = try NWListener(using: parameters)
@@ -111,7 +152,15 @@ private final class ProxyFixture: @unchecked Sendable {
             self.lock.lock(); self.recorded.append(request); self.lock.unlock()
             let code: Int, headers: String, body: String
             if request.hasPrefix("CONNECT ") { code = 502; headers = ""; body = "refused test tunnel" }
-            else if request.contains("macos.json") { code = 200; headers = ""; body = #"{"version":"9.0.0","dmg":"test.dmg"}"# }
+            else if request.contains("macos.json") {
+                code = 200; headers = ""
+                if self.absoluteFeed, let port = self.port {
+                    let digest = SHA256.hash(data: Data("image".utf8)).map { String(format: "%02x", $0) }.joined()
+                    body = #"{"version":"9.0.0","dmg":"http://127.0.0.1:\#(port)/downloads/official.dmg","sha256":"\#(digest)"}"#
+                } else {
+                    body = #"{"version":"9.0.0","dmg":"test.dmg"}"#
+                }
+            }
             else if request.contains("test.dmg") { code = 302; headers = "Location: http://download.invalid/final\r\n"; body = "" }
             else { code = 200; headers = ""; body = "image" }
             let reply = "HTTP/1.1 \(code) Test\r\n\(headers)Content-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"

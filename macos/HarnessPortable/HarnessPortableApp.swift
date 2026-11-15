@@ -30,13 +30,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @MainActor
-@main
 struct HarnessPortableApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var services: AppServices
 
     init() {
-        _services = StateObject(wrappedValue: AppRuntime.shared.services)
+        let appServices = AppRuntime.shared.services
+        _services = StateObject(wrappedValue: appServices)
+        if CommandLine.arguments.contains("--check-for-updates") {
+            Task { @MainActor in appServices.updater.check() }
+        }
     }
 
     var body: some Scene {
@@ -65,6 +68,18 @@ struct HarnessPortableApp: App {
 
         MenuBarExtra("Harness Portable", systemImage: "point.3.connected.trianglepath.dotted") {
             MenuBarView(services: services)
+        }
+    }
+}
+
+@main
+@MainActor
+enum HarnessPortableEntry {
+    static func main() {
+        if let request = MacUpdateTransition.helperRequest(CommandLine.arguments) {
+            MacUpdateTransition.runHelper(request)
+        } else {
+            HarnessPortableApp.main()
         }
     }
 }

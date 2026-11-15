@@ -202,19 +202,11 @@ struct ManagementView: View {
                         Button {
                             updater.download()
                         } label: {
-                            Label("下载并安装", systemImage: "arrow.down.circle.fill")
+                            Label("下载更新", systemImage: "arrow.down.circle.fill")
                         }
                         .buttonStyle(DshPrimaryButtonStyle())
                     case .readyToInstall:
-                        Button {
-                            updater.openInstaller()
-                        } label: {
-                            Label("打开安装镜像", systemImage: "opticaldiscdrive")
-                        }
-                        .buttonStyle(DshPrimaryButtonStyle())
-                        Text("已下载到「下载」文件夹并校验通过；macOS 上应用不能自替换，请在打开的镜像里把新版本拖入「应用程序」后重新启动。")
-                            .font(.caption)
-                            .foregroundStyle(dsh.textSecondary)
+                        MacUpdateInstallActions(updater: updater)
                     default:
                         EmptyView()
                     }
@@ -444,12 +436,7 @@ struct ManagementView: View {
         settings.value.directAuthModes[url] == LocalDshAuth.modeLaunchd ? "本机自动" : "无"
     }
 
-    private var isUpdaterBusy: Bool {
-        switch updater.phase {
-        case .checking, .downloading: return true
-        default: return false
-        }
-    }
+    private var isUpdaterBusy: Bool { updater.isBusy }
 
     private var downloadFraction: Double {
         if case .downloading(let fraction) = updater.phase { return min(max(fraction, 0), 1) }
@@ -472,6 +459,7 @@ struct ManagementView: View {
         case .downloading(let fraction):
             return "正在下载更新… \(Int((min(max(fraction, 0), 1)) * 100))%"
         case .readyToInstall(let version): return "版本 \(version) 已就绪"
+        case .installing: return "正在准备安装…"
         case .failed(let message): return message
         }
     }
@@ -481,7 +469,7 @@ struct ManagementView: View {
         switch updater.phase {
         case .available, .readyToInstall: DshStatusDot(color: dsh.success)
         case .failed: DshStatusDot(color: dsh.danger)
-        case .checking, .downloading: DshStatusDot(color: dsh.warning)
+        case .checking, .downloading, .installing: DshStatusDot(color: dsh.warning)
         default: DshStatusDot(color: dsh.borderL1)
         }
     }

@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-final class KeychainStore {
+final class KeychainStore: @unchecked Sendable {
     private let service = "com.harness.portable"
     private let cacheLock = NSLock()
     private var cachedPasswords: [String: String] = [:]  // keyed by Keychain account
@@ -14,7 +14,12 @@ final class KeychainStore {
     }
 
     func hasPassword(for profileID: String) -> Bool {
-        password(for: profileID) != nil
+        var query = baseQuery(for: profileID)
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        var result: CFTypeRef?
+        return SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess
     }
 
     func password(for profileID: String) -> String? {

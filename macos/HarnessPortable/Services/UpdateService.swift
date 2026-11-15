@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import CryptoKit
 import AppKit
 
 /// One entry of the `macos.json` update feed, written next to the dmg by
@@ -19,38 +18,53 @@ enum UpdatePhase: Equatable {
     case available(version: String)
     case downloading(fraction: Double)
     case readyToInstall(version: String)
+    case installing
     case failed(String)
 }
 
-/// Lightweight in-app updater for the macOS port.
-///
-/// Windows rides on Velopack (Setup + portable zip both self-update); macOS has
-/// no equivalent pipeline here, so this reads the same style of feed the
-/// Android app uses (`macos.json` with version / dmg / sha256 / notes), shows
-/// download progress like 2.6.10, and then hands the verified dmg to the user —
-/// macOS won't let a running app replace itself, so the install step mounts
-/// the dmg and the user drags the new app over.
+/// Reads the macOS DMG feed and hands verified official releases to the installer.
 @MainActor
 final class UpdateService: NSObject, ObservableObject {
     @Published private(set) var phase: UpdatePhase = .idle
     @Published private(set) var notes: String = ""
     @Published private(set) var feed: MacUpdateFeed?
+    @Published private(set) var installIssue: String?
 
     private let settings: SettingsStore
+    private let feedBaseOverride: URL?
+    private let downloadFolder: URL
+    private let openImage: (URL) -> Bool
     private var downloadTask: URLSessionDownloadTask?
     private var downloadSession: URLSession?
     private var expectedDownloadBytes: Int64 = 0
     private var checkedProxy = UpdateProxy()
     private var checkedBase: URL?
+    private var checkedFeedWasHTTPS = false
+    private var downloadedPackage: URL?
+    private var downloadableFromOfficialSource = false
 
-    init(settings: SettingsStore) {
+    var isBusy: Bool {
+        switch phase { case .checking, .downloading, .installing: return true; default: return false }
+    }
+
+    var canInstallAutomatically: Bool {
+        downloadableFromOfficialSource && downloadedPackage != nil && MacUpdateTransition.canReplace()
+    }
+
+    init(settings: SettingsStore, feedBaseOverride: URL? = nil, downloadFolder: URL? = nil,
+        openImage: ((URL) -> Bool)? = nil) {
         self.settings = settings
+        self.feedBaseOverride = feedBaseOverride
+        self.downloadFolder = downloadFolder ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        self.openImage = openImage ?? { NSWorkspace.shared.open($0) }
     }
 
     func resetSourceResult() {
-        switch phase { case .checking, .downloading: return; default: break }
-        feed = nil; notes = ""; phase = .idle
-        checkedBase = nil
+        guard !isBusy else { return }
+        feed = nil; notes = ""; phase = .idle; installIssue = nil
+        downloadedPackage = nil; downloadableFromOfficialSource = false
+        checkedBase = nil; checkedFeedWasHTTPS = false
     }
 
     nonisolated static let currentVersion: String = {
@@ -93,28 +107,27 @@ final class UpdateService: NSObject, ObservableObject {
     }
 
     private var feedBase: URL? {
+        if let feedBaseOverride { return feedBaseOverride }
         let source=settings.value.updateSourceSelected
         return Self.repositoryBase(source == "github" ? settings.value.updateGithubUrl : settings.value.updateCnbUrl, source: source)
     }
 
     func check() {
-        switch phase {
-        case .checking, .downloading:
-            return
-        default:
-            break
-        }
+        guard !isBusy else { return }
+        downloadedPackage = nil; downloadableFromOfficialSource = false; installIssue = nil
         phase = .checking
 
         guard let base = feedBase else {
+            MacUpdateLog.record("check.invalid_source")
             phase = .failed("更新源不可用：请检查 CNB / GitHub 仓库地址。")
             return
         }
 
         let feedURL = base.appendingPathComponent("macos.json")
-        feed = nil; checkedBase = base
+        feed = nil; checkedBase = base; checkedFeedWasHTTPS = false
         let proxy = UpdateProxy(settings: settings.value)
         checkedProxy = proxy
+        MacUpdateLog.record("check.started", "current=\(MacUpdateLog.version(Self.currentVersion)) source=\(base.host ?? "unknown") proxy=\(proxy.enabled)")
         Task { await loadFeed(from: feedURL, proxy: proxy) }
     }
 
@@ -127,9 +140,11 @@ final class UpdateService: NSObject, ObservableObject {
                 let session = URLSession(configuration: try proxy.configuration())
                 defer { session.finishTasksAndInvalidate() }
                 let (payload, response) = try await session.data(from: url)
-                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                    throw URLError(.badServerResponse)
+                if let http = response as? HTTPURLResponse {
+                    MacUpdateLog.record("check.http", "status=\(http.statusCode)")
+                    if !(200..<300).contains(http.statusCode) { throw URLError(.badServerResponse) }
                 }
+                checkedFeedWasHTTPS = response.url?.scheme == "https"
                 data = payload
             }
             let decoded = try JSONDecoder().decode(MacUpdateFeed.self, from: data)
@@ -137,10 +152,13 @@ final class UpdateService: NSObject, ObservableObject {
             notes = decoded.notes ?? ""
             if Self.isVersion(decoded.version, newerThan: Self.currentVersion) {
                 phase = .available(version: decoded.version)
+                MacUpdateLog.record("check.available", "version=\(MacUpdateLog.version(decoded.version))")
             } else {
                 phase = .upToDate
+                MacUpdateLog.record("check.up_to_date", "published=\(MacUpdateLog.version(decoded.version))")
             }
         } catch {
+            MacUpdateLog.failure("check.failed", error)
             feed = nil
             phase = .failed("读取更新源失败：\(error.localizedDescription)")
         }
@@ -151,12 +169,14 @@ final class UpdateService: NSObject, ObservableObject {
               case .available(let version) = phase,
               let base = checkedBase else { return }
 
-        let absolute = URL(string: feed.dmg)
-        let dmgURL = ["http", "https"].contains(absolute?.scheme?.lowercased() ?? "") ? absolute! : base.appendingPathComponent(feed.dmg)
+        let dmgURL = Self.resolveReadableURL(feed.dmg) ?? base.appendingPathComponent(feed.dmg)
+        downloadableFromOfficialSource = checkedFeedWasHTTPS && MacUpdateTransition.officialPackage(base: base, package: dmgURL,
+            version: feed.version, sha256: feed.sha256)
         phase = .downloading(fraction: 0)
         expectedDownloadBytes = 0
 
         installVersion = version
+        MacUpdateLog.record("download.started", "version=\(MacUpdateLog.version(version)) official=\(downloadableFromOfficialSource)")
         if dmgURL.isFileURL {
             Task {
                 do {
@@ -194,33 +214,46 @@ final class UpdateService: NSObject, ObservableObject {
         }
     }
 
-    fileprivate func bridgeDidFinish(at location: URL) {
-        defer { try? FileManager.default.removeItem(at: location) }
+    fileprivate func bridgeDidFinish(at location: URL, downloadedOverHTTPS: Bool = false) {
         downloadTask = nil
         downloadSession?.invalidateAndCancel()
         downloadSession = nil
+        downloadableFromOfficialSource = downloadableFromOfficialSource && downloadedOverHTTPS
 
-        do {
-            if let expected = feed?.sha256, !expected.isEmpty {
-                let data = try Data(contentsOf: location)
-                let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-                if !digest.equalsIgnoreCase(expected) {
-                    throw NSError(
-                        domain: "HarnessPortable.Update",
-                        code: 1,
-                        userInfo: [NSLocalizedDescriptionKey: "SHA256 校验失败（下载可能不完整）"]
-                    )
-                }
+        let expected = feed?.sha256
+        let version = installVersion
+        let destination = downloadFolder
+        let name = URL(string: feed?.dmg ?? "")?.lastPathComponent ?? ""
+        let invalidFilename = CharacterSet.controlCharacters.union(CharacterSet(charactersIn: "/\\:"))
+        let safeName = name.lowercased().hasSuffix(".dmg") && name.rangeOfCharacter(from: invalidFilename) == nil
+            ? name : "HarnessPortable.dmg"
+        Task { @MainActor in
+            defer { try? FileManager.default.removeItem(at: location) }
+            do {
+                let target = try await Task.detached {
+                    if let expected, !expected.isEmpty,
+                       try MacUpdateTransition.digest(location).caseInsensitiveCompare(expected) != .orderedSame {
+                        MacUpdateLog.record("download.checksum_mismatch")
+                        throw MacUpdateIssue.invalidPackage
+                    }
+                    let fm = FileManager.default
+                    let target = destination.appendingPathComponent(safeName)
+                    do {
+                        try fm.moveItem(at: location, to: target)
+                        return target
+                    } catch CocoaError.fileWriteFileExists {
+                        let alternate = destination.appendingPathComponent(UUID().uuidString + "-" + safeName)
+                        try fm.moveItem(at: location, to: alternate)
+                        return alternate
+                    }
+                }.value
+                downloadedPackage = target
+                phase = .readyToInstall(version: version)
+                MacUpdateLog.record("download.ready", "checksumVerified=\(expected?.isEmpty == false) automatic=\(canInstallAutomatically)")
+            } catch {
+                MacUpdateLog.failure("download.validation_or_save_failed", error)
+                phase = .failed("下载失败：\(error.localizedDescription)")
             }
-            let destination = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-                ?? FileManager.default.temporaryDirectory
-            let name = URL(string: feed?.dmg ?? "")?.lastPathComponent
-            let target = destination.appendingPathComponent(name?.isEmpty == false ? name! : "HarnessPortable.dmg")
-            try? FileManager.default.removeItem(at: target)
-            try FileManager.default.moveItem(at: location, to: target)
-            phase = .readyToInstall(version: installVersion)
-        } catch {
-            phase = .failed("下载失败：\(error.localizedDescription)")
         }
     }
 
@@ -229,23 +262,36 @@ final class UpdateService: NSObject, ObservableObject {
         downloadSession?.invalidateAndCancel()
         downloadSession = nil
         guard case .downloading = phase else { return }
+        MacUpdateLog.failure("download.failed", error)
         phase = .failed("下载失败：\(error.localizedDescription)")
     }
 
-    /// Mounts the downloaded dmg so the user can drag the new app over; the
-    /// running app cannot replace itself on macOS.
     func openInstaller() {
-        let name = feed?.dmg ?? "HarnessPortable.dmg"
-        let destination = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let target = destination.appendingPathComponent(name)
-        NSWorkspace.shared.open(target)
+        guard case .readyToInstall = phase, let target = downloadedPackage else { return }
+        let opened = openImage(target)
+        MacUpdateLog.record("installer.open_image", "opened=\(opened)")
+        if !opened { installIssue = "无法打开安装镜像，请重新下载。" }
     }
-}
 
-private extension String {
-    func equalsIgnoreCase(_ other: String) -> Bool {
-        caseInsensitiveCompare(other) == .orderedSame
+    func installAndRelaunch() {
+        guard case .readyToInstall(let version) = phase, canInstallAutomatically,
+              let package = downloadedPackage, let sha256 = feed?.sha256 else { return }
+        let request = MacUpdateRequest(parent: ProcessInfo.processInfo.processIdentifier, app: Bundle.main.bundleURL,
+            from: Self.currentVersion, to: version, sha256: sha256, appearance: settings.value.appearance)
+        installIssue = nil
+        phase = .installing
+        MacUpdateLog.record("install.requested", "from=\(MacUpdateLog.version(request.from)) to=\(MacUpdateLog.version(request.to))")
+        Task { @MainActor in
+            do {
+                try await MacUpdateTransition.prepareAndLaunch(package: package, request: request)
+                MacUpdateLog.record("install.quitting_for_replacement")
+                NSApplication.shared.terminate(nil)
+            } catch {
+                MacUpdateLog.failure("install.handoff_failed", error)
+                installIssue = error.localizedDescription
+                phase = .readyToInstall(version: version)
+            }
+        }
     }
 }
 
@@ -277,13 +323,15 @@ private final class DownloadProgressBridge: NSObject, URLSessionDownloadDelegate
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let owner = self.owner
         do {
-            if let response = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) {
-                throw URLError(.badServerResponse)
+            if let response = downloadTask.response as? HTTPURLResponse {
+                MacUpdateLog.record("download.http", "status=\(response.statusCode) bytes=\(downloadTask.countOfBytesReceived)")
+                if !(200..<300).contains(response.statusCode) { throw URLError(.badServerResponse) }
             }
             // URLSession deletes location after this callback returns.
             let staged = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".dmg")
             try FileManager.default.moveItem(at: location, to: staged)
-            Task { @MainActor in owner.bridgeDidFinish(at: staged) }
+            let downloadedOverHTTPS = downloadTask.response?.url?.scheme == "https"
+            Task { @MainActor in owner.bridgeDidFinish(at: staged, downloadedOverHTTPS: downloadedOverHTTPS) }
         } catch {
             Task { @MainActor in owner.bridgeDidFail(error) }
         }

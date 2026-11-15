@@ -3,7 +3,8 @@
 param(
     [ValidateSet('All','Windows','Android','macOS')][string]$Platform='All',
     [string]$Version='',
-    [string]$Repository='https://cnb.cool/railgunhamster/HarnessPortable'
+    [string]$Repository='https://cnb.cool/railgunhamster/HarnessPortable',
+    [switch]$IncludeMacOS
 )
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
@@ -58,7 +59,7 @@ if($Platform -in @('All','Android')){
     $path=Join-Path $stage 'android.json';[IO.File]::WriteAllText($path,($feed|ConvertTo-Json -Depth 8)+"`n")
     $files.Add((Join-Path $android $apk));$files.Add($path);$feeds.Add($path)
 }
-if($Platform -eq 'macOS'){
+if($Platform -eq 'macOS' -or ($Platform -eq 'All' -and $IncludeMacOS)){
     $mac=Join-Path $root 'artifacts/macos';$feed=Get-Content -LiteralPath (Join-Path $mac 'macos.json') -Raw|ConvertFrom-Json
     if($feed.version -ne $Version){throw 'macOS feed version mismatch.'}
     $dmg=Split-Path -Leaf $feed.dmg;$files.Add((Join-Path $mac $dmg))

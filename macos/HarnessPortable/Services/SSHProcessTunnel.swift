@@ -49,7 +49,7 @@ final class SSHProcessTunnel {
     var onState: ((TunnelInfo, Int) -> Void)?
 
     static func cleanupOrphanedSSHProcesses() {
-        let pattern = "HarnessPortable/Support/known-host-"
+        let pattern = NSRegularExpression.escapedPattern(for: AppPaths.supportDirectory.path + "/known-host-")
         for signal in ["-TERM", "-KILL"] {
             let command = Process()
             command.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")

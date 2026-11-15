@@ -61,6 +61,10 @@ pwsh -File scripts/release-macos.ps1
 
 产物：`artifacts\macos\HarnessPortable-<VERSION>.dmg`（含 `/Applications` 快捷方式，通用 arm64 + x86_64）。ad-hoc 签名首次打开需右键「打开」绕过 Gatekeeper；对外分发再换 Developer ID + 公证（见 `docs/mac-setup.md` 第 10 节）。
 
+从官方 CNB 或 GitHub 下载并校验更新包后，可在设置中点「安装并重新打开」。独立过渡窗会显示准备、安装和重新打开。安装程序会先校验应用签名、架构和版本，等待旧进程退出后再替换。新版本无法打开时会尝试恢复旧版本。自定义源或安装目录不可写时，可使用「打开安装镜像」。跨进程回归使用 `scripts/test-fixtures/macos-update/smoke.sh`，只替换临时目录里的测试应用。
+
+更新记录写入 `~/Library/Application Support/HarnessPortable/update.log`，包括更新源主机名、HTTP 状态、校验和安装阶段及错误码。日志不记录完整 URL、代理地址或凭据。启动参数 `--check-for-updates` 调用与设置页相同的检查操作。
+
 ## 远程构建
 
 Windows 端配置好 Mac Remote Login 和 `harness_mac_ed25519` 公钥后，可从仓库根目录执行：

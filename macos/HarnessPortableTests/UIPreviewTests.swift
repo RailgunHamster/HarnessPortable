@@ -5,6 +5,35 @@ import AppKit
 
 final class UIPreviewTests: XCTestCase {
     @MainActor
+    func testUpdateTransitionRendersInBothAppearances() throws {
+        guard let output = ProcessInfo.processInfo.environment["HP_UI_PREVIEW_DIR"] else {
+            throw XCTSkip("Set HP_UI_PREVIEW_DIR to export the update window.")
+        }
+        let directory = URL(fileURLWithPath: output, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let presentation = MacUpdatePresentation()
+        presentation.stage = .installing
+        let icon = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+        for scheme in [ColorScheme.light, .dark] {
+            let host = NSHostingView(rootView: MacUpdateSplashView(presentation: presentation,
+                from: "2.8.7", to: "2.8.8", icon: icon).environment(\.colorScheme, scheme))
+            let bounds = NSRect(x: 0, y: 0, width: 470, height: 184)
+            let window = NSWindow(contentRect: bounds, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = host
+            window.orderFrontRegardless()
+            defer { window.close() }
+            host.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+            let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: bitmap)
+            let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            XCTAssertGreaterThan(data.count, 4_000)
+            try data.write(to: directory.appendingPathComponent(scheme == .dark ? "macos-update-dark.png" : "macos-update-light.png"))
+        }
+    }
+
+    @MainActor
     func testNativeViewsRenderInBothAppearances() throws {
         guard ProcessInfo.processInfo.environment["CI"] == "true",
               let output = ProcessInfo.processInfo.environment["HP_UI_PREVIEW_DIR"] else {

@@ -269,10 +269,15 @@ struct WorkspaceView: View {
     }
 
     private func startTunnelsInWorkspace() {
-        for item in workspace.allTabs() where item.tab.kind == .tunnel {
-            guard let profile = services.profiles.findTunnel(id: item.tab.profileID),
-                  canStartWithoutPrompt(profile) else { continue }
-            services.tunnels.start(profile)
+        let restored = Dictionary(grouping: workspace.allTabs().map(\.tab).filter { $0.kind == .tunnel }, by: \.profileID)
+        for (profileID, tabs) in restored {
+            guard let profile = services.profiles.findTunnel(id: profileID) else { continue }
+            let tabIDs = Set(tabs.map(\.id))
+            services.tunnels.startRestored(profile) { [workspace, profiles = services.profiles] in
+                profiles.findTunnel(id: profileID) == profile && workspace.allTabs().contains {
+                    tabIDs.contains($0.tab.id) && $0.tab.kind == .tunnel && $0.tab.profileID == profileID
+                }
+            }
         }
     }
 

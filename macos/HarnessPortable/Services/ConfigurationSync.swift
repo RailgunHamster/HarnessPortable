@@ -26,16 +26,33 @@ final class ConfigurationSync: ObservableObject {
     private var subscriptions = Set<AnyCancellable>()
     private var timer: Timer?
     private var pending: Task<Void, Never>?
+    private var passwordStatusTask: Task<Void, Never>?
     private var stateValid = true
     private struct State: Codable { var options = WebDavOptions(); var base = ""; var lastSuccess: Date? }
     private struct Journal: Codable { let profiles: ProfileConfig; let settings: AppSettings; let state: State }
     init(profiles: ProfileStore, settings: SettingsStore, keychain: KeychainStore, directory: URL = AppPaths.dataDirectory, secretPrefix: String = "#webdav-sync:") {
         self.profiles = profiles; self.settings = settings; self.keychain = keychain; self.secretPrefix = secretPrefix
         stateFile = directory.appendingPathComponent("settings-sync.json"); journalFile = directory.appendingPathComponent("settings-sync-rollback.json")
-        do { try recover(); let state = try load(); options = state.options; lastSuccess = state.lastSuccess; hasPassword = keychain.hasPassword(for: secretKey(state.options)) }
+        do {
+            try recover()
+            let state = try load()
+            options = state.options
+            lastSuccess = state.lastSuccess
+            refreshPasswordStatus()
+        }
         catch { stateValid = false; phase = "failed"; message = "本机同步记录或恢复文件损坏，未应用云端配置；请保留数据目录中的同步文件。" }
     }
     private func secretKey(_ options: WebDavOptions) -> String { secretPrefix + SHA256.hash(data: Data((options.url + "\n" + options.username).utf8)).map { String(format: "%02x", $0) }.joined() }
+    private func refreshPasswordStatus() {
+        passwordStatusTask?.cancel()
+        guard !options.url.isEmpty else { hasPassword = false; return }
+        let account = secretKey(options)
+        passwordStatusTask = Task { [weak self, keychain] in
+            let exists = await Task.detached { keychain.hasPassword(for: account) }.value
+            guard !Task.isCancelled else { return }
+            self?.hasPassword = exists
+        }
+    }
     private func load() throws -> State {
         guard FileManager.default.fileExists(atPath: stateFile.path) else { return State() }
         let state = try JSONDecoder().decode(State.self, from: Data(contentsOf: stateFile)); _ = try baseline(state); return state
@@ -56,7 +73,14 @@ final class ConfigurationSync: ObservableObject {
         else if let password { try keychain.setPassword(password, for: secretKey(value)) }
         if !same { state.base = ""; state.lastSuccess = nil }
         state.options = value; try writeAtomically(JSONEncoder().encode(state), to: stateFile)
-        options = value; lastSuccess = state.lastSuccess; hasPassword = keychain.hasPassword(for: secretKey(value)); conflicts = []; conflictLocal = nil
+        options = value; lastSuccess = state.lastSuccess; conflicts = []; conflictLocal = nil
+        if clearPassword || password != nil {
+            passwordStatusTask?.cancel()
+            hasPassword = !clearPassword && password != nil
+        } else if !same {
+            hasPassword = false
+            refreshPasswordStatus()
+        }
         phase = "idle"; message = "同步设置已保存 · 连接密码始终只保存在本机"
         schedule()
     }
@@ -98,7 +122,15 @@ final class ConfigurationSync: ObservableObject {
         do {
             guard stateValid && !FileManager.default.fileExists(atPath: journalFile.path) else { throw SyncError("本机同步恢复尚未完成，请重启应用。") }
             let state = try load(); _ = try WebDavConfigurationClient.folder(state.options)
-            try await operation(state, keychain.password(for: secretKey(state.options)) ?? "")
+            let account = secretKey(state.options)
+            let (password, exists) = await Task.detached { [keychain] in
+                let password = keychain.password(for: account)
+                return (password, password != nil || keychain.hasPassword(for: account))
+            }.value
+            try client.checkCancelled()
+            hasPassword = exists
+            if exists && password == nil { throw SyncError("无法读取 WebDAV 钥匙串密码，请确认访问权限后重试。") }
+            try await operation(state, password ?? "")
             if phase == "syncing" { phase = "success" }
         } catch is CancellationError { phase = "cancelled"; message = "同步已取消，本机配置未替换；下次同步会重新检查云端。" }
         catch {
